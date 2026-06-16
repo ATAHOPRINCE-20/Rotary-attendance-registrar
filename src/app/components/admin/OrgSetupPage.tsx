@@ -23,6 +23,27 @@ export function OrgSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Logo upload states
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1.5 * 1024 * 1024) {
+      toast.error("Logo file size must be less than 1.5MB");
+      return;
+    }
+
+    setLogoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+
   // Helper to auto-generate slug
   function handleNameChange(val: string) {
     setOrgName(val);
@@ -51,12 +72,42 @@ export function OrgSetupPage() {
     setLoading(true);
 
     try {
+      let logoUrl = null;
+      if (logoFile) {
+        try {
+          const fileExt = logoFile.name.split(".").pop();
+          const fileName = `${slug}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          // Try to upload
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(filePath, logoFile, {
+              upsert: true,
+              contentType: logoFile.type
+            });
+
+          if (uploadErr) throw uploadErr;
+
+          // Get public URL
+          const { data: publicUrlData } = supabase.storage
+            .from("logos")
+            .getPublicUrl(filePath);
+
+          logoUrl = publicUrlData.publicUrl;
+        } catch (storageErr) {
+          console.warn("Storage upload failed, falling back to Base64:", storageErr);
+          logoUrl = logoPreview; // Fallback to base64
+        }
+      }
+
       // 1. Create the organization
       const { data: org, error: orgErr } = await supabase
         .from("organizations")
         .insert({
           name: orgName.trim(),
           slug: slug.trim(),
+          logo_url: logoUrl,
           district: district.trim() || null,
           country: country.trim() || null,
           website: website.trim() || null,
@@ -113,6 +164,40 @@ export function OrgSetupPage() {
               onChange={handleNameChange}
               required
             />
+
+            {/* Club Logo Upload */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                Club Logo (Optional)
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-xl border border-dashed border-border bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
+                  {logoPreview ? (
+                    <img src={logoPreview} className="w-full h-full object-contain p-1 bg-white" alt="Preview" />
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground font-semibold">No Logo</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="hidden"
+                    id="club-logo-file"
+                  />
+                  <label
+                    htmlFor="club-logo-file"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-border rounded-xl text-xs font-bold text-foreground bg-card hover:bg-muted cursor-pointer transition-all"
+                  >
+                    Choose Logo File
+                  </label>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Supports PNG, JPG, GIF up to 1.5MB.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>

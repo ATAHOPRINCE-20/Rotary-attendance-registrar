@@ -138,17 +138,20 @@ export function CheckInPage() {
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <!-- Rotary wheel SVG -->
-      <svg class="wheel" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="46" fill="none" stroke="#17458F" stroke-width="7"/>
-        <circle cx="50" cy="50" r="16" fill="#17458F"/>
-        ${Array.from({length:6},(_,i)=>{
-          const a=i*60*Math.PI/180;
-          const x1=50+16*Math.sin(a), y1=50-16*Math.cos(a);
-          const x2=50+44*Math.sin(a), y2=50-44*Math.cos(a);
-          return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#17458F" stroke-width="7" stroke-linecap="round"/>`;
-        }).join('')}
-      </svg>
+      ${organization?.logo_url ? `
+        <img class="wheel" src="${organization.logo_url}" alt="${orgName}" style="object-fit: contain; border-radius: 4px;" />
+      ` : `
+        <svg class="wheel" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="#17458F" stroke-width="7"/>
+          <circle cx="50" cy="50" r="16" fill="#17458F"/>
+          ${Array.from({length:6},(_,i)=>{
+            const a=i*60*Math.PI/180;
+            const x1=50+16*Math.sin(a), y1=50-16*Math.cos(a);
+            const x2=50+44*Math.sin(a), y2=50-44*Math.cos(a);
+            return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#17458F" stroke-width="7" stroke-linecap="round"/>`;
+          }).join('')}
+        </svg>
+      `}
       <div>
         <div class="org-name">${orgName}</div>
         <div class="org-tagline">Service Above Self</div>

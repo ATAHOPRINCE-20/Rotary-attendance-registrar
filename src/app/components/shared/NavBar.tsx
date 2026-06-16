@@ -38,7 +38,11 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
           onClick={() => navigate(slug ? `${base}` : "/")}
           className="flex items-center gap-3"
         >
-          <RotaryLogo size={36} />
+          {organization?.logo_url ? (
+            <img src={organization.logo_url} className="h-9 w-auto object-contain rounded-md" alt={organization.name} />
+          ) : (
+            <RotaryLogo size={36} />
+          )}
           <div className="hidden sm:flex flex-col leading-tight">
             <span
               className="font-black text-sm tracking-wide"
