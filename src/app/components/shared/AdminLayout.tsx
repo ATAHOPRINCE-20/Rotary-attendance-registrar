@@ -50,9 +50,9 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-border/40">
           {organization?.logo_url ? (
-            <img src={organization.logo_url} className="h-9 w-auto object-contain rounded-md" alt={organization.name} />
+            <img src={organization.logo_url} className="h-12 w-auto object-contain rounded-md" alt={organization.name} />
           ) : (
-            <RotaryLogo size={36} />
+            <RotaryLogo size={44} />
           )}
           <div className="leading-tight overflow-hidden">
             <p

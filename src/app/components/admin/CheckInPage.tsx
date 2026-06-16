@@ -88,7 +88,7 @@ export function CheckInPage() {
     /* ── Header ── */
     .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #17458F; padding-bottom: 14px; margin-bottom: 16px; }
     .header-left { display: flex; align-items: center; gap: 14px; }
-    .wheel { width: 52px; height: 52px; }
+    .wheel { width: 68px; height: 68px; }
     .org-name { font-size: 18px; font-weight: 900; color: #17458F; font-family: 'Montserrat', Arial, sans-serif; letter-spacing: -0.3px; }
     .org-tagline { font-size: 9px; color: #777; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
     .header-right { text-align: right; font-size: 9.5px; color: #555; line-height: 1.6; }
