@@ -4,11 +4,10 @@ import { useAdminEvents } from "../../../hooks/useEvents";
 import { useOrgRegistrations } from "../../../hooks/useRegistrations";
 import { useOrgDonations } from "../../../hooks/useDonations";
 import { PageCard } from "../shared/PageCard";
-import { OutlineButton } from "../shared/Buttons";
-import { NavBar } from "../shared/NavBar";
+import { AdminLayout } from "../shared/AdminLayout";
 import { NAVY, GOLD, DONATION_CATEGORIES } from "../../../lib/constants";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
-import { TrendingUp, Users, Heart, Award, ArrowLeft, BarChart3 } from "lucide-react";
+import { TrendingUp, Users, Heart, Award, BarChart3 } from "lucide-react";
 
 export function AnalyticsPage() {
   const { organization } = useAuth();
@@ -48,58 +47,14 @@ export function AnalyticsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background pt-20 pb-12">
-      <NavBar organization={organization} currentPath={window.location.pathname} />
+    <AdminLayout pageTitle="Analytics">
+      <div className="mb-6">
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Analytics</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Review stats on check-ins, attendee metrics, and donation campaign metrics.</p>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
-              REPORTING & INTELLIGENCE
-            </p>
-            <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Analytics
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Review stats on check-ins, attendee metrics, and donation campaign metrics.
-            </p>
-          </div>
-
-          <OutlineButton onClick={() => navigate("/admin/dashboard")} className="py-2.5 px-4 text-xs font-bold">
-            <ArrowLeft size={14} /> Back to Dashboard
-          </OutlineButton>
-        </div>
-
-        {/* Sidebar/Main Panel Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sub Nav */}
-          <div className="lg:col-span-1 flex flex-col gap-2">
-            <h3 className="text-xs font-bold tracking-wider text-muted-foreground uppercase px-4 mb-2">Reports</h3>
-            {[
-              { label: "Overview", to: "/admin/dashboard", active: false },
-              { label: "Events", to: "/admin/events", active: false },
-              { label: "Communications", to: "/admin/communications", active: false },
-              { label: "Analytics", to: "/admin/analytics", active: true },
-            ].map((navItem) => (
-              <button
-                key={navItem.label}
-                onClick={() => navigate(navItem.to)}
-                className={`w-full text-left px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${
-                  navItem.active
-                    ? "bg-[#17458F] text-white shadow-sm"
-                    : "hover:bg-muted text-foreground"
-                }`}
-                style={{ fontFamily: "Montserrat, sans-serif" }}
-              >
-                {navItem.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Main Charts area */}
-          <div className="lg:col-span-3 flex flex-col gap-8">
-            {/* Summary metrics card */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Summary metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <PageCard className="flex items-center gap-4">
                 <div className="p-3 bg-[#17458F]/10 text-[#17458F] rounded-xl">
                   <Users size={20} />
@@ -132,10 +87,9 @@ export function AnalyticsPage() {
                   <p className="text-[10px] text-muted-foreground mt-0.5">In club database</p>
                 </div>
               </PageCard>
-            </div>
+      </div>
 
-            {/* Graphs grid */}
-            <div className="grid grid-cols-1 gap-8">
+      <div className="flex flex-col gap-6">
               {/* Event RSVPs checkins chart */}
               <PageCard>
                 <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-6 flex items-center gap-1.5 border-b border-border pb-2">
@@ -179,10 +133,7 @@ export function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
               </PageCard>
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }

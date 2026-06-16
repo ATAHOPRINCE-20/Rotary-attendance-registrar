@@ -5,7 +5,7 @@ import { useEvent } from "../../../hooks/useEvents";
 import { useEventRegistrations, useCheckIn } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
-import { NavBar } from "../shared/NavBar";
+import { AdminLayout } from "../shared/AdminLayout";
 import { NAVY, GOLD } from "../../../lib/constants";
 import {
   ChevronLeft,
@@ -108,38 +108,21 @@ export function CheckInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-20 pb-12">
-      <NavBar organization={organization} currentPath={window.location.pathname} />
+    <AdminLayout pageTitle={event.title}>
+      <div className="mb-6">
+        <button
+          onClick={() => navigate("/admin/events")}
+          className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors mb-2"
+        >
+          <ChevronLeft size={14} /> Back to events
+        </button>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Check-In & Registrations</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Event: <span className="font-bold text-foreground">{event.title}</span>
+        </p>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <button
-              onClick={() => navigate("/admin/events")}
-              className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors mb-2"
-            >
-              <ChevronLeft size={14} /> Back to events
-            </button>
-            <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Check-In & Registrations
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Event: <span className="font-bold text-foreground">{event.title}</span>
-            </p>
-          </div>
-
-          <OutlineButton
-            onClick={() => {
-              // Simulating export to CSV
-              toast.success("Attendee list exported successfully!");
-            }}
-            className="py-2.5 px-4 text-xs font-bold"
-          >
-            <FileSpreadsheet size={14} /> Export CSV
-          </OutlineButton>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Check-in scanning utility */}
           <div className="lg:col-span-1 flex flex-col gap-6">
             <PageCard>
@@ -275,8 +258,7 @@ export function CheckInPage() {
               )}
             </PageCard>
           </div>
-        </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }

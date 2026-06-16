@@ -9,7 +9,7 @@ import {
 } from "../../../hooks/useEvents";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, NavyButton, OutlineButton } from "../shared/Buttons";
-import { NavBar } from "../shared/NavBar";
+import { AdminLayout } from "../shared/AdminLayout";
 import { NAVY, GOLD, EVENT_TYPES } from "../../../lib/constants";
 import {
   Calendar,
@@ -135,34 +135,25 @@ export function EventsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-20 pb-12">
-      <NavBar organization={organization} currentPath={window.location.pathname} />
+    <AdminLayout
+      pageTitle="Events"
+      actions={
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all"
+          style={{ background: NAVY }}
+        >
+          <Plus size={14} /> Create Event
+        </button>
+      }
+    >
+      {/* Page heading */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Events</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Create and publish gatherings, generate check-in codes, and monitor RSVPs.</p>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
-              MANAGE CLUB SERVICES
-            </p>
-            <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Events
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Create and publish gatherings, generate check-in codes, and monitor RSVPs.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <OutlineButton onClick={() => navigate("/admin/dashboard")} className="py-2.5 px-4 text-xs font-bold">
-              Back to Dashboard
-            </OutlineButton>
-            <GoldButton onClick={openCreate} className="py-2.5 px-4 text-xs font-bold">
-              <Plus size={14} /> Create Event
-            </GoldButton>
-          </div>
-        </div>
-
-        {/* Content list */}
+      {/* Content list */}
         {isLoading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
@@ -249,9 +240,8 @@ export function EventsPage() {
             ))}
           </div>
         )}
-      </div>
 
-      {/* Create / Edit Modal Dialog */}
+      {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -356,6 +346,6 @@ export function EventsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }
