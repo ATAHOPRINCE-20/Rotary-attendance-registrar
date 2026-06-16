@@ -12,11 +12,10 @@ import {
   Users,
   Search,
   CheckCircle,
-  XCircle,
   QrCode,
   UserCheck,
-  AlertCircle,
   FileSpreadsheet,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,7 +37,170 @@ export function CheckInPage() {
 
   const loading = eventLoading || regsLoading;
 
-  // Filter registrations
+  // ── Download / Print Attendance Report ─────────────────────────────────────
+  function downloadAttendanceReport() {
+    if (!event || !registrations) return;
+
+    const eventDate = new Date(event.date).toLocaleDateString("en-GB", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+    const now = new Date().toLocaleString("en-GB");
+    const orgName = organization?.name ?? "Rotary Club";
+    const checkedIn = registrations.filter(r => r.status === "checked-in").length;
+
+    const rows = registrations.map((r, i) => `
+      <tr class="${i % 2 === 0 ? "even" : "odd"}">
+        <td class="no">${i + 1}</td>
+        <td class="name">${r.full_name}</td>
+        <td>${r.phone ?? "—"}</td>
+        <td>${r.email}</td>
+        <td>${r.club_name ?? (r.is_member ? "Member" : "—")}</td>
+        <td class="center">${r.is_member ? "Member" : "<span class='guest'>Guest</span>"}</td>
+        <td class="center">${r.status === "checked-in" ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
+        <td class="sig"></td>
+      </tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Attendance – ${event.title}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Open Sans', Arial, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; padding: 24px 32px; }
+
+    /* ── Header ── */
+    .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #17458F; padding-bottom: 14px; margin-bottom: 16px; }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .wheel { width: 52px; height: 52px; }
+    .org-name { font-size: 18px; font-weight: 900; color: #17458F; font-family: 'Montserrat', Arial, sans-serif; letter-spacing: -0.3px; }
+    .org-tagline { font-size: 9px; color: #777; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+    .header-right { text-align: right; font-size: 9.5px; color: #555; line-height: 1.6; }
+
+    /* ── Report title ── */
+    .report-title { font-size: 15px; font-weight: 900; color: #17458F; font-family: 'Montserrat', Arial, sans-serif; margin-bottom: 2px; }
+    .report-meta { display: flex; gap: 24px; font-size: 9.5px; color: #444; margin-bottom: 14px; }
+    .report-meta span { display: flex; gap: 4px; }
+    .report-meta b { color: #17458F; }
+
+    /* ── Summary pills ── */
+    .summary { display: flex; gap: 12px; margin-bottom: 16px; }
+    .pill { padding: 5px 12px; border-radius: 6px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pill-blue { background: #17458F15; color: #17458F; border: 1px solid #17458F30; }
+    .pill-green { background: #48BB7815; color: #276749; border: 1px solid #48BB7830; }
+    .pill-gold  { background: #F7A81B15; color: #9a6b00; border: 1px solid #F7A81B40; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    thead tr { background: #17458F; color: #fff; }
+    thead th { padding: 7px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+    tbody tr.even { background: #f8f9fc; }
+    tbody tr.odd  { background: #fff; }
+    tbody tr:hover { background: #EBF0F9; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e8ecf4; vertical-align: middle; }
+    td.no   { color: #999; font-size: 9px; width: 28px; }
+    td.name { font-weight: 700; color: #17458F; }
+    td.center { text-align: center; }
+    td.sig  { width: 80px; border-bottom: 1px solid #bbb; }
+    .guest    { background: #FFF3CD; color: #856404; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
+    .checkedin{ background: #D1FAE5; color: #065F46; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
+    .pending  { background: #FEF3C7; color: #92400E; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
+
+    /* ── Footer ── */
+    .footer { border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8.5px; color: #888; }
+    .signature-block { display: flex; gap: 48px; margin-top: 28px; }
+    .sig-line { flex: 1; border-top: 1px solid #555; padding-top: 4px; font-size: 8.5px; color: #555; text-align: center; }
+
+    @media print {
+      body { padding: 12px 18px; }
+      @page { size: A4 landscape; margin: 10mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <!-- Rotary wheel SVG -->
+      <svg class="wheel" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="none" stroke="#17458F" stroke-width="7"/>
+        <circle cx="50" cy="50" r="16" fill="#17458F"/>
+        ${Array.from({length:6},(_,i)=>{
+          const a=i*60*Math.PI/180;
+          const x1=50+16*Math.sin(a), y1=50-16*Math.cos(a);
+          const x2=50+44*Math.sin(a), y2=50-44*Math.cos(a);
+          return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#17458F" stroke-width="7" stroke-linecap="round"/>`;
+        }).join('')}
+      </svg>
+      <div>
+        <div class="org-name">${orgName}</div>
+        <div class="org-tagline">Service Above Self</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div>Attendance Report</div>
+      <div>Printed: ${now}</div>
+      ${organization?.district ? `<div>District ${organization.district}</div>` : ""}
+    </div>
+  </div>
+
+  <!-- Report title -->
+  <div class="report-title">Attendance Register</div>
+  <div class="report-meta">
+    <span><b>Event:</b> ${event.title}</span>
+    <span><b>Date:</b> ${eventDate}</span>
+    ${event.location ? `<span><b>Venue:</b> ${event.location}</span>` : ""}
+  </div>
+
+  <!-- Summary pills -->
+  <div class="summary">
+    <div class="pill pill-blue">Total Registered: ${registrations.length}</div>
+    <div class="pill pill-green">Checked In: ${checkedIn}</div>
+    <div class="pill pill-gold">Absent: ${registrations.length - checkedIn}</div>
+  </div>
+
+  <!-- Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th>Club</th>
+        <th style="text-align:center">Type</th>
+        <th style="text-align:center">Status</th>
+        <th>Signature</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <!-- Signature block -->
+  <div class="signature-block">
+    <div class="sig-line">Club President / Chairperson</div>
+    <div class="sig-line">Secretary</div>
+    <div class="sig-line">Event Coordinator</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>${orgName} — Attendance Register — ${event.title}</span>
+    <span>Generated by RotaryConnect &bull; rotary-ntinda.vercel.app</span>
+  </div>
+
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Pop-up blocked — allow pop-ups and try again."); return; }
+    win.document.write(html);
+    win.document.close();
+  }
+
   const filteredRegs = registrations?.filter((r) => {
     const matchesSearch =
       r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -108,7 +270,19 @@ export function CheckInPage() {
   }
 
   return (
-    <AdminLayout pageTitle={event.title}>
+    <AdminLayout
+      pageTitle={event.title}
+      actions={
+        <button
+          onClick={downloadAttendanceReport}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all"
+          style={{ background: NAVY }}
+          title="Download Attendance Report (PDF/Print)"
+        >
+          <Printer size={14} /> Print Report
+        </button>
+      }
+    >
       <div className="mb-6">
         <button
           onClick={() => navigate("/admin/events")}
