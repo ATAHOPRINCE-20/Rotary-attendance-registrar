@@ -39,9 +39,9 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
           className="flex items-center gap-3"
         >
           {organization?.logo_url ? (
-            <img src={organization.logo_url} className="h-12 w-auto object-contain rounded-md" alt={organization.name} />
+            <img src={organization.logo_url} className="h-14 w-auto object-contain rounded-md" alt={organization.name} />
           ) : (
-            <RotaryLogo size={44} />
+            <RotaryLogo size={48} />
           )}
           <div className="hidden sm:flex flex-col leading-tight">
             <span
