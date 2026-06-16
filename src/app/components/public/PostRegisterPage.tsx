@@ -56,16 +56,16 @@ export function PostRegisterPage() {
           <div className="flex flex-col items-center gap-2">
             <CheckCircle2 className="w-16 h-16 text-[#48BB78] animate-bounce" />
             <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Registration Confirmed!
+              Checked In Successfully!
             </h1>
             <p className="text-sm text-muted-foreground">
-              Thank you, <strong style={{ color: NAVY }}>{registration.full_name}</strong>
+              Welcome, <strong style={{ color: NAVY }}>{registration.full_name}</strong>. You are all set!
             </p>
           </div>
 
           <div className="bg-muted/30 p-6 rounded-2xl border border-border w-full flex flex-col items-center gap-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              YOUR PERSONAL CHECK-IN QR
+              YOUR PERSONAL ATTENDANCE TICKET
             </p>
             <div className="bg-white p-4 rounded-xl shadow-sm border border-border">
               <QRCodeSVG value={qrValue} size={180} level="H" includeMargin={false} />
@@ -74,8 +74,8 @@ export function PostRegisterPage() {
               <p className="text-sm font-bold" style={{ color: NAVY }}>
                 Ticket ID: {registration.qr_ref}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Present this QR code to staff at check-in
+              <p className="text-xs text-emerald-600 font-semibold mt-1">
+                ✓ Registered & Checked In
               </p>
             </div>
           </div>

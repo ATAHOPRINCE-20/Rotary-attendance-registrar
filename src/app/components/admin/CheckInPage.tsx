@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router";
 import { useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useEvent } from "../../../hooks/useEvents";
-import { useEventRegistrations, useCheckIn } from "../../../hooks/useRegistrations";
+import { useEventRegistrations, useCheckIn, useSubmitRegistration } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
@@ -16,6 +16,8 @@ import {
   UserCheck,
   FileSpreadsheet,
   Printer,
+  Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,12 +30,25 @@ export function CheckInPage() {
   const { data: event, isLoading: eventLoading } = useEvent(eventId);
   const { data: registrations, isLoading: regsLoading } = useEventRegistrations(eventId);
   const checkInMutation = useCheckIn();
+  const registerMutation = useSubmitRegistration();
 
   // Filter/Search states
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "checked-in">("all");
   const [scanningCode, setScanningCode] = useState("");
   const [scanning, setScanning] = useState(false);
+
+  // Manual Registration Form States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [isMember, setIsMember] = useState(false);
+  const [clubName, setClubName] = useState("");
+  const [district, setDistrict] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [comments, setComments] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const loading = eventLoading || regsLoading;
 
@@ -248,6 +263,49 @@ export function CheckInPage() {
     }
   }
 
+  async function handleAddAttendee(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fullName.trim() || !email.trim()) {
+      toast.error("Please fill out all required fields.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await registerMutation.mutateAsync({
+        event_id: eventId!,
+        organization_id: organization?.id || "",
+        full_name: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        is_member: isMember,
+        club_name: isMember ? clubName.trim() || null : null,
+        district: isMember ? district.trim() || null : null,
+        buddy_group: null,
+        occupation: occupation.trim() || null,
+        organization_name: null,
+        comments: comments.trim() || null,
+      });
+
+      toast.success("Attendee registered & checked in successfully!");
+      // Reset form
+      setFullName("");
+      setEmail("");
+      setPhone("");
+      setIsMember(false);
+      setClubName("");
+      setDistrict("");
+      setOccupation("");
+      setComments("");
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to register attendee.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -273,14 +331,22 @@ export function CheckInPage() {
     <AdminLayout
       pageTitle={event.title}
       actions={
-        <button
-          onClick={downloadAttendanceReport}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all"
-          style={{ background: NAVY }}
-          title="Download Attendance Report (PDF/Print)"
-        >
-          <Printer size={14} /> Print Report
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all"
+            style={{ background: GOLD }}
+          >
+            <Plus size={14} /> Register Attendee
+          </button>
+          <button
+            onClick={downloadAttendanceReport}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted bg-card transition-all"
+            title="Download Attendance Report (PDF/Print)"
+          >
+            <Printer size={14} /> Print Report
+          </button>
+        </div>
       }
     >
       <div className="mb-6">
@@ -433,6 +499,123 @@ export function CheckInPage() {
             </PageCard>
           </div>
       </div>
+
+      {/* Manual Registration Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-card w-full max-w-xl rounded-2xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-base font-bold" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                Register & Check In Attendee
+              </h2>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleAddAttendee} className="p-6 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
+              <TextInput
+                label="Full Name"
+                placeholder="Enter attendee's full name"
+                value={fullName}
+                onChange={setFullName}
+                required
+              />
+
+              <TextInput
+                label="Email Address"
+                type="email"
+                placeholder="e.g. name@domain.com"
+                value={email}
+                onChange={setEmail}
+                required
+              />
+
+              <TextInput
+                label="Phone Number (Optional)"
+                type="tel"
+                placeholder="e.g. +256 700 000000"
+                value={phone}
+                onChange={setPhone}
+              />
+
+              <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-xl">
+                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                  <input
+                    type="checkbox"
+                    checked={isMember}
+                    onChange={(e) => setIsMember(e.target.checked)}
+                    className="rounded border-border text-[#17458F] focus:ring-[#17458F] w-4 h-4"
+                  />
+                  Is this attendee a Rotary Member?
+                </label>
+
+                {isMember && (
+                  <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1">
+                    <TextInput
+                      label="Club Name"
+                      placeholder="e.g. Rotary Club of Ntinda"
+                      value={clubName}
+                      onChange={setClubName}
+                      required={isMember}
+                    />
+                    <TextInput
+                      label="District"
+                      placeholder="e.g. 9213"
+                      value={district}
+                      onChange={setDistrict}
+                      required={isMember}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <TextInput
+                label="Occupation / Title (Optional)"
+                placeholder="e.g. Doctor, Manager, Guest"
+                value={occupation}
+                onChange={setOccupation}
+              />
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                  Comments / Notes (Optional)
+                </label>
+                <textarea
+                  placeholder="Special requests or attendee notes..."
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  rows={2}
+                  className="px-3 py-2 text-xs rounded-xl border border-border bg-input-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+                <OutlineButton
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-xs"
+                >
+                  Cancel
+                </OutlineButton>
+                <GoldButton
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2 text-xs font-bold"
+                >
+                  {submitting ? "Registering..." : "Register & Check In"}
+                </GoldButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

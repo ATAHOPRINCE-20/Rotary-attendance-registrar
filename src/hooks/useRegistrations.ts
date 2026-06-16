@@ -59,7 +59,11 @@ export function useSubmitRegistration() {
     mutationFn: async (payload: Omit<Registration, "id" | "qr_ref" | "created_at" | "status" | "checked_in_at">) => {
       const { data, error } = await supabase
         .from("registrations")
-        .insert({ ...payload, status: "pending" })
+        .insert({
+          ...payload,
+          status: "checked-in",
+          checked_in_at: new Date().toISOString()
+        })
         .select()
         .single();
       if (error) throw error;
