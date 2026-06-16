@@ -2,13 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type { Campaign } from "../types/database";
 
-export function useCampaigns() {
+export function useCampaigns(organizationId: string | undefined) {
   return useQuery({
-    queryKey: ["campaigns"],
+    queryKey: ["campaigns", organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("campaigns")
         .select("*, events(title)")
+        .eq("organization_id", organizationId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as (Campaign & { events: { title: string } | null })[];

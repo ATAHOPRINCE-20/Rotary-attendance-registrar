@@ -20,13 +20,15 @@ export function useEventRegistrations(eventId: string | undefined) {
 }
 
 // ─── All registrations for an org (admin dashboard) ──────────────────────────
-export function useOrgRegistrations() {
+export function useOrgRegistrations(organizationId: string | undefined) {
   return useQuery({
-    queryKey: ["org-registrations"],
+    queryKey: ["org-registrations", organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("registrations")
         .select("*, events(title, date)")
+        .eq("organization_id", organizationId!)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;

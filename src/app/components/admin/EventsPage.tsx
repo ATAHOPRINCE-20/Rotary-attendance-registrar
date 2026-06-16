@@ -31,7 +31,7 @@ export function EventsPage() {
   const navigate = useNavigate();
 
   // Queries/Mutations
-  const { data: events, isLoading } = useAdminEvents();
+  const { data: events, isLoading } = useAdminEvents(organization?.id);
   const createMutation = useCreateEvent();
   const updateMutation = useUpdateEvent();
   const deleteMutation = useDeleteEvent();

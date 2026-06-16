@@ -36,9 +36,9 @@ export function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { data: events,        isLoading: eventsLoading   } = useAdminEvents();
-  const { data: registrations, isLoading: regsLoading     } = useOrgRegistrations();
-  const { data: donations,     isLoading: donationsLoading } = useOrgDonations();
+  const { data: events,        isLoading: eventsLoading   } = useAdminEvents(organization?.id);
+  const { data: registrations, isLoading: regsLoading     } = useOrgRegistrations(organization?.id);
+  const { data: donations,     isLoading: donationsLoading } = useOrgDonations(organization?.id);
 
   const loading = eventsLoading || regsLoading || donationsLoading;
 

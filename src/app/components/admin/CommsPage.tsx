@@ -25,8 +25,8 @@ export function CommsPage() {
   const navigate = useNavigate();
 
   // Queries/Mutations
-  const { data: campaigns, isLoading: campaignsLoading } = useCampaigns();
-  const { data: events } = useAdminEvents();
+  const { data: campaigns, isLoading: campaignsLoading } = useCampaigns(organization?.id);
+  const { data: events } = useAdminEvents(organization?.id);
   const createMutation = useCreateCampaign();
 
   // Form states

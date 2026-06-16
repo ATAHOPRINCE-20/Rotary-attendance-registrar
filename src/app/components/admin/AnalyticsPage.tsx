@@ -14,9 +14,9 @@ export function AnalyticsPage() {
   const navigate = useNavigate();
 
   // Queries
-  const { data: events } = useAdminEvents();
-  const { data: registrations } = useOrgRegistrations();
-  const { data: donations } = useOrgDonations();
+  const { data: events } = useAdminEvents(organization?.id);
+  const { data: registrations } = useOrgRegistrations(organization?.id);
+  const { data: donations } = useOrgDonations(organization?.id);
 
   // 1. Process registrations stats
   const totalRegistrations = registrations?.length ?? 0;

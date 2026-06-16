@@ -3,13 +3,15 @@ import { supabase } from "../lib/supabase";
 import type { Event } from "../types/database";
 
 // ─── Fetch events for the admin's org ────────────────────────────────────────
-export function useAdminEvents() {
+export function useAdminEvents(organizationId: string | undefined) {
   return useQuery({
-    queryKey: ["admin-events"],
+    queryKey: ["admin-events", organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("events")
         .select("*")
+        .eq("organization_id", organizationId!)
         .order("date", { ascending: true });
       if (error) throw error;
       return data as Event[];

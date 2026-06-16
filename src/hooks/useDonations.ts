@@ -2,13 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type { Donation } from "../types/database";
 
-export function useOrgDonations() {
+export function useOrgDonations(organizationId: string | undefined) {
   return useQuery({
-    queryKey: ["org-donations"],
+    queryKey: ["org-donations", organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("donations")
         .select("*, events(title)")
+        .eq("organization_id", organizationId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as (Donation & { events: { title: string } | null })[];

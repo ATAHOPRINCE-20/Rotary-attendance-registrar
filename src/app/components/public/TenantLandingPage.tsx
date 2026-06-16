@@ -49,16 +49,18 @@ export function TenantLandingPage() {
           <RotaryLogo size={80} />
         )}
 
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-            {organization.name}
-          </h1>
-          {organization.district && (
-            <p className="text-sm font-bold tracking-wider uppercase text-muted-foreground">
-              District {organization.district} • {organization.country || "Global"}
-            </p>
-          )}
-        </div>
+        {!organization.logo_url && (
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              {organization.name}
+            </h1>
+            {organization.district && (
+              <p className="text-sm font-bold tracking-wider uppercase text-muted-foreground">
+                District {organization.district} • {organization.country || "Global"}
+              </p>
+            )}
+          </div>
+        )}
 
         <p className="text-base text-muted-foreground leading-relaxed max-w-md">
           Welcome to our official hub. Explore upcoming events, register attendance, or support our community service projects.
