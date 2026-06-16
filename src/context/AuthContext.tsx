@@ -44,8 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select("*")
           .eq("id", prof.organization_id)
           .single();
-        if (orgErr) console.warn("[AuthContext] loadOrg error:", orgErr.code, orgErr.message);
-        setOrg(org ?? null);
+        if (org) {
+          const orgData = { ...org };
+          if (!orgData.logo_url) {
+            orgData.logo_url = "/logo.jpg";
+          }
+          setOrg(orgData);
+        } else {
+          setOrg(null);
+        }
       }
     } else {
       setProfile(null);

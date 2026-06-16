@@ -39,7 +39,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         if (error || !data) {
           setNotFound(true);
         } else {
-          setOrg(data);
+          const orgData = { ...data };
+          if (!orgData.logo_url) {
+            orgData.logo_url = "/logo.jpg";
+          }
+          setOrg(orgData);
         }
         setLoading(false);
       });
