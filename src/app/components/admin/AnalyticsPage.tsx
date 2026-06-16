@@ -1,0 +1,188 @@
+import { useNavigate } from "react-router";
+import { useAuth } from "../../../context/AuthContext";
+import { useAdminEvents } from "../../../hooks/useEvents";
+import { useOrgRegistrations } from "../../../hooks/useRegistrations";
+import { useOrgDonations } from "../../../hooks/useDonations";
+import { PageCard } from "../shared/PageCard";
+import { OutlineButton } from "../shared/Buttons";
+import { NavBar } from "../shared/NavBar";
+import { NAVY, GOLD, DONATION_CATEGORIES } from "../../../lib/constants";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import { TrendingUp, Users, Heart, Award, ArrowLeft, BarChart3 } from "lucide-react";
+
+export function AnalyticsPage() {
+  const { organization } = useAuth();
+  const navigate = useNavigate();
+
+  // Queries
+  const { data: events } = useAdminEvents();
+  const { data: registrations } = useOrgRegistrations();
+  const { data: donations } = useOrgDonations();
+
+  // 1. Process registrations stats
+  const totalRegistrations = registrations?.length ?? 0;
+  const checkedInCount = registrations?.filter(r => r.status === "checked-in").length ?? 0;
+  const attendanceRate = totalRegistrations > 0 ? Math.round((checkedInCount / totalRegistrations) * 100) : 0;
+
+  // 2. Process donations stats
+  const totalDonationAmount = donations?.reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
+
+  // 3. Prepare data for: Registrations per Event (Bar Chart)
+  const eventAttendanceData = events?.map(ev => {
+    const eventRegsCount = registrations?.filter((r: any) => r.event_id === ev.id).length ?? 0;
+    const eventCheckedIn = registrations?.filter((r: any) => r.event_id === ev.id && r.status === "checked-in").length ?? 0;
+    return {
+      name: ev.title.length > 15 ? `${ev.title.slice(0, 15)}...` : ev.title,
+      Registered: eventRegsCount,
+      "Checked-In": eventCheckedIn,
+    };
+  }) ?? [];
+
+  // 4. Prepare data for: Donation category breakdown (Bar Chart)
+  const donationCategoriesData = DONATION_CATEGORIES.map(cat => {
+    const sum = donations?.filter(d => d.category === cat.id).reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
+    return {
+      category: cat.label.length > 20 ? `${cat.label.slice(0, 20)}...` : cat.label,
+      Amount: sum,
+    };
+  });
+
+  return (
+    <div className="min-h-screen bg-background pt-20 pb-12">
+      <NavBar organization={organization} currentPath={window.location.pathname} />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
+              REPORTING & INTELLIGENCE
+            </p>
+            <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              Analytics
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Review stats on check-ins, attendee metrics, and donation campaign metrics.
+            </p>
+          </div>
+
+          <OutlineButton onClick={() => navigate("/admin/dashboard")} className="py-2.5 px-4 text-xs font-bold">
+            <ArrowLeft size={14} /> Back to Dashboard
+          </OutlineButton>
+        </div>
+
+        {/* Sidebar/Main Panel Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Sub Nav */}
+          <div className="lg:col-span-1 flex flex-col gap-2">
+            <h3 className="text-xs font-bold tracking-wider text-muted-foreground uppercase px-4 mb-2">Reports</h3>
+            {[
+              { label: "Overview", to: "/admin/dashboard", active: false },
+              { label: "Events", to: "/admin/events", active: false },
+              { label: "Communications", to: "/admin/communications", active: false },
+              { label: "Analytics", to: "/admin/analytics", active: true },
+            ].map((navItem) => (
+              <button
+                key={navItem.label}
+                onClick={() => navigate(navItem.to)}
+                className={`w-full text-left px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${
+                  navItem.active
+                    ? "bg-[#17458F] text-white shadow-sm"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                style={{ fontFamily: "Montserrat, sans-serif" }}
+              >
+                {navItem.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Main Charts area */}
+          <div className="lg:col-span-3 flex flex-col gap-8">
+            {/* Summary metrics card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <PageCard className="flex items-center gap-4">
+                <div className="p-3 bg-[#17458F]/10 text-[#17458F] rounded-xl">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">RSVP Conversion</p>
+                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>{attendanceRate}%</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Checked-in / Total RSVPs</p>
+                </div>
+              </PageCard>
+
+              <PageCard className="flex items-center gap-4">
+                <div className="p-3 bg-[#F7A81B]/10 text-[#F7A81B] rounded-xl">
+                  <Heart size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Total Raised</p>
+                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>${totalDonationAmount.toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Overall voluntary donations</p>
+                </div>
+              </PageCard>
+
+              <PageCard className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <Award size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Active Events</p>
+                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>{events?.length ?? 0}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">In club database</p>
+                </div>
+              </PageCard>
+            </div>
+
+            {/* Graphs grid */}
+            <div className="grid grid-cols-1 gap-8">
+              {/* Event RSVPs checkins chart */}
+              <PageCard>
+                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-6 flex items-center gap-1.5 border-b border-border pb-2">
+                  <BarChart3 size={16} /> Attendance per Event
+                </h3>
+
+                {eventAttendanceData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-12 text-center">Add events to view attendance analytics.</p>
+                ) : (
+                  <div className="h-80 w-full text-xs">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={eventAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="Registered" fill="#F7A81B" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Checked-In" fill="#17458F" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </PageCard>
+
+              {/* Donations allocation breakdown chart */}
+              <PageCard>
+                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-6 flex items-center gap-1.5 border-b border-border pb-2">
+                  <Heart size={16} /> Donations Breakdown by Allocation
+                </h3>
+
+                <div className="h-80 w-full text-xs">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={donationCategoriesData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="category" />
+                      <YAxis tickFormatter={(val) => `$${val}`} />
+                      <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, "Raised"]} />
+                      <Bar dataKey="Amount" fill="#0067C8" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </PageCard>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

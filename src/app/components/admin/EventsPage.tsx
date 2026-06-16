@@ -1,0 +1,361 @@
+import { useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "../../../context/AuthContext";
+import {
+  useAdminEvents,
+  useCreateEvent,
+  useUpdateEvent,
+  useDeleteEvent,
+} from "../../../hooks/useEvents";
+import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
+import { GoldButton, NavyButton, OutlineButton } from "../shared/Buttons";
+import { NavBar } from "../shared/NavBar";
+import { NAVY, GOLD, EVENT_TYPES } from "../../../lib/constants";
+import {
+  Calendar,
+  Plus,
+  Edit2,
+  Trash2,
+  QrCode,
+  Users,
+  Eye,
+  CheckCircle,
+  AlertCircle,
+  X,
+  FileImage,
+} from "lucide-react";
+import { toast } from "sonner";
+
+export function EventsPage() {
+  const { organization } = useAuth();
+  const navigate = useNavigate();
+
+  // Queries/Mutations
+  const { data: events, isLoading } = useAdminEvents();
+  const createMutation = useCreateEvent();
+  const updateMutation = useUpdateEvent();
+  const deleteMutation = useDeleteEvent();
+
+  // Modal / Form state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState("");
+  const [location, setLocation] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [type, setType] = useState("General");
+  const [status, setStatus] = useState("draft");
+  const [coverUrl, setCoverUrl] = useState("");
+
+  const [error, setError] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditingEvent(null);
+    setTitle("");
+    setDescription("");
+    setDate("");
+    setLocation("");
+    setCapacity("");
+    setType("General");
+    setStatus("draft");
+    setCoverUrl("");
+    setError(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(ev: any) {
+    setEditingEvent(ev);
+    setTitle(ev.title);
+    setDescription(ev.description || "");
+    // Convert timestamp to datetime-local compatible format (YYYY-MM-DDThh:mm)
+    const formattedDate = ev.date ? new Date(ev.date).toISOString().slice(0, 16) : "";
+    setDate(formattedDate);
+    setLocation(ev.location || "");
+    setCapacity(ev.capacity?.toString() || "");
+    setType(ev.type || "General");
+    setStatus(ev.status || "draft");
+    setCoverUrl(ev.cover_image_url || "");
+    setError(null);
+    setModalOpen(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!title.trim() || !date) {
+      setError("Title and Date are required.");
+      return;
+    }
+
+    const payload = {
+      organization_id: organization?.id || "",
+      title: title.trim(),
+      description: description.trim() || null,
+      date: new Date(date).toISOString(),
+      end_date: null,
+      location: location.trim() || null,
+      capacity: capacity ? parseInt(capacity, 10) : null,
+      type,
+      status: status as "draft" | "published" | "closed",
+      cover_image_url: coverUrl.trim() || null,
+      created_by: null,
+    };
+
+    try {
+      if (editingEvent) {
+        await updateMutation.mutateAsync({
+          id: editingEvent.id,
+          ...payload,
+        });
+        toast.success("Event updated successfully!");
+      } else {
+        await createMutation.mutateAsync(payload);
+        toast.success("Event created successfully!");
+      }
+      setModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Failed to save event. Please check inputs.");
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Are you sure you want to permanently delete this event? This will also delete registrations.")) return;
+
+    try {
+      await deleteMutation.mutateAsync(id);
+      toast.success("Event deleted.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to delete event.");
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background pt-20 pb-12">
+      <NavBar organization={organization} currentPath={window.location.pathname} />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
+              MANAGE CLUB SERVICES
+            </p>
+            <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              Events
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Create and publish gatherings, generate check-in codes, and monitor RSVPs.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <OutlineButton onClick={() => navigate("/admin/dashboard")} className="py-2.5 px-4 text-xs font-bold">
+              Back to Dashboard
+            </OutlineButton>
+            <GoldButton onClick={openCreate} className="py-2.5 px-4 text-xs font-bold">
+              <Plus size={14} /> Create Event
+            </GoldButton>
+          </div>
+        </div>
+
+        {/* Content list */}
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
+          </div>
+        ) : !events || events.length === 0 ? (
+          <PageCard className="text-center py-16">
+            <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-bold" style={{ color: NAVY }}>No Events Yet</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+              Get started by creating your club's first community gathering or fundraiser gala.
+            </p>
+            <GoldButton onClick={openCreate} className="mt-4">
+              Create Event
+            </GoldButton>
+          </PageCard>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((ev) => (
+              <PageCard key={ev.id} className="flex flex-col justify-between h-full hover:shadow-md transition-shadow">
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-4">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+                    >
+                      {ev.type || "General"}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        ev.status === "published"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : ev.status === "closed"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-100 text-slate-800"
+                      }`}
+                    >
+                      {ev.status}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                    {ev.title}
+                  </h3>
+
+                  <p className="text-xs text-muted-foreground mb-1">
+                    <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
+                  </p>
+                  {ev.location && (
+                    <p className="text-xs text-muted-foreground mb-1">
+                      <strong>Venue:</strong> {ev.location}
+                    </p>
+                  )}
+                  {ev.capacity && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      <strong>Capacity:</strong> {ev.capacity} attendees
+                    </p>
+                  )}
+
+                  {ev.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
+                      {ev.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
+                  <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
+                    <Edit2 size={12} /> Edit
+                  </OutlineButton>
+                  <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
+                    <QrCode size={12} /> QR Codes
+                  </OutlineButton>
+                  <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
+                    <Users size={12} /> Attendees & Check‑In
+                  </OutlineButton>
+                  <OutlineButton
+                    onClick={() => handleDelete(ev.id)}
+                    className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
+                  >
+                    <Trash2 size={12} /> Delete Event
+                  </OutlineButton>
+                </div>
+              </PageCard>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create / Edit Modal Dialog */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
+              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                {editingEvent ? "Edit Event" : "Create New Event"}
+              </h2>
+              <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+              <TextInput
+                label="Event Title"
+                placeholder="e.g. Annual Charity Ball 2026"
+                value={title}
+                onChange={setTitle}
+                required
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <TextInput
+                  label="Date & Time"
+                  type="datetime-local"
+                  value={date}
+                  onChange={setDate}
+                  required
+                />
+                <TextInput
+                  label="Venue Location"
+                  placeholder="e.g. Grand Arena Hall"
+                  value={location}
+                  onChange={setLocation}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <SelectInput
+                  label="Event Type"
+                  options={EVENT_TYPES.map(t => ({ value: t, label: t }))}
+                  value={type}
+                  onChange={setType}
+                />
+                <TextInput
+                  label="Max Capacity (Optional)"
+                  type="number"
+                  placeholder="Unlimited if empty"
+                  value={capacity}
+                  onChange={setCapacity}
+                />
+              </div>
+
+              <TextInput
+                label="Cover Image URL (Optional)"
+                type="url"
+                placeholder="https://images.unsplash.com/..."
+                value={coverUrl}
+                onChange={setCoverUrl}
+              />
+
+              <SelectInput
+                label="Publish Status"
+                options={[
+                  { value: "draft", label: "Draft (Internal Only)" },
+                  { value: "published", label: "Published (Public View)" },
+                  { value: "closed", label: "Closed" },
+                ]}
+                value={status}
+                onChange={setStatus}
+              />
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-foreground font-sans">
+                  Description / Event Details
+                </label>
+                <textarea
+                  placeholder="Describe your event..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all resize-none"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm bg-destructive/10 text-destructive">
+                  <AlertCircle size={15} />
+                  <span className="font-semibold">{error}</span>
+                </div>
+              )}
+
+              <div className="flex gap-4 border-t border-border pt-4 mt-2">
+                <OutlineButton type="button" onClick={() => setModalOpen(false)} className="flex-1 justify-center">
+                  Cancel
+                </OutlineButton>
+                <GoldButton type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="flex-1 justify-center">
+                  Save Event
+                </GoldButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
