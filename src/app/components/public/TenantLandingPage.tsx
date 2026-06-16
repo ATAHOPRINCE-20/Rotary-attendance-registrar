@@ -43,7 +43,7 @@ export function TenantLandingPage() {
           <img
             src={organization.logo_url}
             alt={organization.name}
-            className="max-w-[320px] max-h-[140px] object-contain"
+            className="max-w-[480px] max-h-[200px] object-contain mx-auto mb-2"
           />
         ) : (
           <RotaryLogo size={80} />
