@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS organizations (
   district   TEXT,
   country    TEXT,
   website    TEXT,
+  buddy_groups TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS events (
   cover_image_url TEXT,
   status          TEXT NOT NULL DEFAULT 'draft'
                   CHECK (status IN ('draft', 'published', 'closed')),
+  buddy_groups    TEXT,
   created_by      UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS donations (
   full_name       TEXT,
   email           TEXT,
   amount          DECIMAL(10, 2) NOT NULL,
-  currency        TEXT DEFAULT 'USD',
+  currency        TEXT DEFAULT 'UGX',
   category        TEXT,
   payment_method  TEXT,
   status          TEXT DEFAULT 'pending'
@@ -214,3 +216,49 @@ CREATE INDEX IF NOT EXISTS idx_regs_org         ON registrations(organization_id
 CREATE INDEX IF NOT EXISTS idx_regs_qr_ref      ON registrations(qr_ref);
 CREATE INDEX IF NOT EXISTS idx_donations_org    ON donations(organization_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_org    ON campaigns(organization_id);
+
+-- Migration statement to add buddy_groups to events table and update default currency
+ALTER TABLE events ADD COLUMN IF NOT EXISTS buddy_groups TEXT;
+ALTER TABLE donations ALTER COLUMN currency SET DEFAULT 'UGX';
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS buddy_groups TEXT;
+
+-- ============================================================
+-- Rotary Connect — Members Table Migration
+-- ============================================================
+
+-- Create MEMBERS table
+CREATE TABLE IF NOT EXISTS members (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  full_name       TEXT NOT NULL,
+  email           TEXT,
+  phone           TEXT,
+  buddy_group     TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+
+-- Row Level Security Policies
+CREATE POLICY "Admins manage org members"
+  ON members FOR ALL
+  USING (organization_id = my_org_id());
+
+CREATE POLICY "Public read members"
+  ON members FOR SELECT
+  USING (true);
+
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_members_org ON members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_members_org_name ON members(organization_id, full_name);
+
+-- Trigger for updated_at auto-updating
+CREATE TRIGGER members_updated_at
+  BEFORE UPDATE ON members
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Update registrations table to support member mapping
+ALTER TABLE registrations ADD COLUMN IF NOT EXISTS member_id UUID REFERENCES members(id) ON DELETE SET NULL;
+

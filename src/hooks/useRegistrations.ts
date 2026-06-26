@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type { Registration } from "../types/database";
+import { sanitizeInput, sanitizeRequiredInput } from "../lib/constants";
 
 // ─── All registrations for an event (admin) ───────────────────────────────────
 export function useEventRegistrations(eventId: string | undefined) {
@@ -59,10 +60,43 @@ export function useSubmitRegistration() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Omit<Registration, "id" | "qr_ref" | "created_at" | "status" | "checked_in_at">) => {
+      const sanitizedVisits = payload.visits
+        ? payload.visits
+            .map(v => ({
+              club_name: sanitizeRequiredInput(v.club_name),
+              date: sanitizeRequiredInput(v.date),
+            }))
+            .filter(v => v.club_name !== "")
+        : null;
+
+      const sanitizedMakeups = payload.makeups
+        ? payload.makeups
+            .map(m => ({
+              club_name: sanitizeRequiredInput(m.club_name),
+              date: sanitizeRequiredInput(m.date),
+            }))
+            .filter(m => m.club_name !== "")
+        : null;
+
+      const sanitizedPayload = {
+        ...payload,
+        full_name: sanitizeRequiredInput(payload.full_name),
+        email: sanitizeRequiredInput(payload.email),
+        phone: payload.phone ? sanitizeInput(payload.phone) : null,
+        club_name: payload.club_name ? sanitizeInput(payload.club_name) : null,
+        district: payload.district ? sanitizeInput(payload.district) : null,
+        buddy_group: payload.buddy_group ? sanitizeInput(payload.buddy_group) : null,
+        occupation: payload.occupation ? sanitizeInput(payload.occupation) : null,
+        organization_name: payload.organization_name ? sanitizeInput(payload.organization_name) : null,
+        comments: payload.comments ? sanitizeInput(payload.comments) : null,
+        visits: sanitizedVisits,
+        makeups: sanitizedMakeups,
+      };
+
       const { data, error } = await supabase
         .from("registrations")
         .insert({
-          ...payload,
+          ...sanitizedPayload,
           status: "checked-in",
           checked_in_at: new Date().toISOString()
         })

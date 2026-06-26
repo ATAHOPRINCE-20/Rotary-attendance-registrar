@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type { Donation } from "../types/database";
+import { sanitizeInput, sanitizeRequiredInput } from "../lib/constants";
 
 export function useOrgDonations(organizationId: string | undefined) {
   return useQuery({
@@ -40,9 +41,18 @@ export function useSubmitDonation() {
     mutationFn: async (
       payload: Omit<Donation, "id" | "receipt_number" | "created_at">
     ) => {
+      const sanitizedPayload = {
+        ...payload,
+        full_name: payload.full_name ? sanitizeRequiredInput(payload.full_name) : "Anonymous",
+        email: payload.email ? sanitizeInput(payload.email) : null,
+        currency: sanitizeRequiredInput(payload.currency),
+        category: payload.category ? sanitizeInput(payload.category) : null,
+        payment_method: payload.payment_method ? sanitizeInput(payload.payment_method) : null,
+      };
+
       const { data, error } = await supabase
         .from("donations")
-        .insert(payload)
+        .insert(sanitizedPayload)
         .select()
         .single();
       if (error) throw error;

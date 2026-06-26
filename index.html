@@ -8,13 +8,37 @@
       <title>Rotary Club of Ntinda</title>
       <meta name="description" content="Streamline Rotary event registration and donations with a professional platform that connects leaders, supports community projects, and enhances engagement." />
       <meta name="robots" content="noindex, nofollow" />
+      <link rel="manifest" href="/manifest.json" />
+      <meta name="theme-color" content="#17458F" />
+      <link rel="apple-touch-icon" href="/assets/rotary_gold_logo.png" />
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
       
     </head>
 
     <body>
       
-      <div id="root"></div>
+      <div id="root">
+        <!-- Instant loading screen (automatically cleared when React mounts) -->
+        <div style="position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #081c3b 0%, #0d2c54 100%); color: #ffffff; z-index: 9999; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;">
+          <!-- Spinning logo gear -->
+          <div style="position: relative; margin-bottom: 24px; padding: 12px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); animation: index-gear-spin 10s linear infinite; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
+            <img src="/assets/rotary_gold_logo.png" alt="Rotary International" style="width: 64px; height: 64px; object-fit: contain;" />
+          </div>
+          <!-- Loader spinner -->
+          <div style="width: 32px; height: 32px; border-radius: 50%; border: 4px solid #F7A81B; border-top-color: transparent; animation: index-spinner-spin 1.2s linear infinite; margin-bottom: 16px;"></div>
+          <!-- Loading text -->
+          <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.25em; font-weight: 800; color: #F7A81B; margin: 0; opacity: 0.8;">Loading</p>
+          <style>
+            @keyframes index-gear-spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            @keyframes index-spinner-spin {
+              to { transform: rotate(360deg); }
+            }
+          </style>
+        </div>
+      </div>
       <script type="module" src="/src/main.tsx"></script>
       
     </body>

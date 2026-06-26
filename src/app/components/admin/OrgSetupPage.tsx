@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../context/AuthContext";
 import { supabase } from "../../../lib/supabase";
 import { PageCard, TextInput } from "../shared/PageCard";
 import { GoldButton } from "../shared/Buttons";
 import { RotaryLogo } from "../shared/RotaryLogo";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
 import { AlertCircle, Building, Globe, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+import { LoadingScreen } from "../shared/LoadingScreen";
+
 export function OrgSetupPage() {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, profileLoading, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
 
   // Form states
@@ -26,6 +28,22 @@ export function OrgSetupPage() {
   // Logo upload states
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Redirect checks safely executed inside useEffect
+  useEffect(() => {
+    if (!authLoading && !profileLoading) {
+      if (!user) {
+        navigate("/admin", { replace: true });
+      } else if (profile) {
+        navigate("/admin/dashboard", { replace: true });
+      }
+    }
+  }, [authLoading, profileLoading, user, profile, navigate]);
+
+  // Wait until loading finishes or redirect is in progress
+  if (authLoading || profileLoading || !user || profile) {
+    return <LoadingScreen variant="light" />;
+  }
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -105,12 +123,12 @@ export function OrgSetupPage() {
       const { data: org, error: orgErr } = await supabase
         .from("organizations")
         .insert({
-          name: orgName.trim(),
-          slug: slug.trim(),
+          name: sanitizeRequiredInput(orgName),
+          slug: sanitizeRequiredInput(slug),
           logo_url: logoUrl,
-          district: district.trim() || null,
-          country: country.trim() || null,
-          website: website.trim() || null,
+          district: district.trim() ? sanitizeInput(district) : null,
+          country: country.trim() ? sanitizeInput(country) : null,
+          website: website.trim() ? sanitizeInput(website) : null,
         })
         .select()
         .single();
@@ -252,9 +270,63 @@ export function OrgSetupPage() {
               </div>
             )}
 
-            <GoldButton type="submit" disabled={loading} className="w-full justify-center py-3.5 mt-2">
+            <GoldButton type="submit" disabled={loading} className="w-full justify-center py-2.5 mt-2">
               {loading ? "Configuring Club..." : "Complete Setup"}
             </GoldButton>
+            <button
+              type="button"
+              onClick={async () => {
+                await signOut();
+                navigate("/admin");
+              }}
+              className="text-xs font-semibold hover:underline text-center mt-3 w-full cursor-pointer block"
+              style={{ color: NAVY }}
+            >
+              Sign Out & Cancel
+            </button>
+
+            {/* Diagnostics Info for debugging */}
+            <div className="mt-6 pt-5 border-t border-border/60 text-left">
+              <details className="group">
+                <summary className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer select-none outline-none hover:text-foreground transition-colors flex items-center gap-1">
+                  <span>Diagnostics Info (Debug)</span>
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                </summary>
+                <div className="mt-3 bg-muted/40 rounded-xl p-3 text-[10px] font-mono text-muted-foreground border border-border/40 flex flex-col gap-1.5 overflow-x-auto">
+                  <div><strong>Build Time:</strong> 2026-06-22T13:17:00Z</div>
+                  <div><strong>Auth Loading:</strong> {authLoading ? "true" : "false"}</div>
+                  <div><strong>Profile Loading:</strong> {profileLoading ? "true" : "false"}</div>
+                  <div><strong>User ID:</strong> {user?.id ?? "none"}</div>
+                  <div><strong>User Email:</strong> {user?.email ?? "none"}</div>
+                  <div><strong>Profile:</strong> {profile ? JSON.stringify(profile) : "null"}</div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if ('serviceWorker' in navigator) {
+                          const registrations = await navigator.serviceWorker.getRegistrations();
+                          for (const reg of registrations) {
+                            await reg.unregister();
+                          }
+                        }
+                        const cacheNames = await caches.keys();
+                        for (const cacheName of cacheNames) {
+                          await caches.delete(cacheName);
+                        }
+                        sessionStorage.clear();
+                        localStorage.clear();
+                        window.location.reload();
+                      } catch (e) {
+                        window.location.reload();
+                      }
+                    }}
+                    className="mt-3 w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-bold rounded-lg text-[9px] uppercase tracking-wider transition-colors cursor-pointer text-center"
+                  >
+                    Clear Cache & Hard Reload
+                  </button>
+                </div>
+              </details>
+            </div>
           </form>
         </PageCard>
       </div>

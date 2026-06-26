@@ -1,40 +1,28 @@
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useAdminEvents } from "../../../hooks/useEvents";
 import { useOrgRegistrations } from "../../../hooks/useRegistrations";
 import { useOrgDonations } from "../../../hooks/useDonations";
-import { NAVY, GOLD } from "../../../lib/constants";
-import { RotaryLogo } from "../shared/RotaryLogo";
+import { supabase } from "../../../lib/supabase";
+import { toast } from "sonner";
+import { NAVY, GOLD, sanitizeInput } from "../../../lib/constants";
+import { AdminLayout } from "../shared/AdminLayout";
 import {
-  LayoutDashboard,
   Calendar,
   Users,
   Heart,
-  MessageSquare,
-  BarChart3,
-  Settings,
-  LogOut,
   Plus,
   UserCheck,
-  Globe,
-  Bell,
-  Search,
   TrendingUp,
   ArrowUpRight,
 } from "lucide-react";
 
-// ─── Sidebar nav items ─────────────────────────────────────────────────────────
-const MENU_ITEMS = [
-  { label: "Dashboard",       to: "/admin/dashboard",       icon: LayoutDashboard },
-  { label: "Events",          to: "/admin/events",          icon: Calendar },
-  { label: "Communications",  to: "/admin/communications",  icon: MessageSquare },
-  { label: "Analytics",       to: "/admin/analytics",       icon: BarChart3 },
-];
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function AdminDashboard() {
-  const { profile, organization, signOut } = useAuth();
+  const { profile, organization, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const { data: events,        isLoading: eventsLoading   } = useAdminEvents(organization?.id);
   const { data: registrations, isLoading: regsLoading     } = useOrgRegistrations(organization?.id);
@@ -42,161 +30,70 @@ export function AdminDashboard() {
 
   const loading = eventsLoading || regsLoading || donationsLoading;
 
+  const [clubBuddyGroups, setClubBuddyGroups] = useState("");
+  const [savingBuddyGroups, setSavingBuddyGroups] = useState(false);
+
+  useEffect(() => {
+    if (organization) {
+      setClubBuddyGroups(organization.buddy_groups || "");
+    }
+  }, [organization]);
+
+  async function handleSaveBuddyGroups(e: React.FormEvent) {
+    e.preventDefault();
+    if (!organization) return;
+
+    setSavingBuddyGroups(true);
+    try {
+      const sanitizedBuddyGroups = sanitizeInput(clubBuddyGroups);
+      const { error } = await supabase
+        .from("organizations")
+        .update({ buddy_groups: sanitizedBuddyGroups })
+        .eq("id", organization.id);
+
+      if (error) throw error;
+      toast.success("Club buddy groups updated successfully!");
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to update buddy groups.");
+    } finally {
+      setSavingBuddyGroups(false);
+    }
+  }
+
   const activeEventsCount  = events?.filter(e => e.status === "published").length ?? 0;
   const totalRegistrations = registrations?.length ?? 0;
   const totalDonations     = donations?.reduce((a, d) => a + Number(d.amount), 0) ?? 0;
   const checkedInCount     = registrations?.filter(r => r.status === "checked-in").length ?? 0;
 
-  const initials = profile?.full_name
-    ?.split(" ")
-    .map(w => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() ?? "AD";
-
   return (
-    <div className="flex h-screen bg-[#f4f6fb] overflow-hidden">
-
-      {/* ── LEFT SIDEBAR ──────────────────────────────────────────────── */}
-      <aside
-        className="hidden lg:flex flex-col w-60 shrink-0 h-full border-r border-border/60"
-        style={{ background: "#fff" }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-border/40">
-          {organization?.logo_url ? (
-            <img src={organization.logo_url} className="h-12 w-auto object-contain rounded-md" alt={organization.name} />
-          ) : (
-            <RotaryLogo size={44} />
-          )}
-          <div className="leading-tight overflow-hidden">
-            <p className="font-black text-xs truncate" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              {organization?.name ?? "RotaryConnect"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">Service Above Self</p>
-          </div>
+    <AdminLayout
+      pageTitle="Dashboard"
+      actions={
+        <button
+          onClick={() => navigate("/admin/events")}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+          style={{ background: NAVY }}
+        >
+          <Plus size={14} /> New Event
+        </button>
+      }
+    >
+      <main className="flex-1">
+        {/* Page heading */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            Dashboard
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Plan, manage and track your Rotary club with ease.
+          </p>
         </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-5 flex flex-col gap-1 overflow-y-auto">
-          <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">Menu</p>
-          {MENU_ITEMS.map(({ label, to, icon: Icon }) => {
-            const active = location.pathname === to;
-            return (
-              <button
-                key={to}
-                onClick={() => navigate(to)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
-                  active
-                    ? "text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-                style={{
-                  background: active ? NAVY : undefined,
-                  fontFamily: "Open Sans, sans-serif",
-                }}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            );
-          })}
-
-          <div className="mt-6">
-            <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">General</p>
-            <button
-              onClick={() => window.open(`/org/${organization?.slug}`, "_blank")}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-            >
-              <Globe size={16} />
-              Public Portal
-            </button>
-            <button
-              onClick={signOut}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-all"
-            >
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
-        </nav>
-
-        {/* User avatar card at bottom */}
-        <div className="p-4 border-t border-border/40">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted transition-all cursor-default">
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0"
-              style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
-            >
-              {initials}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-bold text-foreground truncate">{profile?.full_name ?? "Admin"}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{profile?.role ?? "admin"}</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-border/40 shrink-0">
-          {/* Search */}
-          <div className="flex items-center gap-2 bg-[#f4f6fb] rounded-xl px-4 py-2.5 w-64">
-            <Search size={14} className="text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Search…</span>
-          </div>
-
-          {/* Right: bell + avatar */}
-          <div className="flex items-center gap-3">
-            <button className="w-9 h-9 rounded-xl bg-[#f4f6fb] flex items-center justify-center hover:bg-muted transition-all">
-              <Bell size={16} className="text-muted-foreground" />
-            </button>
-            {/* Create event shortcut */}
-            <button
-              onClick={() => navigate("/admin/events")}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-              style={{ background: NAVY }}
-            >
-              <Plus size={14} />
-              New Event
-            </button>
-            {/* Avatar */}
-            <div className="flex items-center gap-2.5">
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-black"
-                style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
-              >
-                {initials}
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-xs font-bold text-foreground">{profile?.full_name ?? "Admin"}</p>
-                <p className="text-[10px] text-muted-foreground">{organization?.name}</p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Scrollable page body */}
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-
-          {/* Page heading */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Dashboard
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Plan, manage and track your Rotary club with ease.
-            </p>
-          </div>
 
           {/* ── STAT CARDS ── */}
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-            </div>
+            <LoadingScreen variant="light" fullScreen={false} />
           ) : (
             <>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
@@ -227,7 +124,7 @@ export function AdminDashboard() {
                   },
                   {
                     label: "Total Donations",
-                    val:   `$${totalDonations.toFixed(2)}`,
+                    val:   `UGX ${totalDonations.toLocaleString()}`,
                     icon:  Heart,
                     accent: "#E53E3E",
                     bg:    "#E53E3E18",
@@ -257,6 +154,34 @@ export function AdminDashboard() {
                     </p>
                   </div>
                 ))}
+              </div>
+
+              {/* Club Buddy Groups Settings Card */}
+              <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4 mb-6">
+                <div>
+                  <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                    Club Buddy Groups 
+                  </h3>
+                  {/* <p className="text-xs text-muted-foreground mt-0.5">
+                    Set default buddy groups (comma-separated) that will always appear in the registration dropdown for your club's events.
+                  </p> */}
+                </div>
+                <form onSubmit={handleSaveBuddyGroups} className="flex gap-2">
+                  <input
+                    placeholder="e.g. Table 1, Table 2, Table 3, Table 4"
+                    value={clubBuddyGroups}
+                    onChange={(e) => setClubBuddyGroups(e.target.value)}
+                    className="flex-1 px-4 py-2.5 text-xs rounded-xl border border-border bg-input-background focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingBuddyGroups}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer"
+                    style={{ background: GOLD }}
+                  >
+                    {savingBuddyGroups ? "Saving..." : "Save Groups"}
+                  </button>
+                </form>
               </div>
 
               {/* ── RECENT TABLES ── */}
@@ -346,7 +271,7 @@ export function AdminDashboard() {
                             </div>
                           </div>
                           <span className="text-sm font-black" style={{ color: "#17458F" }}>
-                            +${Number(d.amount).toFixed(2)}
+                            +UGX {Number(d.amount).toLocaleString()}
                           </span>
                         </div>
                       ))
@@ -357,8 +282,7 @@ export function AdminDashboard() {
             </>
           )}
         </main>
-      </div>
-    </div>
+    </AdminLayout>
   );
 }
 

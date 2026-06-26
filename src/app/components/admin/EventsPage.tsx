@@ -10,7 +10,8 @@ import {
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, NavyButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD, EVENT_TYPES } from "../../../lib/constants";
+import { NAVY, GOLD, EVENT_TYPES, parseOrgWebsite, serializeOrgWebsite } from "../../../lib/constants";
+import { supabase } from "../../../lib/supabase";
 import {
   Calendar,
   Plus,
@@ -25,9 +26,10 @@ import {
   FileImage,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function EventsPage() {
-  const { organization } = useAuth();
+  const { organization, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   // Queries/Mutations
@@ -35,6 +37,29 @@ export function EventsPage() {
   const createMutation = useCreateEvent();
   const updateMutation = useUpdateEvent();
   const deleteMutation = useDeleteEvent();
+
+  const { activeEventId } = parseOrgWebsite(organization?.website || null);
+
+  const handleSetActiveEvent = async (eventId: string | null) => {
+    if (!organization) return;
+    const { websiteUrl } = parseOrgWebsite(organization.website);
+    const newWebsite = serializeOrgWebsite(eventId, websiteUrl);
+
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({ website: newWebsite })
+        .eq("id", organization.id);
+
+      if (error) throw error;
+
+      toast.success(eventId ? "Active event set successfully!" : "Active event cleared!");
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to set active event.");
+    }
+  };
 
   // Modal / Form state
   const [modalOpen, setModalOpen] = useState(false);
@@ -102,6 +127,7 @@ export function EventsPage() {
       status: status as "draft" | "published" | "closed",
       cover_image_url: coverUrl.trim() || null,
       created_by: null,
+      buddy_groups: null,
     };
 
     try {
@@ -155,9 +181,7 @@ export function EventsPage() {
 
       {/* Content list */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-          </div>
+          <LoadingScreen variant="light" fullScreen={false} />
         ) : !events || events.length === 0 ? (
           <PageCard className="text-center py-16">
             <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
@@ -171,73 +195,94 @@ export function EventsPage() {
           </PageCard>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((ev) => (
-              <PageCard key={ev.id} className="flex flex-col justify-between h-full hover:shadow-md transition-shadow">
-                <div>
-                  <div className="flex justify-between items-start gap-2 mb-4">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
-                    >
-                      {ev.type || "General"}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                        ev.status === "published"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : ev.status === "closed"
-                          ? "bg-rose-100 text-rose-800"
-                          : "bg-slate-100 text-slate-800"
-                      }`}
-                    >
-                      {ev.status}
-                    </span>
+            {events.map((ev) => {
+              const isActive = activeEventId === ev.id;
+              return (
+                <PageCard key={ev.id} className={`flex flex-col justify-between h-full hover:shadow-md transition-shadow ${isActive ? 'ring-2 ring-emerald-500/50' : ''}`}>
+                  <div>
+                    <div className="flex justify-between items-start gap-2 mb-4">
+                      <div className="flex flex-wrap gap-1.5">
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+                        >
+                          {ev.type || "General"}
+                        </span>
+                        {isActive && (
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" /> Active Site Event
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          ev.status === "published"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : ev.status === "closed"
+                            ? "bg-rose-100 text-rose-800"
+                            : "bg-slate-100 text-slate-800"
+                        }`}
+                      >
+                        {ev.status}
+                      </span>
+                    </div>
+
+                    <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                      {ev.title}
+                    </h3>
+
+                    <p className="text-xs text-muted-foreground mb-1">
+                      <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
+                    </p>
+                    {ev.location && (
+                      <p className="text-xs text-muted-foreground mb-1">
+                        <strong>Venue:</strong> {ev.location}
+                      </p>
+                    )}
+                    {ev.capacity && (
+                      <p className="text-xs text-muted-foreground mb-3">
+                        <strong>Capacity:</strong> {ev.capacity} attendees
+                      </p>
+                    )}
+
+                    {ev.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
+                        {ev.description}
+                      </p>
+                    )}
                   </div>
 
-                  <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-                    {ev.title}
-                  </h3>
-
-                  <p className="text-xs text-muted-foreground mb-1">
-                    <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
-                  </p>
-                  {ev.location && (
-                    <p className="text-xs text-muted-foreground mb-1">
-                      <strong>Venue:</strong> {ev.location}
-                    </p>
-                  )}
-                  {ev.capacity && (
-                    <p className="text-xs text-muted-foreground mb-3">
-                      <strong>Capacity:</strong> {ev.capacity} attendees
-                    </p>
-                  )}
-
-                  {ev.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
-                      {ev.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
-                  <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
-                    <Edit2 size={12} /> Edit
-                  </OutlineButton>
-                  <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
-                    <QrCode size={12} /> QR Codes
-                  </OutlineButton>
-                  <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
-                    <Users size={12} /> Attendees & Check‑In
-                  </OutlineButton>
-                  <OutlineButton
-                    onClick={() => handleDelete(ev.id)}
-                    className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
-                  >
-                    <Trash2 size={12} /> Delete Event
-                  </OutlineButton>
-                </div>
-              </PageCard>
-            ))}
+                  <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
+                      className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
+                        isActive
+                          ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
+                          : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
+                      }`}
+                    >
+                      <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
+                    </button>
+                    <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
+                      <Edit2 size={12} /> Edit
+                    </OutlineButton>
+                    <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
+                      <QrCode size={12} /> QR Codes
+                    </OutlineButton>
+                    <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
+                      <Users size={12} /> Attendees & Check‑In
+                    </OutlineButton>
+                    <OutlineButton
+                      onClick={() => handleDelete(ev.id)}
+                      className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
+                    >
+                      <Trash2 size={12} /> Delete Event
+                    </OutlineButton>
+                  </div>
+                </PageCard>
+              );
+            })}
           </div>
         )}
 

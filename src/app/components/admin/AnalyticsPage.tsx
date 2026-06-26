@@ -9,31 +9,35 @@ import { NAVY, GOLD, DONATION_CATEGORIES } from "../../../lib/constants";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { TrendingUp, Users, Heart, Award, BarChart3 } from "lucide-react";
 
+import { LoadingScreen } from "../shared/LoadingScreen";
+
 export function AnalyticsPage() {
   const { organization } = useAuth();
   const navigate = useNavigate();
 
   // Queries
-  const { data: events } = useAdminEvents(organization?.id);
-  const { data: registrations } = useOrgRegistrations(organization?.id);
-  const { data: donations } = useOrgDonations(organization?.id);
+  const { data: events, isLoading: eventsLoading } = useAdminEvents(organization?.id);
+  const { data: registrations, isLoading: regsLoading } = useOrgRegistrations(organization?.id);
+  const { data: donations, isLoading: donationsLoading } = useOrgDonations(organization?.id);
+
+  const loading = eventsLoading || regsLoading || donationsLoading;
+
+  if (loading) {
+    return <LoadingScreen variant="light" />;
+  }
 
   // 1. Process registrations stats
-  const totalRegistrations = registrations?.length ?? 0;
   const checkedInCount = registrations?.filter(r => r.status === "checked-in").length ?? 0;
-  const attendanceRate = totalRegistrations > 0 ? Math.round((checkedInCount / totalRegistrations) * 100) : 0;
 
   // 2. Process donations stats
   const totalDonationAmount = donations?.reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
 
-  // 3. Prepare data for: Registrations per Event (Bar Chart)
+  // 3. Prepare data for: Attendees per Event (Bar Chart)
   const eventAttendanceData = events?.map(ev => {
-    const eventRegsCount = registrations?.filter((r: any) => r.event_id === ev.id).length ?? 0;
     const eventCheckedIn = registrations?.filter((r: any) => r.event_id === ev.id && r.status === "checked-in").length ?? 0;
     return {
       name: ev.title.length > 15 ? `${ev.title.slice(0, 15)}...` : ev.title,
-      Registered: eventRegsCount,
-      "Checked-In": eventCheckedIn,
+      "Attendees": eventCheckedIn,
     };
   }) ?? [];
 
@@ -60,9 +64,9 @@ export function AnalyticsPage() {
                   <Users size={20} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">RSVP Conversion</p>
-                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>{attendanceRate}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Checked-in / Total RSVPs</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Total Attendees</p>
+                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>{checkedInCount}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Checked-in across all events</p>
                 </div>
               </PageCard>
 
@@ -72,7 +76,7 @@ export function AnalyticsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase">Total Raised</p>
-                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>${totalDonationAmount.toFixed(2)}</p>
+                  <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>UGX {totalDonationAmount.toLocaleString()}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Overall voluntary donations</p>
                 </div>
               </PageCard>
@@ -107,8 +111,7 @@ export function AnalyticsPage() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="Registered" fill="#F7A81B" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Checked-In" fill="#17458F" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Attendees" fill="#17458F" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -126,8 +129,8 @@ export function AnalyticsPage() {
                     <BarChart data={donationCategoriesData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="category" />
-                      <YAxis tickFormatter={(val) => `$${val}`} />
-                      <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, "Raised"]} />
+                      <YAxis tickFormatter={(val) => `UGX ${Number(val).toLocaleString()}`} />
+                      <Tooltip formatter={(value) => [`UGX ${Number(value).toLocaleString()}`, "Raised"]} />
                       <Bar dataKey="Amount" fill="#0067C8" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>

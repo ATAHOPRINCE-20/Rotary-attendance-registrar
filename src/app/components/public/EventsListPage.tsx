@@ -6,6 +6,7 @@ import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
 import { NAVY, GOLD } from "../../../lib/constants";
 import { Calendar, MapPin, Tag, ArrowRight } from "lucide-react";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function EventsListPage() {
   const { slug } = useParams<{ slug?: string }>();
@@ -14,6 +15,10 @@ export function EventsListPage() {
   const { data: events, isLoading: eventsLoading } = usePublicEvents(organization?.id);
 
   const loading = tenantLoading || eventsLoading;
+
+  if (loading) {
+    return <LoadingScreen variant="blue" />;
+  }
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-12">
@@ -28,15 +33,11 @@ export function EventsListPage() {
             Club Events
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Join us in service and fellowship. Click any event to learn more and RSVP.
+            Join us in service and fellowship. Click any event to register your attendance.
           </p>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-          </div>
-        ) : !events || events.length === 0 ? (
+        {!events || events.length === 0 ? (
           <PageCard className="text-center py-12">
             <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-bold" style={{ color: NAVY }}>No Events Scheduled</h3>

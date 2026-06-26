@@ -19,6 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function CommsPage() {
   const { organization } = useAuth();
@@ -118,9 +119,7 @@ export function CommsPage() {
 
         <div className="px-5 py-4">
           {campaignsLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-            </div>
+            <LoadingScreen variant="light" fullScreen={false} />
           ) : !campaigns || campaigns.length === 0 ? (
             <p className="text-sm text-muted-foreground py-12 text-center">No campaigns sent yet.</p>
           ) : (
@@ -174,7 +173,7 @@ export function CommsPage() {
               <TextInput label="Campaign Name" placeholder="e.g. Thank You for attending Gala" value={name} onChange={setName} required />
               <SelectInput label="Broadcast Channel" options={[{ value: "email", label: "Email Campaign" }, { value: "sms", label: "SMS Broadcast" }, { value: "whatsapp", label: "WhatsApp Template" }]} value={channel} onChange={(val) => setChannel(val as any)} />
               <SelectInput label="Target Event (Optional)" options={events ? [{ value: "", label: "All Contacts" }, ...events.map(e => ({ value: e.id, label: e.title }))] : [{ value: "", label: "All Contacts" }]} value={eventId} onChange={setEventId} />
-              <SelectInput label="Target Audience" options={[{ value: "all", label: "All Registered Attendees" }, { value: "checked-in", label: "Only Checked-In Guests" }, { value: "pending", label: "Only RSVPs (Not Checked-In)" }]} value={audience} onChange={setAudience} />
+              <SelectInput label="Target Audience" options={[{ value: "all", label: "All Registered Attendees" }, { value: "checked-in", label: "Only Checked-In Guests" }, { value: "pending", label: "Pending (Not Checked-In)" }]} value={audience} onChange={setAudience} />
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold text-foreground">Message Body</label>
                 <textarea placeholder="Type your message..." value={message} onChange={e => setMessage(e.target.value)} rows={4} required className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all resize-none" />

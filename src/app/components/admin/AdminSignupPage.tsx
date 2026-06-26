@@ -108,7 +108,7 @@ export function AdminSignupPage() {
               </div>
             )}
 
-            <GoldButton onClick={handleSignUp} className="w-full justify-center py-3 mt-1" disabled={loading}>
+            <GoldButton onClick={handleSignUp} className="w-full justify-center py-2.5 mt-1" disabled={loading}>
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><UserPlus size={15} /> Create Account</>}
             </GoldButton>
 

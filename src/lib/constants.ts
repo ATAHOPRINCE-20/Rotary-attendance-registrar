@@ -34,3 +34,44 @@ export const ROLES = {
   ADMIN:       "admin",
   STAFF:       "staff",
 } as const;
+
+// ─── Organization Website Metadata Helpers ────────────────────────────────────
+export interface ParsedOrgWebsite {
+  activeEventId: string | null;
+  websiteUrl: string | null;
+}
+
+export function parseOrgWebsite(websiteStr: string | null): ParsedOrgWebsite {
+  if (!websiteStr) return { activeEventId: null, websiteUrl: null };
+  
+  if (websiteStr.startsWith("event_id:")) {
+    const parts = websiteStr.split("|");
+    const activeEventId = parts[0].replace("event_id:", "") || null;
+    const websiteUrl = parts[1] ? parts[1].replace("website:", "") : null;
+    return { activeEventId, websiteUrl };
+  }
+  
+  return { activeEventId: null, websiteUrl: websiteStr };
+}
+
+export function serializeOrgWebsite(activeEventId: string | null, websiteUrl: string | null): string {
+  const parts = [];
+  parts.push(`event_id:${activeEventId || ""}`);
+  parts.push(`website:${websiteUrl || ""}`);
+  return parts.join("|");
+}
+
+export function sanitizeInput(val: string | null | undefined): string | null {
+  if (!val) return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  // Remove HTML tags to prevent HTML/Script injection
+  return trimmed.replace(/<\/?[^>]+(>|$)/g, "");
+}
+
+export function sanitizeRequiredInput(val: string): string {
+  const sanitized = sanitizeInput(val);
+  if (!sanitized) return "";
+  return sanitized;
+}
+

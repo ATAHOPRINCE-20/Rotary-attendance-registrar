@@ -1,21 +1,12 @@
-import { GOLD, NAVY, WHITE } from "../../../lib/constants";
-
-export function RotaryLogo({ size = 40 }: { size?: number }) {
+export function RotaryLogo({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="45" fill={NAVY} />
-      <circle cx="50" cy="50" r="32" fill="none" stroke={GOLD} strokeWidth="6" />
-      <circle cx="50" cy="50" r="10" fill={GOLD} />
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
-        <rect
-          key={i}
-          x="47" y="14"
-          width="6" height="14"
-          rx="3"
-          fill={WHITE}
-          transform={`rotate(${angle} 50 50)`}
-        />
-      ))}
-    </svg>
+    <img
+      src="/assets/rotary_gold_logo.png"
+      alt="Rotary International"
+      width={size}
+      height={size}
+      className={`object-contain ${className}`}
+      style={{ width: `${size}px`, height: `${size}px` }}
+    />
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Loader2, AlertCircle, LogIn } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
@@ -7,18 +7,30 @@ import { GoldButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
 import { NAVY, GOLD } from "../../../lib/constants";
 
+import { LoadingScreen } from "../shared/LoadingScreen";
+
 export function AdminLoginPage() {
-  const { signIn, user, profile } = useAuth();
+  const { signIn, user, profile, loading: authLoading, profileLoading } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState<string | null>(null);
   const [loading, setLoading]   = useState(false);
 
-  // Already logged in → redirect
-  if (user && profile) {
-    navigate("/admin/dashboard", { replace: true });
-    return null;
+  // Already logged in → redirect safely using useEffect
+  useEffect(() => {
+    if (!authLoading && !profileLoading && user) {
+      if (profile) {
+        navigate("/admin/dashboard", { replace: true });
+      } else {
+        navigate("/org-setup", { replace: true });
+      }
+    }
+  }, [authLoading, profileLoading, user, profile, navigate]);
+
+  // Wait until loading finishes or redirect is in progress
+  if (authLoading || (user && profileLoading)) {
+    return <LoadingScreen variant="light" />;
   }
 
   async function handleLogin() {
@@ -78,7 +90,7 @@ export function AdminLoginPage() {
               </div>
             )}
 
-            <GoldButton onClick={handleLogin} className="w-full justify-center py-3" disabled={loading}>
+            <GoldButton onClick={handleLogin} className="w-full justify-center py-2.5" disabled={loading}>
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><LogIn size={15} /> Sign In</>}
             </GoldButton>
 

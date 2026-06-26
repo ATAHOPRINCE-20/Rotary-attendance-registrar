@@ -1,29 +1,82 @@
+import { lazy, Suspense, ComponentType } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { TenantProvider } from "../context/TenantContext";
+import { LoadingScreen } from "./components/shared/LoadingScreen";
 
-// Public screens
-import { RootLandingPage }   from "./components/public/RootLandingPage";
-import { TenantLandingPage } from "./components/public/TenantLandingPage";
-import { EventsListPage }    from "./components/public/EventsListPage";
-import { EventDetailPage }   from "./components/public/EventDetailPage";
-import { RegistrationPage }  from "./components/public/RegistrationPage";
-import { PostRegisterPage }  from "./components/public/PostRegisterPage";
-import { DonatePage }        from "./components/public/DonatePage";
-import { QRScannerPage }     from "./components/public/QRScannerPage";
+// Helper utility to retry dynamic imports when they fail (e.g. during PWA updates or offline states)
+function lazyWithRetry<T extends ComponentType<any>>(
+  componentImport: () => Promise<{ [key: string]: T } | { default: T }>,
+  exportName?: string
+) {
+  return lazy(async () => {
+    const hasReloaded = sessionStorage.getItem("pwa-retry-reload");
+    try {
+      const module = await componentImport();
+      if (hasReloaded) {
+        sessionStorage.removeItem("pwa-retry-reload");
+      }
+      return exportName ? { default: (module as any)[exportName] } : (module as { default: T });
+    } catch (error) {
+      console.error("Failed to dynamically import component. Error details:", error);
+      
+      // Only reload once to prevent infinite loops if there is a real server-side issue
+      if (!hasReloaded) {
+        sessionStorage.setItem("pwa-retry-reload", "true");
+        window.location.reload();
+      }
+      
+      // Fallback UI in case offline or reloads fail
+      return {
+        default: (() => (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-background">
+            <div className="w-16 h-16 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg>
+            </div>
+            <h2 className="text-lg font-bold" style={{ color: "#17458F" }}>Connection Error</h2>
+            <p className="text-sm text-muted-foreground mt-2 max-w-xs leading-relaxed">
+              We encountered a network issue loading this section. Please make sure you are connected to the internet.
+            </p>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem("pwa-retry-reload");
+                window.location.reload();
+              }}
+              className="mt-6 px-6 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )) as any
+      };
+    }
+  });
+}
 
-// Admin screens
-import { AdminLoginPage }    from "./components/admin/AdminLoginPage";
-import { AdminSignupPage }   from "./components/admin/AdminSignupPage";
-import { OrgSetupPage }      from "./components/admin/OrgSetupPage";
-import { AdminDashboard }    from "./components/admin/AdminDashboard";
-import { EventsPage }        from "./components/admin/EventsPage";
-import { EventQRPage }       from "./components/admin/EventQRPage";
-import { CheckInPage }       from "./components/admin/CheckInPage";
-import { CommsPage }         from "./components/admin/CommsPage";
-import { AnalyticsPage }     from "./components/admin/AnalyticsPage";
+// Public screens (lazy loaded with retry)
+const RootLandingPage = lazyWithRetry(() => import("./components/public/RootLandingPage"), "RootLandingPage");
+const TenantLandingPage = lazyWithRetry(() => import("./components/public/TenantLandingPage"), "TenantLandingPage");
+const EventsListPage = lazyWithRetry(() => import("./components/public/EventsListPage"), "EventsListPage");
+const EventDetailPage = lazyWithRetry(() => import("./components/public/EventDetailPage"), "EventDetailPage");
+const RegistrationPage = lazyWithRetry(() => import("./components/public/RegistrationPage"), "RegistrationPage");
+const PostRegisterPage = lazyWithRetry(() => import("./components/public/PostRegisterPage"), "PostRegisterPage");
+const DonatePage = lazyWithRetry(() => import("./components/public/DonatePage"), "DonatePage");
+
+// Admin screens (lazy loaded with retry)
+const AdminLoginPage = lazyWithRetry(() => import("./components/admin/AdminLoginPage"), "AdminLoginPage");
+const AdminSignupPage = lazyWithRetry(() => import("./components/admin/AdminSignupPage"), "AdminSignupPage");
+const OrgSetupPage = lazyWithRetry(() => import("./components/admin/OrgSetupPage"), "OrgSetupPage");
+const AdminDashboard = lazyWithRetry(() => import("./components/admin/AdminDashboard"), "AdminDashboard");
+const EventsPage = lazyWithRetry(() => import("./components/admin/EventsPage"), "EventsPage");
+const EventQRPage = lazyWithRetry(() => import("./components/admin/EventQRPage"), "EventQRPage");
+const CheckInPage = lazyWithRetry(() => import("./components/admin/CheckInPage"), "CheckInPage");
+const CommsPage = lazyWithRetry(() => import("./components/admin/CommsPage"), "CommsPage");
+const AnalyticsPage = lazyWithRetry(() => import("./components/admin/AnalyticsPage"), "AnalyticsPage");
+const MembersPage = lazyWithRetry(() => import("./components/admin/MembersPage"), "MembersPage");
+
+import { PWAInstallBanner }  from "./components/shared/PWAInstallBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,21 +84,54 @@ const queryClient = new QueryClient({
   },
 });
 
+// Dynamic fallback that checks current route to match styling
+function RouteLoadingFallback() {
+  const isDocAdmin = window.location.pathname.startsWith("/admin") || 
+                     window.location.pathname.startsWith("/org-setup") || 
+                     window.location.pathname.startsWith("/signup");
+  return <LoadingScreen variant={isDocAdmin ? "light" : "blue"} />;
+}
+
 // ─── Protected Route ──────────────────────────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileLoading, profileError, refreshProfile } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      </div>
-    );
+  // Wait for auth AND profile fetch to both complete before making routing decisions
+  if (loading || profileLoading) {
+    return <LoadingScreen variant="light" />;
   }
 
   if (!user) return <Navigate to="/admin" replace />;
 
-  // Has user but no profile yet → send to org setup
+  // Profile fetch errored (network/timeout) — show retry rather than sending to /org-setup
+  if (profileError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center"
+           style={{ background: "linear-gradient(135deg, #081c3b 0%, #0d2c54 100%)" }}>
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-sm w-full border border-white/10 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-400/20 flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                 fill="none" stroke="#F7A81B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 16h.01"/><path d="M12 8v4"/>
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+            </svg>
+          </div>
+          <h2 className="text-white font-black text-lg mb-2">Connection Issue</h2>
+          <p className="text-blue-100/70 text-sm leading-relaxed mb-6">
+            We couldn't load your profile. Please check your internet connection and try again.
+          </p>
+          <button
+            onClick={() => refreshProfile()}
+            className="w-full py-3 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl transition-all shadow-lg cursor-pointer text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Only redirect to org-setup if profile fetch completed successfully with no record (new user)
   if (!profile) return <Navigate to="/org-setup" replace />;
 
   return <>{children}</>;
@@ -70,6 +156,7 @@ function AppRoutes() {
       <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute><CheckInPage /></ProtectedRoute>} />
       <Route path="/admin/communications"     element={<ProtectedRoute><CommsPage /></ProtectedRoute>} />
       <Route path="/admin/analytics"          element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+      <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
 
       {/* Tenant (public attendee) routes — all scoped to :slug */}
       <Route
@@ -83,7 +170,6 @@ function AppRoutes() {
               <Route path="register/:id" element={<RegistrationPage />} />
               <Route path="post-register" element={<PostRegisterPage />} />
               <Route path="donate"       element={<DonatePage />} />
-              <Route path="scan"         element={<QRScannerPage />} />
             </Routes>
           </TenantProvider>
         }
@@ -100,7 +186,10 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <AppRoutes />
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <AppRoutes />
+          </Suspense>
+          <PWAInstallBanner />
           <Toaster richColors position="top-right" />
         </BrowserRouter>
       </AuthProvider>

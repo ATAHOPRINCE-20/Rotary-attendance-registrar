@@ -26,6 +26,11 @@ export interface Database {
         Insert: Omit<Registration, "id" | "qr_ref" | "created_at">;
         Update: Partial<Omit<Registration, "id" | "created_at">>;
       };
+      members: {
+        Row: Member;
+        Insert: Omit<Member, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<Member, "id" | "created_at">>;
+      };
       donations: {
         Row: Donation;
         Insert: Omit<Donation, "id" | "receipt_number" | "created_at">;
@@ -54,6 +59,7 @@ export interface Organization {
   country:    string | null;
   website:    string | null;
   created_at: string;
+  buddy_groups?: string | null;
 }
 
 export interface Profile {
@@ -80,6 +86,7 @@ export interface Event {
   created_by:      string | null;
   created_at:      string;
   updated_at:      string;
+  buddy_groups?:   string | null;
 }
 
 export interface Registration {
@@ -100,6 +107,14 @@ export interface Registration {
   qr_ref:            string;
   checked_in_at:     string | null;
   created_at:        string;
+  member_id?:        string | null;
+  visits?:           ClubActivity[] | null;
+  makeups?:          ClubActivity[] | null;
+}
+
+export interface ClubActivity {
+  club_name: string;
+  date: string;
 }
 
 export interface Donation {
@@ -133,6 +148,17 @@ export interface Campaign {
   sent_at:         string | null;
   created_by:      string | null;
   created_at:      string;
+}
+
+export interface Member {
+  id:              string;
+  organization_id: string;
+  full_name:       string;
+  email:           string | null;
+  phone:           string | null;
+  buddy_group:     string | null;
+  created_at:      string;
+  updated_at:      string;
 }
 
 // ─── Auth State ───────────────────────────────────────────────────────────────

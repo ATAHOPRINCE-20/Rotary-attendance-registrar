@@ -1,25 +1,30 @@
 import { useParams, useNavigate } from "react-router";
-import { useState } from "react";
+import { useState, useEffect, Fragment, MouseEvent } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useEvent } from "../../../hooks/useEvents";
 import { useEventRegistrations, useCheckIn, useSubmitRegistration } from "../../../hooks/useRegistrations";
-import { PageCard, TextInput } from "../shared/PageCard";
+import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
 import {
   ChevronLeft,
   Users,
   Search,
   CheckCircle,
-  QrCode,
-  UserCheck,
   FileSpreadsheet,
   Printer,
   Plus,
   X,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingScreen } from "../shared/LoadingScreen";
+import { supabase } from "../../../lib/supabase";
+import type { ClubActivity } from "../../../types/database";
+import { useCreateMember } from "../../../hooks/useMembers";
 
 export function CheckInPage() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -29,28 +34,139 @@ export function CheckInPage() {
   // Queries
   const { data: event, isLoading: eventLoading } = useEvent(eventId);
   const { data: registrations, isLoading: regsLoading } = useEventRegistrations(eventId);
+
+  const loading = eventLoading || regsLoading;
+
+  if (loading) {
+    return <LoadingScreen variant="light" />;
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <PageCard className="text-center max-w-sm flex flex-col gap-4">
+          <h2 className="text-lg font-bold" style={{ color: NAVY }}>Event Not Found</h2>
+          <GoldButton onClick={() => navigate("/admin/events")} className="w-full justify-center">
+            Back to Events
+          </GoldButton>
+        </PageCard>
+      </div>
+    );
+  }
+
+  return (
+    <CheckInContent
+      key={event.id}
+      event={event}
+      registrations={registrations || []}
+      organization={organization}
+      eventId={eventId!}
+    />
+  );
+}
+
+interface CheckInContentProps {
+  event: any;
+  registrations: any[];
+  organization: any;
+  eventId: string;
+}
+
+function CheckInContent({ event, registrations, organization, eventId }: CheckInContentProps) {
+  const navigate = useNavigate();
   const checkInMutation = useCheckIn();
   const registerMutation = useSubmitRegistration();
 
   // Filter/Search states
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "checked-in">("all");
-  const [scanningCode, setScanningCode] = useState("");
-  const [scanning, setScanning] = useState(false);
+  const [expandedAttendeeId, setExpandedAttendeeId] = useState<string | null>(null);
+
+  const storageKey = `rotary-admin-reg-${eventId}`;
+
+  // Read saved form data if exists
+  const savedData = (() => {
+    try {
+      const data = sessionStorage.getItem(storageKey);
+      return data ? JSON.parse(data) : {};
+    } catch {
+      return {};
+    }
+  })();
 
   // Manual Registration Form States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [isMember, setIsMember] = useState(false);
-  const [clubName, setClubName] = useState("");
-  const [district, setDistrict] = useState("");
-  const [occupation, setOccupation] = useState("");
-  const [comments, setComments] = useState("");
+  const [fullName, setFullName] = useState(savedData.fullName || "");
+  const [email, setEmail] = useState(savedData.email || "");
+  const [phone, setPhone] = useState(savedData.phone || "");
+  const [regType, setRegType] = useState<"guest" | "rotarian" | "club_member">(savedData.regType || "guest");
+  const [clubName, setClubName] = useState(savedData.clubName || "");
+  const [district, setDistrict] = useState(savedData.district || "");
+  const [buddyGroup, setBuddyGroup] = useState(savedData.buddyGroup || "");
+  const [occupation, setOccupation] = useState(savedData.occupation || "");
+  const [comments, setComments] = useState(savedData.comments || "");
   const [submitting, setSubmitting] = useState(false);
 
-  const loading = eventLoading || regsLoading;
+  const [visits, setVisits] = useState<ClubActivity[]>([]);
+  const [makeups, setMakeups] = useState<ClubActivity[]>([]);
+  const [existingMakeupsCount, setExistingMakeupsCount] = useState(0);
+  const createMemberMutation = useCreateMember();
+
+  // Fetch existing monthly makeups count for manual registration
+  useEffect(() => {
+    if (regType !== "club_member" || !fullName.trim()) {
+      setExistingMakeupsCount(0);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const eventDate = new Date(event.date);
+        const startOfMonth = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1).toISOString();
+        const endOfMonth = new Date(eventDate.getFullYear(), eventDate.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+
+        const { data, error } = await supabase
+          .from("registrations")
+          .select("id, makeups, events!inner(date)")
+          .ilike("full_name", fullName.trim())
+          .eq("organization_id", organization?.id || "")
+          .gte("events.date", startOfMonth)
+          .lte("events.date", endOfMonth);
+
+        if (error) throw error;
+
+        const count = data?.reduce((acc, reg) => {
+          const mUps = reg.makeups;
+          if (Array.isArray(mUps)) {
+            return acc + mUps.length;
+          }
+          return acc;
+        }, 0) || 0;
+
+        setExistingMakeupsCount(count);
+      } catch (err) {
+        console.error("Error fetching monthly makeups in admin:", err);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [fullName, regType, event.date, organization?.id]);
+
+  // Auto-persist inputs on changes
+  useEffect(() => {
+    const data = {
+      fullName,
+      email,
+      phone,
+      regType,
+      clubName,
+      district,
+      buddyGroup,
+      occupation,
+      comments,
+    };
+    sessionStorage.setItem(storageKey, JSON.stringify(data));
+  }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, storageKey]);
 
   // ── Download / Print Attendance Report ─────────────────────────────────────
   function downloadAttendanceReport() {
@@ -63,18 +179,28 @@ export function CheckInPage() {
     const orgName = organization?.name ?? "Rotary Club";
     const checkedIn = registrations.filter(r => r.status === "checked-in").length;
 
-    const rows = registrations.map((r, i) => `
-      <tr class="${i % 2 === 0 ? "even" : "odd"}">
-        <td class="no">${i + 1}</td>
-        <td class="name">${r.full_name}</td>
-        <td>${r.phone ?? "—"}</td>
-        <td>${r.email}</td>
-        <td>${r.club_name ?? (r.is_member ? "Member" : "—")}</td>
-        <td class="center">${r.is_member ? "Member" : "<span class='guest'>Guest</span>"}</td>
-        <td class="center">${r.status === "checked-in" ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-        <td class="sig"></td>
-      </tr>`
-    ).join("");
+    const rows = registrations.map((r, i) => {
+      const role = !r.is_member
+        ? "guest"
+        : r.buddy_group && r.buddy_group.trim() !== ""
+        ? "club member"
+        : "rotarian";
+      return `
+        <tr class="${i % 2 === 0 ? "even" : "odd"}">
+          <td class="no">${i + 1}</td>
+          <td class="name">
+            <div>${r.full_name}</div>
+            ${r.visits && r.visits.length > 0 ? `<div style="font-size: 8px; color: #17458F; font-weight: normal; margin-top: 2px;"><b>Visits:</b> ${r.visits.map((v: ClubActivity) => `${v.club_name} (${v.date})`).join(", ")}</div>` : ''}
+            ${r.makeups && r.makeups.length > 0 ? `<div style="font-size: 8px; color: #B45309; font-weight: normal; margin-top: 1px;"><b>Make-ups:</b> ${r.makeups.map((m: ClubActivity) => `${m.club_name} (${m.date})`).join(", ")}</div>` : ''}
+          </td>
+          <td>${r.phone ?? "—"}</td>
+          <td>${r.email}</td>
+          <td>${r.club_name ?? (role === "club member" ? "Club Member" : role === "rotarian" ? "Rotarian" : "—")}</td>
+          <td class="center"><span class="role-badge role-${role.replace(" ", "-")}">${role}</span></td>
+          <td class="center">${r.status === "checked-in" ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
+          <td class="sig"></td>
+        </tr>`;
+    }).join("");
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -118,7 +244,10 @@ export function CheckInPage() {
     td.name { font-weight: 700; color: #17458F; }
     td.center { text-align: center; }
     td.sig  { width: 80px; border-bottom: 1px solid #bbb; }
-    .guest    { background: #FFF3CD; color: #856404; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
+    .role-badge { padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+    .role-guest { background: #F1F5F9; color: #475569; }
+    .role-rotarian { background: #E0F2FE; color: #0369A1; }
+    .role-club-member { background: #FEF3C7; color: #B45309; }
     .checkedin{ background: #D1FAE5; color: #065F46; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
     .pending  { background: #FEF3C7; color: #92400E; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
 
@@ -219,6 +348,12 @@ export function CheckInPage() {
     win.document.close();
   }
 
+  const buddyGroupsList = event?.buddy_groups
+    ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+    : organization?.buddy_groups
+    ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+    : ["Table 1", "Table 2", "Table 3", "Table 4"];
+
   const filteredRegs = registrations?.filter((r) => {
     const matchesSearch =
       r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -240,66 +375,118 @@ export function CheckInPage() {
     }
   }
 
-  async function handleScanSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!scanningCode.trim()) return;
-
-    const code = scanningCode.trim().toUpperCase();
-    const match = registrations?.find((r) => r.qr_ref === code);
-
-    if (!match) {
-      toast.error("Ticket code not found for this event.");
-      return;
-    }
-
-    if (match.status === "checked-in") {
-      toast.warning(`${match.full_name} is already checked in.`);
-      setScanningCode("");
-      return;
-    }
-
-    try {
-      await handleCheckIn(match.id);
-      setScanningCode("");
-    } catch (err) {
-      // handled above
-    }
-  }
-
   async function handleAddAttendee(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim()) {
-      toast.error("Please fill out all required fields.");
+
+    const sanitizedFullName = sanitizeRequiredInput(fullName);
+    const sanitizedEmail = regType === "club_member" ? `member@${organization?.slug || "rotary"}.org` : sanitizeRequiredInput(email);
+    const sanitizedPhone = regType === "club_member" ? null : sanitizeInput(phone);
+    const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
+    const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
+    const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
+    const sanitizedOccupation = regType !== "club_member" ? sanitizeInput(occupation) : null;
+    const sanitizedComments = sanitizeInput(comments);
+
+    if (regType === "club_member") {
+      if (!sanitizedFullName || !sanitizedBuddyGroup) {
+        toast.error("Please enter Full Name and select a Buddy Group.");
+        return;
+      }
+    } else {
+      if (!sanitizedFullName || !sanitizedEmail || !sanitizedPhone) {
+        toast.error("Please fill out all required fields (Name, Email, and Phone).");
+        return;
+      }
+    }
+
+    if (regType === "rotarian" && (!sanitizedClubName || !sanitizedDistrict)) {
+      toast.error("Please enter Club Name and District.");
+      return;
+    }
+
+    const filteredVisits = visits
+      .map(v => ({
+        club_name: sanitizeRequiredInput(v.club_name),
+        date: sanitizeRequiredInput(v.date),
+      }))
+      .filter(v => v.club_name !== "");
+
+    const filteredMakeups = makeups
+      .map(m => ({
+        club_name: sanitizeRequiredInput(m.club_name),
+        date: sanitizeRequiredInput(m.date),
+      }))
+      .filter(m => m.club_name !== "");
+
+    if (regType === "club_member" && (existingMakeupsCount + filteredMakeups.length > 2)) {
+      toast.error(`You have already registered ${existingMakeupsCount} make-up(s) this month. You cannot exceed 2 make-ups per month (attempted to add ${filteredMakeups.length} more).`);
       return;
     }
 
     setSubmitting(true);
     try {
+      const isRotaryMember = regType === "rotarian" || regType === "club_member";
+
+      let finalMemberId = null;
+
+      if (regType === "club_member") {
+        try {
+          const { data: existing } = await supabase
+            .from("members")
+            .select("id")
+            .eq("organization_id", organization?.id || "")
+            .ilike("full_name", sanitizedFullName)
+            .limit(1);
+
+          if (existing && existing.length > 0) {
+            finalMemberId = existing[0].id;
+          } else {
+            const newMember = await createMemberMutation.mutateAsync({
+              organization_id: organization?.id || "",
+              full_name: sanitizedFullName,
+              email: null,
+              phone: null,
+              buddy_group: sanitizedBuddyGroup || null,
+            });
+            finalMemberId = newMember.id;
+          }
+        } catch (mErr) {
+          console.error("Failed to auto-enroll member in directory:", mErr);
+        }
+      }
+
       await registerMutation.mutateAsync({
         event_id: eventId!,
         organization_id: organization?.id || "",
-        full_name: fullName.trim(),
-        email: email.trim(),
-        phone: phone.trim() || null,
-        is_member: isMember,
-        club_name: isMember ? clubName.trim() || null : null,
-        district: isMember ? district.trim() || null : null,
-        buddy_group: null,
-        occupation: occupation.trim() || null,
+        full_name: sanitizedFullName,
+        email: sanitizedEmail,
+        phone: sanitizedPhone,
+        is_member: isRotaryMember,
+        club_name: sanitizedClubName,
+        district: sanitizedDistrict,
+        buddy_group: sanitizedBuddyGroup,
+        occupation: sanitizedOccupation,
         organization_name: null,
-        comments: comments.trim() || null,
+        comments: sanitizedComments,
+        member_id: finalMemberId || null,
+        visits: regType === "club_member" && filteredVisits.length > 0 ? filteredVisits : null,
+        makeups: regType === "club_member" && filteredMakeups.length > 0 ? filteredMakeups : null,
       });
 
       toast.success("Attendee registered & checked in successfully!");
+      sessionStorage.removeItem(storageKey);
       // Reset form
       setFullName("");
       setEmail("");
       setPhone("");
-      setIsMember(false);
+      setRegType("guest");
       setClubName("");
       setDistrict("");
+      setBuddyGroup("");
       setOccupation("");
       setComments("");
+      setVisits([]);
+      setMakeups([]);
       setIsAddModalOpen(false);
     } catch (err: any) {
       console.error(err);
@@ -309,42 +496,22 @@ export function CheckInPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  if (!event) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <PageCard className="text-center max-w-sm flex flex-col gap-4">
-          <h2 className="text-lg font-bold" style={{ color: NAVY }}>Event Not Found</h2>
-          <GoldButton onClick={() => navigate("/admin/events")} className="w-full justify-center">
-            Back to Events
-          </GoldButton>
-        </PageCard>
-      </div>
-    );
-  }
-
   return (
     <AdminLayout
       pageTitle={event.title}
       actions={
         <div className="flex items-center gap-2">
+          {/* QR Scanner view toggle button removed */}
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer"
             style={{ background: GOLD }}
           >
             <Plus size={14} /> Register Attendee
           </button>
           <button
             onClick={downloadAttendanceReport}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted bg-card transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted bg-card transition-all cursor-pointer"
             title="Download Attendance Report (PDF/Print)"
           >
             <Printer size={14} /> Print Report
@@ -365,142 +532,295 @@ export function CheckInPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Check-in scanning utility */}
-          <div className="lg:col-span-1 flex flex-col gap-6">
-            <PageCard>
-              <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-1.5">
-                <QrCode size={16} /> QR Scanner Desk
-              </h3>
-
-              <div className="aspect-video w-full bg-muted/40 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 mb-4">
-                {scanning ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <UserCheck className="w-8 h-8 text-[#48BB78] animate-bounce" />
-                    <p className="text-xs text-muted-foreground font-semibold">Ready for scan feed...</p>
-                  </div>
-                ) : (
-                  <>
-                    <QrCode className="w-8 h-8 text-muted-foreground" />
-                    <GoldButton onClick={() => setScanning(true)} className="py-1.5 px-3 text-xs">
-                      Activate Scan Desk
-                    </GoldButton>
-                  </>
-                )}
+      <div className="grid grid-cols-1 gap-8">
+        {/* Attendee list */}
+        <div className="w-full flex flex-col gap-4">
+          <PageCard>
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
+              {/* Search */}
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  placeholder="Search name, email, or ticket ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 text-xs rounded-xl border border-border bg-input-background focus:outline-none"
+                />
               </div>
 
-              <form onSubmit={handleScanSubmit} className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-muted-foreground uppercase">
-                  Scan / Type Ticket Code
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    placeholder="e.g. ROT-B1C2..."
-                    value={scanningCode}
-                    onChange={(e) => setScanningCode(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-border bg-input-background uppercase font-mono focus:outline-none"
-                  />
-                  <GoldButton type="submit" className="py-2 px-3 text-xs font-bold">
-                    Validate
-                  </GoldButton>
-                </div>
-              </form>
-            </PageCard>
-          </div>
-
-          {/* Attendee list */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <PageCard>
-              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
-                {/* Search */}
-                <div className="flex-1 relative">
-                  <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    placeholder="Search name, email, or ticket ID..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 text-xs rounded-xl border border-border bg-input-background focus:outline-none"
-                  />
-                </div>
-
-                {/* Filter segments */}
-                <div className="flex border border-border rounded-xl overflow-hidden self-start">
-                  {(["all", "pending", "checked-in"] as const).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setFilterStatus(status)}
-                      className={`px-3 py-2 text-[10px] font-bold uppercase transition-all ${
-                        filterStatus === status
-                          ? "bg-[#17458F] text-white"
-                          : "bg-card hover:bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {status === "all" ? "All" : status === "pending" ? "Pending" : "Checked In"}
-                    </button>
-                  ))}
-                </div>
+              {/* Filter segments */}
+              <div className="flex border border-border rounded-xl overflow-hidden self-start">
+                {(["all", "pending", "checked-in"] as const).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-3 py-2 text-[10px] font-bold uppercase transition-all ${
+                      filterStatus === status
+                        ? "bg-[#17458F] text-white"
+                        : "bg-card hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {status === "all" ? "All" : status === "pending" ? "Pending" : "Checked In"}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Table list */}
-              {filteredRegs.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-12 text-center">No matching attendees found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/20">
-                        <th className="py-3 px-3 font-semibold text-muted-foreground">Attendee</th>
-                        <th className="py-3 px-3 font-semibold text-muted-foreground">Ticket Code</th>
-                        <th className="py-3 px-3 font-semibold text-muted-foreground">Status</th>
-                        <th className="py-3 px-3 font-semibold text-muted-foreground text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRegs.map((r) => (
-                        <tr key={r.id} className="border-b border-border/50 hover:bg-muted/10">
-                          <td className="py-4 px-3">
-                            <p className="font-bold text-foreground">{r.full_name}</p>
-                            <p className="text-[10px] text-muted-foreground">{r.email}</p>
-                            {r.is_member && (
-                              <span
-                                className="inline-block mt-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase"
-                                style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
+            {/* Table list */}
+            {filteredRegs.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">No matching attendees found.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/20">
+                      <th className="py-3 px-3 font-semibold text-muted-foreground">Attendee</th>
+                      <th className="hidden md:table-cell py-3 px-3 font-semibold text-muted-foreground">Email</th>
+                      <th className="hidden sm:table-cell py-3 px-3 font-semibold text-muted-foreground">Role</th>
+                      <th className="hidden md:table-cell py-3 px-3 font-semibold text-muted-foreground">Club</th>
+                      <th className="w-10 py-3 px-3 text-center">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRegs.map((r) => {
+                      const isExpanded = expandedAttendeeId === r.id;
+                      return (
+                        <Fragment key={r.id}>
+                          <tr
+                            onClick={() => setExpandedAttendeeId(isExpanded ? null : r.id)}
+                            className={`border-b border-border/50 hover:bg-muted/10 cursor-pointer transition-colors ${
+                              isExpanded ? "bg-muted/5" : ""
+                            }`}
+                          >
+                            <td className="py-4 px-3">
+                              <p className="font-bold text-foreground">{r.full_name}</p>
+                              {(() => {
+                                const role = !r.is_member
+                                  ? "guest"
+                                  : r.buddy_group && r.buddy_group.trim() !== ""
+                                  ? "club member"
+                                  : "rotarian";
+                                const colorStyles =
+                                  role === "guest"
+                                    ? { backgroundColor: "#F1F5F9", color: "#475569" }
+                                    : role === "rotarian"
+                                    ? { backgroundColor: "#E0F2FE", color: "#0369A1" }
+                                    : { backgroundColor: `${GOLD}15`, color: GOLD };
+                                return (
+                                  <span
+                                    className="inline-block mt-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase md:hidden"
+                                    style={colorStyles}
+                                  >
+                                    {role}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="hidden md:table-cell py-4 px-3 font-medium text-foreground">
+                              <a
+                                href={`mailto:${r.email}`}
+                                className="text-primary hover:underline"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                Rotary Member
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 font-mono text-[10px]">{r.qr_ref}</td>
-                          <td className="py-4 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                r.status === "checked-in"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {r.status === "checked-in" ? "Checked In" : "Pending"}
-                            </span>
-                          </td>
-                          <td className="py-4 px-3 text-right">
-                            {r.status === "pending" ? (
-                              <GoldButton onClick={() => handleCheckIn(r.id)} className="py-1 px-3.5 text-[10px] inline-flex">
-                                Check In
-                              </GoldButton>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground font-semibold inline-block py-1 pr-2">
-                                Checked In
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </PageCard>
-          </div>
+                                {r.email}
+                              </a>
+                            </td>
+                            <td className="hidden sm:table-cell py-4 px-3">
+                              {(() => {
+                                const role = !r.is_member
+                                  ? "guest"
+                                  : r.buddy_group && r.buddy_group.trim() !== ""
+                                  ? "club member"
+                                  : "rotarian";
+                                const badgeClass =
+                                  role === "guest"
+                                    ? "bg-slate-100 text-slate-800"
+                                    : role === "rotarian"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-amber-100 text-amber-800";
+                                return (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${badgeClass}`}
+                                  >
+                                    {role}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="hidden md:table-cell py-4 px-3 text-muted-foreground">
+                              {r.is_member ? (r.club_name || "—") : "Guest"}
+                            </td>
+                            <td className="py-4 px-3 text-center text-muted-foreground">
+                              <div className="flex justify-center">
+                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-muted/10 border-b border-border/50">
+                              <td colSpan={5} className="py-4 px-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                                  <div>
+                                    <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                      Contact Details
+                                    </p>
+                                    <p className="text-foreground">
+                                      <span className="text-muted-foreground font-semibold">Email:</span>{" "}
+                                      <a href={`mailto:${r.email}`} className="text-primary hover:underline font-medium">
+                                        {r.email}
+                                      </a>
+                                    </p>
+                                    {r.phone && (
+                                      <p className="text-foreground mt-0.5">
+                                        <span className="text-muted-foreground font-semibold">Phone:</span>{" "}
+                                        <a href={`tel:${r.phone}`} className="text-primary hover:underline font-medium">
+                                          {r.phone}
+                                        </a>
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                      Rotary Affiliation
+                                    </p>
+                                    {r.is_member ? (
+                                      r.buddy_group && r.buddy_group.trim() !== "" ? (
+                                        <div>
+                                          <p className="text-foreground">
+                                            <span className="text-muted-foreground font-semibold">Role:</span>{" "}
+                                            Club Member
+                                          </p>
+                                          <p className="text-foreground mt-0.5">
+                                            <span className="text-muted-foreground font-semibold">Buddy Group:</span>{" "}
+                                            {r.buddy_group}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <div>
+                                          <p className="text-foreground">
+                                            <span className="text-muted-foreground font-semibold">Club:</span>{" "}
+                                            {r.club_name || "—"}
+                                          </p>
+                                          {r.district && (
+                                            <p className="text-foreground mt-0.5">
+                                              <span className="text-muted-foreground font-semibold">District:</span>{" "}
+                                              {r.district}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )
+                                    ) : (
+                                      <p className="text-muted-foreground italic mt-0.5">Guest (Non-Rotarian)</p>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                      Attendee Info
+                                    </p>
+                                    <p className="text-foreground">
+                                      <span className="text-muted-foreground font-semibold">Ticket Code:</span>{" "}
+                                      <span className="font-mono text-foreground font-semibold">{r.qr_ref}</span>
+                                    </p>
+                                    {r.occupation && (
+                                      <p className="text-foreground mt-0.5">
+                                        <span className="text-muted-foreground font-semibold">
+                                          {!r.is_member ? "Profession" : "Classification"}:
+                                        </span>{" "}
+                                        {r.occupation}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {r.comments && (
+                                    <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-2.5">
+                                      <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                        Comments & Notes
+                                      </p>
+                                      <p className="text-muted-foreground italic bg-white p-2.5 rounded-xl border border-border/40">
+                                        {r.comments}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {((r.visits && r.visits.length > 0) || (r.makeups && r.makeups.length > 0)) && (
+                                    <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                      {r.visits && r.visits.length > 0 && (
+                                        <div>
+                                          <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                            Visited Clubs
+                                          </p>
+                                          <ul className="list-disc list-inside text-xs text-foreground bg-white p-2.5 rounded-xl border border-border/40 flex flex-col gap-1">
+                                            {r.visits.map((v: ClubActivity, idx: number) => (
+                                              <li key={idx} className="font-semibold text-[#17458F]">
+                                                {v.club_name} <span className="text-[10px] text-muted-foreground font-normal">({v.date})</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {r.makeups && r.makeups.length > 0 && (
+                                        <div>
+                                          <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
+                                            Make-ups Submitted
+                                          </p>
+                                          <ul className="list-disc list-inside text-xs text-foreground bg-white p-2.5 rounded-xl border border-border/40 flex flex-col gap-1">
+                                            {r.makeups.map((m: ClubActivity, idx: number) => (
+                                              <li key={idx} className="font-semibold text-amber-600">
+                                                {m.club_name} <span className="text-[10px] text-muted-foreground font-normal">({m.date})</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Action button & Status inside expanded content for ALL viewports */}
+                                  <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-muted-foreground font-semibold">Attendance Status:</span>
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                          r.status === "checked-in"
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : "bg-amber-100 text-amber-800"
+                                        }`}
+                                      >
+                                        {r.status === "checked-in" ? "Checked In" : "Pending"}
+                                      </span>
+                                    </div>
+
+                                    {r.status === "pending" ? (
+                                      <GoldButton
+                                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                          e.stopPropagation();
+                                          handleCheckIn(r.id);
+                                        }}
+                                        className="py-1.5 px-4 text-xs font-bold"
+                                      >
+                                        Check In
+                                      </GoldButton>
+                                    ) : (
+                                      <div className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                                        Checked In ✓
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </PageCard>
+        </div>
       </div>
 
       {/* Manual Registration Modal */}
@@ -513,7 +833,11 @@ export function CheckInPage() {
                 Register & Check In Attendee
               </h2>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setVisits([]);
+                  setMakeups([]);
+                }}
                 className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-all"
               >
                 <X size={18} />
@@ -530,67 +854,238 @@ export function CheckInPage() {
                 required
               />
 
-              <TextInput
-                label="Email Address"
-                type="email"
-                placeholder="e.g. name@domain.com"
-                value={email}
-                onChange={setEmail}
-                required
-              />
-
-              <TextInput
-                label="Phone Number (Optional)"
-                type="tel"
-                placeholder="e.g. +256 700 000000"
-                value={phone}
-                onChange={setPhone}
-              />
-
-              <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-xl">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer" style={{ fontFamily: "Montserrat, sans-serif" }}>
-                  <input
-                    type="checkbox"
-                    checked={isMember}
-                    onChange={(e) => setIsMember(e.target.checked)}
-                    className="rounded border-border text-[#17458F] focus:ring-[#17458F] w-4 h-4"
+              {regType !== "club_member" && (
+                <>
+                  <TextInput
+                    label="Email Address"
+                    type="email"
+                    placeholder="e.g. name@domain.com"
+                    value={email}
+                    onChange={setEmail}
+                    required
                   />
-                  Is this attendee a Rotary Member?
-                </label>
 
-                {isMember && (
-                  <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1">
-                    <TextInput
-                      label="Club Name"
-                      placeholder="e.g. Rotary Club of Ntinda"
-                      value={clubName}
-                      onChange={setClubName}
-                      required={isMember}
-                    />
-                    <TextInput
-                      label="District"
-                      placeholder="e.g. 9213"
-                      value={district}
-                      onChange={setDistrict}
-                      required={isMember}
-                    />
-                  </div>
-                )}
+                  <TextInput
+                    label="Phone Number"
+                    type="tel"
+                    placeholder="e.g. +256 700 000000"
+                    value={phone}
+                    onChange={setPhone}
+                    required
+                  />
+                </>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                  Registration Type
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "guest", label: "Guest" },
+                    { id: "rotarian", label: "Rotarian" },
+                    { id: "club_member", label: "Club Member" },
+                  ].map((type) => {
+                    const isSelected = regType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setRegType(type.id as any)}
+                        className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
+                          isSelected
+                            ? "border-[#17458F] bg-[#17458F]/5 text-[#17458F]"
+                            : "border-border bg-card text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <TextInput
-                label="Occupation / Title (Optional)"
-                placeholder="e.g. Doctor, Manager, Guest"
-                value={occupation}
-                onChange={setOccupation}
-              />
+              {regType === "rotarian" && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-muted/20 rounded-xl border border-border/40 animate-in fade-in slide-in-from-top-1">
+                  <TextInput
+                    label="Club Name"
+                    placeholder="e.g. Rotary Club of Ntinda"
+                    value={clubName}
+                    onChange={setClubName}
+                    required={regType === "rotarian"}
+                  />
+                  <TextInput
+                    label="District"
+                    placeholder="e.g. 9213"
+                    value={district}
+                    onChange={setDistrict}
+                    required={regType === "rotarian"}
+                  />
+                </div>
+              )}
+
+              {regType === "club_member" && (
+                <div className="p-3 bg-muted/20 rounded-xl border border-border/40 animate-in fade-in slide-in-from-top-1 flex flex-col gap-4">
+                  <SelectInput
+                    label="Buddy Group / Table Name"
+                    options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
+                    value={buddyGroup}
+                    onChange={buddy => setBuddyGroup(buddy)}
+                  />
+
+                  <div className="flex flex-col gap-5 p-4 rounded-xl bg-card border border-border mt-2">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                        Recent Club Activities
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Report any other club visits or make-ups completed this month.
+                      </p>
+                    </div>
+
+                    {/* VISITS SECTION */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                          Other Clubs Visited <span className="text-[9px] bg-[#E2E8F0] text-slate-600 px-1.5 py-0.5 rounded font-normal dark:bg-zinc-800 dark:text-zinc-300">Unlimited</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setVisits([...visits, { club_name: "", date: new Date().toISOString().split("T")[0] }])}
+                          className="text-[11px] font-bold text-[#17458F] hover:text-[#17458F]/80 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Plus size={12} /> Add Visit
+                        </button>
+                      </div>
+
+                      {visits.map((visit, index) => (
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center animate-in fade-in zoom-in-95 duration-100">
+                          <input
+                            type="text"
+                            placeholder="Club Name (e.g. Rotary Club of Kampala)"
+                            value={visit.club_name}
+                            onChange={(e) => {
+                              const newVisits = [...visits];
+                              newVisits[index] = { ...newVisits[index], club_name: e.target.value };
+                              setVisits(newVisits);
+                            }}
+                            className="flex-1 px-3 py-2 rounded-xl border border-border bg-input-background text-foreground text-xs focus:outline-none focus:ring-1 transition-all font-semibold"
+                            required
+                          />
+                          <input
+                            type="date"
+                            value={visit.date}
+                            onChange={(e) => {
+                              const newVisits = [...visits];
+                              newVisits[index] = { ...newVisits[index], date: e.target.value };
+                              setVisits(newVisits);
+                            }}
+                            className="w-full sm:w-32 px-3 py-2 rounded-xl border border-border bg-input-background text-foreground text-xs focus:outline-none focus:ring-1 transition-all font-semibold"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVisits(visits.filter((_, i) => i !== index))}
+                            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all cursor-pointer self-end sm:self-auto"
+                            title="Remove visit"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* MAKE-UPS SECTION */}
+                    <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
+                      <div className="flex justify-between items-center">
+                        <div className="flex flex-col">
+                          <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                            Make-ups Done <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30">Max 2 / Month</span>
+                          </label>
+                          <span className="text-[9px] text-muted-foreground mt-0.5">
+                            Registered this month: <strong className="text-foreground">{existingMakeupsCount}</strong> / 2
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (existingMakeupsCount + makeups.length >= 2) {
+                              toast.error(`You cannot exceed the limit of 2 make-ups per month. You already have ${existingMakeupsCount} registered.`);
+                              return;
+                            }
+                            setMakeups([...makeups, { club_name: "", date: new Date().toISOString().split("T")[0] }]);
+                          }}
+                          disabled={existingMakeupsCount + makeups.length >= 2}
+                          className={`text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                            existingMakeupsCount + makeups.length >= 2
+                              ? "text-muted-foreground cursor-not-allowed opacity-50"
+                              : "text-[#17458F] hover:text-[#17458F]/80"
+                          }`}
+                        >
+                          <Plus size={12} /> Add Make-up
+                        </button>
+                      </div>
+
+                      {makeups.map((makeup, index) => (
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center animate-in fade-in zoom-in-95 duration-100">
+                          <input
+                            type="text"
+                            placeholder="Club Name (e.g. Rotary Club of Ntinda)"
+                            value={makeup.club_name}
+                            onChange={(e) => {
+                              const newMakeups = [...makeups];
+                              newMakeups[index] = { ...newMakeups[index], club_name: e.target.value };
+                              setMakeups(newMakeups);
+                            }}
+                            className="flex-1 px-3 py-2 rounded-xl border border-border bg-input-background text-foreground text-xs focus:outline-none focus:ring-1 transition-all font-semibold"
+                            required
+                          />
+                          <input
+                            type="date"
+                            value={makeup.date}
+                            onChange={(e) => {
+                              const newMakeups = [...makeups];
+                              newMakeups[index] = { ...newMakeups[index], date: e.target.value };
+                              setMakeups(newMakeups);
+                            }}
+                            className="w-full sm:w-32 px-3 py-2 rounded-xl border border-border bg-input-background text-foreground text-xs focus:outline-none focus:ring-1 transition-all font-semibold"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setMakeups(makeups.filter((_, i) => i !== index))}
+                            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all cursor-pointer self-end sm:self-auto"
+                            title="Remove makeup"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+
+                      {existingMakeupsCount >= 2 && (
+                        <div className="text-[10px] text-amber-600 bg-amber-50/50 dark:bg-amber-950/10 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 font-medium">
+                          ✓ Already registered 2 make-ups for this month.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {regType !== "club_member" && (
+                <TextInput
+                  label={regType === "guest" ? "Profession (Optional)" : "Classification (Optional)"}
+                  placeholder={regType === "guest" ? "e.g. Doctor, Manager" : "e.g. Consultant, Architect"}
+                  value={occupation}
+                  onChange={setOccupation}
+                />
+              )}
 
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "Montserrat, sans-serif" }}>
                   Comments / Notes (Optional)
                 </label>
                 <textarea
-                  placeholder="Special requests or attendee notes..."
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   rows={2}
@@ -602,7 +1097,11 @@ export function CheckInPage() {
               <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
                 <OutlineButton
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setVisits([]);
+                    setMakeups([]);
+                  }}
                   className="px-4 py-2 text-xs"
                 >
                   Cancel

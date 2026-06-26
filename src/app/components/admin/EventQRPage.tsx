@@ -9,6 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { ChevronLeft, Download, Printer, Share2, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function EventQRPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,11 +19,7 @@ export function EventQRPage() {
   const [copied, setCopied] = useState(false);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-      </div>
-    );
+    return <LoadingScreen variant="light" />;
   }
 
   if (!event) {
@@ -39,7 +36,7 @@ export function EventQRPage() {
   }
 
   // The landing/registration link for attendees
-  const publicUrl = `${window.location.origin}/org/${organization?.slug}/event/${event.id}`;
+  const publicUrl = `${window.location.origin}/org/${organization?.slug}/register/${event.id}`;
 
   function copyLink() {
     navigator.clipboard.writeText(publicUrl);

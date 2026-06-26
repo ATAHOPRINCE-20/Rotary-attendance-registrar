@@ -8,6 +8,7 @@ import { NavBar } from "../shared/NavBar";
 import { NAVY, GOLD, DONATION_CATEGORIES, PAYMENT_METHODS } from "../../../lib/constants";
 import { Heart, CheckCircle2, ShieldAlert, Award } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function DonatePage() {
   const { slug } = useParams<{ slug?: string }>();
@@ -21,7 +22,7 @@ export function DonatePage() {
   // Form states
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [amount, setAmount] = useState<number>(25);
+  const [amount, setAmount] = useState<number>(25000);
   const [customAmount, setCustomAmount] = useState("");
   const [category, setCategory] = useState("community");
   const [paymentMethod, setPaymentMethod] = useState("card");
@@ -45,7 +46,7 @@ export function DonatePage() {
         full_name: fullName.trim() || "Anonymous",
         email: email.trim() || null,
         amount: selectedAmount,
-        currency: "USD",
+        currency: "UGX",
         category,
         payment_method: paymentMethod,
         status: "completed", // Simulation sets it directly to completed for now
@@ -60,11 +61,7 @@ export function DonatePage() {
   }
 
   if (tenantLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-      </div>
-    );
+    return <LoadingScreen variant="blue" />;
   }
 
   if (donationSuccess) {
@@ -78,7 +75,7 @@ export function DonatePage() {
               Thank You!
             </h1>
             <p className="text-sm text-muted-foreground">
-              Your contribution of <strong className="text-foreground">${donationSuccess.amount.toFixed(2)}</strong> helps us make a difference in communities worldwide.
+              Your contribution of <strong className="text-foreground">UGX {donationSuccess.amount.toLocaleString()}</strong> helps us make a difference in communities worldwide.
             </p>
 
             <div className="bg-muted/30 p-4 rounded-xl border border-border w-full text-left text-sm flex flex-col gap-2">
@@ -102,96 +99,20 @@ export function DonatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-24 pb-12">
+    <div className="min-h-screen bg-background pt-24 pb-12 flex items-center justify-center">
       <NavBar organization={organization} currentPath={window.location.pathname} />
-
-      <div className="max-w-xl mx-auto px-4">
-        <PageCard>
-          <div className="flex flex-col items-center gap-2 mb-6 text-center">
-            <Heart className="w-12 h-12" style={{ color: GOLD }} />
-            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Support Our Cause
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Your donations go directly toward local and international community service.
-            </p>
-          </div>
-
-          <form onSubmit={handleDonate} className="flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>
-                Select Amount (USD)
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {[10, 25, 50, 100].map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => { setAmount(val); setCustomAmount(""); }}
-                    className={`py-3 rounded-xl border text-sm font-bold transition-all ${
-                      amount === val
-                        ? "border-[#17458F] bg-[#17458F] text-white"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    ${val}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-2">
-                <TextInput
-                  label="Custom Amount ($)"
-                  type="number"
-                  placeholder="Enter custom amount"
-                  value={customAmount}
-                  onChange={(val) => {
-                    setAmount(0);
-                    setCustomAmount(val);
-                  }}
-                />
-              </div>
-            </div>
-
-            <SelectInput
-              label="Fund Allocation / Category"
-              options={DONATION_CATEGORIES.map(c => ({ value: c.id, label: c.label }))}
-              value={category}
-              onChange={setCategory}
-            />
-
-            <SelectInput
-              label="Payment Method"
-              options={PAYMENT_METHODS.map(p => ({ value: p.id, label: p.label }))}
-              value={paymentMethod}
-              onChange={setPaymentMethod}
-            />
-
-            <div className="border-t border-border pt-4 mt-2 flex flex-col gap-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Donor Details (Optional)
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <TextInput
-                  label="Full Name"
-                  placeholder="Anonymous"
-                  value={fullName}
-                  onChange={setFullName}
-                />
-                <TextInput
-                  label="Email Address"
-                  type="email"
-                  placeholder="For receipt delivery"
-                  value={email}
-                  onChange={setEmail}
-                />
-              </div>
-            </div>
-
-            <GoldButton type="submit" disabled={mutation.isPending} className="w-full justify-center py-4 mt-2">
-              {mutation.isPending ? "Processing..." : `Donate $${selectedAmount.toFixed(2)}`}
-            </GoldButton>
-          </form>
+      <div className="max-w-md w-full px-4">
+        <PageCard className="text-center flex flex-col items-center gap-6">
+          <ShieldAlert className="w-16 h-16 text-amber-500 animate-pulse" />
+          <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            Donations Offline
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Online donations are temporarily offline at this time. Thank you for your support and willingness to contribute!
+          </p>
+          <GoldButton onClick={() => navigate(`/org/${slug}`)} className="w-full justify-center">
+            Back to Home
+          </GoldButton>
         </PageCard>
       </div>
     </div>

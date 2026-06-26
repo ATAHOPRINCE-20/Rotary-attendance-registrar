@@ -2,11 +2,11 @@ import { useSearchParams, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../context/TenantContext";
 import { useRegistrationByQR } from "../../../hooks/useRegistrations";
 import { PageCard } from "../shared/PageCard";
-import { GoldButton, NavyButton, OutlineButton } from "../shared/Buttons";
+import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
-import { NAVY, GOLD } from "../../../lib/constants";
-import { CheckCircle2, QrCode, Heart, ArrowRight, Loader2, AlertCircle } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import { NAVY } from "../../../lib/constants";
+import { CheckCircle2, Heart, AlertCircle } from "lucide-react";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function PostRegisterPage() {
   const { slug } = useParams<{ slug?: string }>();
@@ -20,11 +20,7 @@ export function PostRegisterPage() {
   const loading = tenantLoading || regLoading;
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-      </div>
-    );
+    return <LoadingScreen variant="blue" />;
   }
 
   if (error || !registration) {
@@ -56,28 +52,11 @@ export function PostRegisterPage() {
           <div className="flex flex-col items-center gap-2">
             <CheckCircle2 className="w-16 h-16 text-[#48BB78] animate-bounce" />
             <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
-              Checked In Successfully!
+              Thank You!
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Welcome, <strong style={{ color: NAVY }}>{registration.full_name}</strong>. You are all set!
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Thank you, <strong style={{ color: NAVY }}>{registration.full_name}</strong>, for attending <strong style={{ color: NAVY }}>{registration.events?.title}</strong>. Your attendance has been successfully registered.
             </p>
-          </div>
-
-          <div className="bg-muted/30 p-6 rounded-2xl border border-border w-full flex flex-col items-center gap-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              YOUR PERSONAL ATTENDANCE TICKET
-            </p>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-border">
-              <QRCodeSVG value={qrValue} size={180} level="H" includeMargin={false} />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-bold" style={{ color: NAVY }}>
-                Ticket ID: {registration.qr_ref}
-              </p>
-              <p className="text-xs text-emerald-600 font-semibold mt-1">
-                ✓ Registered & Checked In
-              </p>
-            </div>
           </div>
 
           <div className="w-full text-left bg-muted/20 p-4 rounded-xl border border-border/50 text-sm flex flex-col gap-2">

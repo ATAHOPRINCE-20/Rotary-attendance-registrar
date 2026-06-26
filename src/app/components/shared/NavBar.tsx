@@ -5,6 +5,7 @@ import { RotaryLogo } from "./RotaryLogo";
 import { GoldButton } from "./Buttons";
 import { GOLD, NAVY } from "../../../lib/constants";
 import type { Organization } from "../../../types/database";
+import { useAuth } from "../../../context/AuthContext";
 
 interface NavBarProps {
   organization?: Organization | null;
@@ -16,6 +17,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
+  const { user } = useAuth();
 
   const base   = slug ? `/org/${slug}` : "";
   const isAdmin = currentPath.startsWith("/admin");
@@ -24,7 +26,6 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
     ? [
         { label: "Home",   to: `${base}` },
         { label: "Events", to: `${base}/events` },
-        { label: "Donate", to: `${base}/donate` },
       ]
     : [];
 
@@ -33,30 +34,13 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Logo + Name */}
+        {/* Logo */}
         <button
           onClick={() => navigate(slug ? `${base}` : "/")}
-          className="flex items-center gap-3"
+          className="flex items-center justify-center cursor-pointer transition-transform hover:scale-105 duration-200"
+          style={{ height: "40px", width: "40px" }}
         >
-          {organization?.logo_url ? (
-            <img src={organization.logo_url} className="h-14 w-auto object-contain rounded-md" alt={organization.name} />
-          ) : (
-            <RotaryLogo size={48} />
-          )}
-          <div className="hidden sm:flex flex-col leading-tight">
-            <span
-              className="font-black text-sm tracking-wide"
-              style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}
-            >
-              {organization?.name ?? "RotaryConnect"}
-            </span>
-            <span
-              className="text-xs text-muted-foreground"
-            >
-
-              Service Above Self
-            </span>
-          </div>
+          <RotaryLogo size={40} />
         </button>
 
         {/* Desktop links */}
@@ -82,32 +66,15 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
         {/* Right side */}
         <div className="hidden md:flex items-center gap-3">
           {!isAdmin && (
-            <>
-              {slug && (
-                <button
-                  onClick={() => navigate(`${base}/scan`)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors"
-                  style={{ fontFamily: "Montserrat, sans-serif" }}
-                >
-                  <QrCode size={15} /> Scan QR
-                </button>
-              )}
+            user ? (
               <button
-                onClick={() => navigate("/admin")}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => navigate("/admin/dashboard")}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
                 style={{ fontFamily: "Montserrat, sans-serif" }}
               >
-                <LogIn size={14} /> Admin
+                Dashboard
               </button>
-              {slug && (
-                <GoldButton
-                  onClick={() => navigate(`${base}/events`)}
-                  className="py-2 px-4"
-                >
-                  Register Now
-                </GoldButton>
-              )}
-            </>
+            ) : null
           )}
         </div>
 
@@ -137,21 +104,18 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
               {l.label}
             </button>
           ))}
-          {slug && (
-            <GoldButton
-              onClick={() => { navigate(`${base}/events`); setOpen(false); }}
-              className="mt-2 justify-center"
-            >
-              Register Now
-            </GoldButton>
+          {/* Removed Register Now button */}
+          {!isAdmin && (
+            user ? (
+              <button
+                onClick={() => { navigate("/admin/dashboard"); setOpen(false); }}
+                className="text-sm text-muted-foreground hover:text-primary py-2 font-semibold text-left px-4"
+                style={{ fontFamily: "Montserrat, sans-serif" }}
+              >
+                Dashboard
+              </button>
+            ) : null
           )}
-          <button
-            onClick={() => { navigate("/admin"); setOpen(false); }}
-            className="text-sm text-muted-foreground hover:text-primary py-2 font-semibold text-left px-4"
-            style={{ fontFamily: "Montserrat, sans-serif" }}
-          >
-            Admin Login
-          </button>
         </div>
       )}
     </nav>

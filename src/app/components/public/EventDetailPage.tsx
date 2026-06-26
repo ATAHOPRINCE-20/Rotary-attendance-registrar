@@ -1,11 +1,12 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, Navigate } from "react-router";
 import { useTenant } from "../../../context/TenantContext";
 import { useEvent, useEventRegistrationCount } from "../../../hooks/useEvents";
 import { PageCard } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, parseOrgWebsite } from "../../../lib/constants";
 import { Calendar, MapPin, Users, ChevronLeft, ShieldAlert } from "lucide-react";
+import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function EventDetailPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
@@ -17,11 +18,15 @@ export function EventDetailPage() {
   const loading = tenantLoading || eventLoading;
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-4 border-[#17458F] border-t-transparent animate-spin" />
-      </div>
-    );
+    return <LoadingScreen variant="blue" />;
+  }
+
+  const { activeEventId } = parseOrgWebsite(organization?.website || null);
+  const isActiveEvent = activeEventId === event?.id;
+
+  // Redirect directly to the registration form only if the event is active
+  if (event && isActiveEvent) {
+    return <Navigate to={`/org/${slug}/register/${event.id}`} replace />;
   }
 
   if (error || !event) {
@@ -149,16 +154,27 @@ export function EventDetailPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-muted/40 p-4 rounded-xl">
             <div className="text-center sm:text-left">
-              <p className="text-xs text-muted-foreground">Ready to secure your spot?</p>
-              <p className="text-sm font-semibold mt-0.5">Registration is free and takes 1 minute.</p>
+              {!isActiveEvent ? (
+                <>
+                  <p className="text-xs text-rose-600 font-bold uppercase tracking-wider">Registration Closed</p>
+                  <p className="text-sm font-semibold mt-0.5">Registration is only open on-site during the live event.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider">On-Site Registration Open</p>
+                  <p className="text-sm font-semibold mt-0.5">Please register your attendance now.</p>
+                </>
+              )}
             </div>
             <GoldButton
               onClick={() => navigate(`/org/${slug}/register/${event.id}`)}
-              disabled={isSoldOut || event.status !== "published"}
+              disabled={!isActiveEvent || isSoldOut || event.status !== "published"}
               className="w-full sm:w-auto justify-center"
             >
               {event.status !== "published"
                 ? "Not Open"
+                : !isActiveEvent
+                ? "Registration Closed"
                 : isSoldOut
                 ? "Event Sold Out"
                 : "Register Attendance"}
