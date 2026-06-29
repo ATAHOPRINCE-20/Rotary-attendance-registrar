@@ -221,6 +221,10 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_org    ON campaigns(organization_id);
 ALTER TABLE events ADD COLUMN IF NOT EXISTS buddy_groups TEXT;
 ALTER TABLE donations ALTER COLUMN currency SET DEFAULT 'UGX';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS buddy_groups TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS buddy_group_of_the_day TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS whatsapp_webhook_url TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS whatsapp_welcome_template TEXT;
+
 
 -- ============================================================
 -- Rotary Connect — Members Table Migration

@@ -41,3 +41,8 @@ vite.config.ts.timestamp-*
 coverage/
 
 .vercel
+
+# WhatsApp Gateway session/cache folders
+baileys_auth_info/
+.wwebjs_auth/
+.wwebjs_cache/

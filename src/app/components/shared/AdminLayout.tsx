@@ -15,11 +15,13 @@ import {
   Menu,
   X,
   Users,
+  FolderArchive,
 } from "lucide-react";
 
 const MENU_ITEMS = [
   { label: "Dashboard",      to: "/admin/dashboard",      icon: LayoutDashboard },
   { label: "Events",         to: "/admin/events",         icon: Calendar        },
+  { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
   { label: "Members",        to: "/admin/members",        icon: Users           },
   { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
   { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },

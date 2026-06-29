@@ -6,7 +6,7 @@ import { useSubmitRegistration } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
-import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
+import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone } from "../../../lib/constants";
 import { AlertCircle, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -231,7 +231,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
     const sanitizedEmail = regType === "club_member" ? `member@${organization?.slug || "rotary"}.org` : sanitizeRequiredInput(email);
-    const sanitizedPhone = regType === "club_member" ? null : sanitizeInput(phone);
+    const sanitizedPhone = regType === "club_member" ? null : formatUgandanPhone(phone);
     const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -355,7 +355,16 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
             <h1 className="text-2xl font-black font-sans" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
               {event.title} Checkin
             </h1>
+            {event.buddy_group_of_the_day && (
+              <div className="mt-2.5 px-3.5 py-2 rounded-xl bg-[#F7A81B]/10 border border-[#F7A81B]/20 text-xs font-semibold flex items-center gap-1.5 text-amber-800 animate-in fade-in slide-in-from-top-1 duration-300">
+                <span>🌟 Hosting Buddy Group today:</span>
+                <span className="bg-[#F7A81B] text-white px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                  {event.buddy_group_of_the_day}
+                </span>
+              </div>
+            )}
           </div>
+
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-3">

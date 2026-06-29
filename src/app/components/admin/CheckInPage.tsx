@@ -6,7 +6,7 @@ import { useEventRegistrations, useCheckIn, useSubmitRegistration } from "../../
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone } from "../../../lib/constants";
 import {
   ChevronLeft,
   Users,
@@ -24,7 +24,8 @@ import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
-import { useCreateMember } from "../../../hooks/useMembers";
+import { useCreateMember, useOrgMembers } from "../../../hooks/useMembers";
+
 
 export function CheckInPage() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -76,10 +77,11 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   const navigate = useNavigate();
   const checkInMutation = useCheckIn();
   const registerMutation = useSubmitRegistration();
+  const { data: members } = useOrgMembers(organization?.id);
+
 
   // Filter/Search states
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "checked-in">("all");
   const [expandedAttendeeId, setExpandedAttendeeId] = useState<string | null>(null);
 
   const storageKey = `rotary-admin-reg-${eventId}`;
@@ -168,6 +170,45 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     sessionStorage.setItem(storageKey, JSON.stringify(data));
   }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, storageKey]);
 
+  // Calculate dynamic buddy group of the day (highest checked-in attendance count)
+  const dynamicBuddyGroup = (() => {
+    if (!registrations || registrations.length === 0) return null;
+    const counts: { [key: string]: number } = {};
+    registrations.forEach((r: any) => {
+      if (r.status === "checked-in" && r.buddy_group && r.buddy_group.trim()) {
+        const bg = r.buddy_group.trim();
+        counts[bg] = (counts[bg] || 0) + 1;
+      }
+    });
+
+    let maxGroup: string | null = null;
+    let maxCount = 0;
+    Object.entries(counts).forEach(([group, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        maxGroup = group;
+      }
+    });
+
+    return maxGroup ? { name: maxGroup, count: maxCount } : null;
+  })();
+
+  // Auto-sync dynamic buddy group of the day back to the Supabase database
+  useEffect(() => {
+    if (!event) return;
+    const currentLeader = dynamicBuddyGroup ? dynamicBuddyGroup.name : null;
+    if (currentLeader !== event.buddy_group_of_the_day) {
+      supabase
+        .from("events")
+        .update({ buddy_group_of_the_day: currentLeader })
+        .eq("id", event.id)
+        .then(({ error }) => {
+          if (error) console.error("Error updating buddy_group_of_the_day:", error);
+        });
+    }
+  }, [dynamicBuddyGroup, event]);
+
+
   // ── Download / Print Attendance Report ─────────────────────────────────────
   function downloadAttendanceReport() {
     if (!event || !registrations) return;
@@ -177,14 +218,26 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     });
     const now = new Date().toLocaleString("en-GB");
     const orgName = organization?.name ?? "Rotary Club";
-    const checkedIn = registrations.filter(r => r.status === "checked-in").length;
+    const checkedInCount = registrations.filter(r => r.status === "checked-in").length;
 
-    const rows = registrations.map((r, i) => {
-      const role = !r.is_member
-        ? "guest"
-        : r.buddy_group && r.buddy_group.trim() !== ""
-        ? "club member"
-        : "rotarian";
+    // Filter registrations into groups
+    const clubMembers = registrations.filter(r => r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id));
+    const visitingRotarians = registrations.filter(r => r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name);
+    const guests = registrations.filter(r => !r.is_member);
+
+    // Calculate club attendance metrics
+    const checkedInClubCount = clubMembers.filter(r => r.status === "checked-in").length;
+    const totalRoster = members?.length ?? 0;
+    const clubAttendancePct = totalRoster > 0 ? (checkedInClubCount / totalRoster) * 100 : 0;
+
+    // Format visiting clubs summary string
+    const vClubsHeadcountStr = visitingClubsList.length > 0
+      ? visitingClubsList.map(item => `${item.club} (${item.count} ${item.count === 1 ? 'person' : 'people'})`).join(", ")
+      : "None";
+
+    // Generate table rows for Club Members
+    const clubMemberRows = clubMembers.length > 0 ? clubMembers.map((r, i) => {
+      const isCheckedIn = r.status === "checked-in";
       return `
         <tr class="${i % 2 === 0 ? "even" : "odd"}">
           <td class="no">${i + 1}</td>
@@ -193,14 +246,44 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
             ${r.visits && r.visits.length > 0 ? `<div style="font-size: 8px; color: #17458F; font-weight: normal; margin-top: 2px;"><b>Visits:</b> ${r.visits.map((v: ClubActivity) => `${v.club_name} (${v.date})`).join(", ")}</div>` : ''}
             ${r.makeups && r.makeups.length > 0 ? `<div style="font-size: 8px; color: #B45309; font-weight: normal; margin-top: 1px;"><b>Make-ups:</b> ${r.makeups.map((m: ClubActivity) => `${m.club_name} (${m.date})`).join(", ")}</div>` : ''}
           </td>
+          <td>${r.buddy_group || "—"}</td>
           <td>${r.phone ?? "—"}</td>
           <td>${r.email}</td>
-          <td>${r.club_name ?? (role === "club member" ? "Club Member" : role === "rotarian" ? "Rotarian" : "—")}</td>
-          <td class="center"><span class="role-badge role-${role.replace(" ", "-")}">${role}</span></td>
-          <td class="center">${r.status === "checked-in" ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
+          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
           <td class="sig"></td>
         </tr>`;
-    }).join("");
+    }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
+
+    // Generate table rows for Visiting Rotarians
+    const visitingRotarianRows = visitingRotarians.length > 0 ? visitingRotarians.map((r, i) => {
+      const isCheckedIn = r.status === "checked-in";
+      return `
+        <tr class="${i % 2 === 0 ? "even" : "odd"}">
+          <td class="no">${i + 1}</td>
+          <td class="name">${r.full_name}</td>
+          <td>${r.club_name || "—"}</td>
+          <td>${r.district || "—"}</td>
+          <td>${r.phone ?? "—"}</td>
+          <td>${r.email}</td>
+          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
+          <td class="sig"></td>
+        </tr>`;
+    }).join("") : `<tr><td colspan="8" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
+
+    // Generate table rows for Guests
+    const guestRows = guests.length > 0 ? guests.map((r, i) => {
+      const isCheckedIn = r.status === "checked-in";
+      return `
+        <tr class="${i % 2 === 0 ? "even" : "odd"}">
+          <td class="no">${i + 1}</td>
+          <td class="name">${r.full_name}</td>
+          <td>${r.occupation || "—"}</td>
+          <td>${r.phone ?? "—"}</td>
+          <td>${r.email}</td>
+          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
+          <td class="sig"></td>
+        </tr>`;
+    }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -209,7 +292,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   <title>Attendance – ${event.title}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Open Sans', Arial, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; padding: 24px 32px; }
+    body { font-family: 'Open Sans', Arial, sans-serif; font-size: 10px; color: #1a1a1a; background: #fff; padding: 24px 32px; }
 
     /* ── Header ── */
     .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #17458F; padding-bottom: 14px; margin-bottom: 16px; }
@@ -221,44 +304,45 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     /* ── Report title ── */
     .report-title { font-size: 15px; font-weight: 900; color: #17458F; font-family: 'Montserrat', Arial, sans-serif; margin-bottom: 2px; }
-    .report-meta { display: flex; gap: 24px; font-size: 9.5px; color: #444; margin-bottom: 14px; }
+    .report-meta { display: flex; flex-wrap: wrap; gap: 24px; font-size: 9.5px; color: #444; margin-bottom: 14px; }
     .report-meta span { display: flex; gap: 4px; }
     .report-meta b { color: #17458F; }
 
     /* ── Summary pills ── */
-    .summary { display: flex; gap: 12px; margin-bottom: 16px; }
+    .summary { display: flex; gap: 12px; margin-bottom: 20px; }
     .pill { padding: 5px 12px; border-radius: 6px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
     .pill-blue { background: #17458F15; color: #17458F; border: 1px solid #17458F30; }
     .pill-green { background: #48BB7815; color: #276749; border: 1px solid #48BB7830; }
     .pill-gold  { background: #F7A81B15; color: #9a6b00; border: 1px solid #F7A81B40; }
 
+    /* ── Sections ── */
+    .section-title { font-size: 11px; font-weight: 800; color: #17458F; font-family: 'Montserrat', Arial, sans-serif; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; border-bottom: 1.5px solid #17458F40; padding-bottom: 2px; }
+    .section-meta { font-size: 9px; color: #666; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+
     /* ── Table ── */
-    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
     thead tr { background: #17458F; color: #fff; }
-    thead th { padding: 7px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+    thead th { padding: 7px 8px; text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
     tbody tr.even { background: #f8f9fc; }
     tbody tr.odd  { background: #fff; }
-    tbody tr:hover { background: #EBF0F9; }
     td { padding: 6px 8px; border-bottom: 1px solid #e8ecf4; vertical-align: middle; }
-    td.no   { color: #999; font-size: 9px; width: 28px; }
+    td.no   { color: #999; font-size: 8.5px; width: 28px; }
     td.name { font-weight: 700; color: #17458F; }
     td.center { text-align: center; }
-    td.sig  { width: 80px; border-bottom: 1px solid #bbb; }
-    .role-badge { padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
-    .role-guest { background: #F1F5F9; color: #475569; }
-    .role-rotarian { background: #E0F2FE; color: #0369A1; }
-    .role-club-member { background: #FEF3C7; color: #B45309; }
-    .checkedin{ background: #D1FAE5; color: #065F46; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
+    td.sig  { width: 90px; border-bottom: 1px solid #bbb; }
+    .checkedin { background: #D1FAE5; color: #065F46; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
     .pending  { background: #FEF3C7; color: #92400E; padding: 1px 6px; border-radius: 10px; font-size: 8px; font-weight: 700; }
 
     /* ── Footer ── */
-    .footer { border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8.5px; color: #888; }
-    .signature-block { display: flex; gap: 48px; margin-top: 28px; }
+    .footer { border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8.5px; color: #888; margin-top: 20px; }
+    .signature-block { display: flex; gap: 48px; margin-top: 36px; margin-bottom: 12px; }
     .sig-line { flex: 1; border-top: 1px solid #555; padding-top: 4px; font-size: 8.5px; color: #555; text-align: center; }
 
     @media print {
       body { padding: 12px 18px; }
       @page { size: A4 landscape; margin: 10mm; }
+      tr { page-break-inside: avoid; }
+      .section-title { page-break-after: avoid; }
     }
   </style>
 </head>
@@ -299,30 +383,79 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     <span><b>Event:</b> ${event.title}</span>
     <span><b>Date:</b> ${eventDate}</span>
     ${event.location ? `<span><b>Venue:</b> ${event.location}</span>` : ""}
+    ${dynamicBuddyGroup ? `<span><b>Buddy Group of the Day:</b> ${dynamicBuddyGroup.name} (${dynamicBuddyGroup.count} Present)</span>` : ""}
   </div>
 
   <!-- Summary pills -->
   <div class="summary">
     <div class="pill pill-blue">Total Registered: ${registrations.length}</div>
-    <div class="pill pill-green">Checked In: ${checkedIn}</div>
-    <div class="pill pill-gold">Absent: ${registrations.length - checkedIn}</div>
+    <div class="pill pill-green">Checked In: ${checkedInCount}</div>
+    <div class="pill pill-gold">Absent: ${registrations.length - checkedInCount}</div>
   </div>
 
-  <!-- Table -->
+  <!-- SECTION 1: CLUB MEMBERS -->
+  <div class="section-title">1. Club Members</div>
+  <div class="section-meta">
+    <span>Checked In: <b>${checkedInClubCount}</b> of <b>${clubMembers.length}</b> registered</span>
+    <span>|</span>
+    <span>Official Club Member Attendance: <b>${clubAttendancePct.toFixed(1)}%</b> (Based on active roster of ${totalRoster} members)</span>
+  </div>
   <table>
     <thead>
       <tr>
         <th>#</th>
         <th>Full Name</th>
+        <th>Buddy Group</th>
         <th>Phone</th>
         <th>Email</th>
-        <th>Club</th>
-        <th style="text-align:center">Type</th>
         <th style="text-align:center">Status</th>
         <th>Signature</th>
       </tr>
     </thead>
-    <tbody>${rows}</tbody>
+    <tbody>${clubMemberRows}</tbody>
+  </table>
+
+  <!-- SECTION 2: VISITING ROTARIANS -->
+  <div class="section-title">2. Visiting Rotarians</div>
+  <div class="section-meta">
+    <span>Checked In: <b>${visitingRotarians.filter(r => r.status === "checked-in").length}</b> of <b>${visitingRotarians.length}</b> registered</span>
+    <span>|</span>
+    <span>Visiting Clubs: <b>${vClubsHeadcountStr}</b></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Club Name</th>
+        <th>District</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th style="text-align:center">Status</th>
+        <th>Signature</th>
+      </tr>
+    </thead>
+    <tbody>${visitingRotarianRows}</tbody>
+  </table>
+
+  <!-- SECTION 3: GUESTS & VISITORS -->
+  <div class="section-title">3. Guests & Non-Rotarians</div>
+  <div class="section-meta">
+    <span>Checked In: <b>${guests.filter(r => r.status === "checked-in").length}</b> of <b>${guests.length}</b> registered</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Profession / Classification</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th style="text-align:center">Status</th>
+        <th>Signature</th>
+      </tr>
+    </thead>
+    <tbody>${guestRows}</tbody>
   </table>
 
   <!-- Signature block -->
@@ -348,6 +481,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     win.document.close();
   }
 
+
   const buddyGroupsList = event?.buddy_groups
     ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
     : organization?.buddy_groups
@@ -355,14 +489,11 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     : ["Table 1", "Table 2", "Table 3", "Table 4"];
 
   const filteredRegs = registrations?.filter((r) => {
-    const matchesSearch =
+    return (
       r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.qr_ref && r.qr_ref.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesStatus = filterStatus === "all" || r.status === filterStatus;
-
-    return matchesSearch && matchesStatus;
+      (r.qr_ref && r.qr_ref.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
   }) ?? [];
 
   async function handleCheckIn(regId: string) {
@@ -380,7 +511,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
     const sanitizedEmail = regType === "club_member" ? `member@${organization?.slug || "rotary"}.org` : sanitizeRequiredInput(email);
-    const sanitizedPhone = regType === "club_member" ? null : sanitizeInput(phone);
+    const sanitizedPhone = regType === "club_member" ? null : formatUgandanPhone(phone);
     const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -496,6 +627,30 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     }
   }
 
+  // ─── Statistics calculations ──────────────────────────────────────────────
+  const checkedInMembersCount = registrations?.filter(
+    r => r.status === "checked-in" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)
+  ).length ?? 0;
+  const totalRosterCount = members?.length ?? 0;
+  const memberAttendancePct = totalRosterCount > 0 ? (checkedInMembersCount / totalRosterCount) * 100 : 0;
+
+  // Visiting clubs headcount breakdown
+  const visitingClubsMap: { [club: string]: number } = {};
+  registrations?.forEach(r => {
+    const role = !r.is_member
+      ? "guest"
+      : r.buddy_group && r.buddy_group.trim() !== ""
+      ? "club member"
+      : "rotarian";
+    if (role === "rotarian" && r.club_name && r.club_name.trim() !== "") {
+      const club = r.club_name.trim();
+      visitingClubsMap[club] = (visitingClubsMap[club] || 0) + 1;
+    }
+  });
+  const visitingClubsList = Object.entries(visitingClubsMap)
+    .map(([club, count]) => ({ club, count }))
+    .sort((a, b) => b.count - a.count);
+
   return (
     <AdminLayout
       pageTitle={event.title}
@@ -527,12 +682,59 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <ChevronLeft size={14} /> Back to events
         </button>
         <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Check-In & Registrations</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Event: <span className="font-bold text-foreground">{event.title}</span>
-        </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground mt-1">
+          <span>Event: <strong className="text-foreground">{event.title}</strong></span>
+          {dynamicBuddyGroup && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-[#F7A81B]/10 border border-[#F7A81B]/20 text-[10px] font-bold text-amber-800 uppercase tracking-wider">
+              🌟 Buddy Group of the Day: {dynamicBuddyGroup.name} ({dynamicBuddyGroup.count} Present)
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Statistics and Breakdown Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        {/* Club Attendance Rate Card */}
+        <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex flex-col justify-between gap-3">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Club Attendance Rate</span>
+            <h3 className="text-2xl font-black mt-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              {memberAttendancePct.toFixed(1)}%
+            </h3>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            <strong>{checkedInMembersCount}</strong> of <strong>{totalRosterCount}</strong> club members checked in today.
+          </p>
+        </div>
+
+        {/* Visiting Clubs Card */}
+        <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex flex-col justify-between gap-3 md:col-span-2">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Visiting Clubs Headcount</span>
+            <div className="flex flex-wrap gap-2 mt-2 max-h-16 overflow-y-auto pr-1">
+              {visitingClubsList.length === 0 ? (
+                <span className="text-xs text-muted-foreground italic py-1.5">No visiting Rotarians checked in yet.</span>
+              ) : (
+                visitingClubsList.map(({ club, count }, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#17458F]/5 text-[#17458F] text-[10px] font-bold rounded-lg border border-[#17458F]/10"
+                  >
+                    <span>{club}</span>
+                    <span className="bg-[#17458F] text-white px-1.5 py-0.5 rounded-md text-[9px] font-black">{count}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground border-t border-border/30 pt-1.5">
+            Total visiting Rotarians registered: <strong>{registrations?.filter(r => r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name).length ?? 0}</strong>
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-8">
+
         {/* Attendee list */}
         <div className="w-full flex flex-col gap-4">
           <PageCard>
@@ -548,22 +750,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 />
               </div>
 
-              {/* Filter segments */}
-              <div className="flex border border-border rounded-xl overflow-hidden self-start">
-                {(["all", "pending", "checked-in"] as const).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-2 text-[10px] font-bold uppercase transition-all ${
-                      filterStatus === status
-                        ? "bg-[#17458F] text-white"
-                        : "bg-card hover:bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {status === "all" ? "All" : status === "pending" ? "Pending" : "Checked In"}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Table list */}
@@ -777,36 +963,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                     </div>
                                   )}
 
-                                  {/* Action button & Status inside expanded content for ALL viewports */}
+                                  {/* Auto checked-in indicator */}
                                   <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-muted-foreground font-semibold">Attendance Status:</span>
-                                      <span
-                                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                          r.status === "checked-in"
-                                            ? "bg-emerald-100 text-emerald-800"
-                                            : "bg-amber-100 text-amber-800"
-                                        }`}
-                                      >
-                                        {r.status === "checked-in" ? "Checked In" : "Pending"}
+                                      <span className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                                        Checked In ✓
                                       </span>
                                     </div>
-
-                                    {r.status === "pending" ? (
-                                      <GoldButton
-                                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                          e.stopPropagation();
-                                          handleCheckIn(r.id);
-                                        }}
-                                        className="py-1.5 px-4 text-xs font-bold"
-                                      >
-                                        Check In
-                                      </GoldButton>
-                                    ) : (
-                                      <div className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                                        Checked In ✓
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               </td>

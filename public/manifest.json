@@ -1,0 +1,24 @@
+{
+  "name": "Rotary Connect — Attendance & Events",
+  "short_name": "RotaryConnect",
+  "description": "Streamline Rotary event registration, QR check-ins, and community engagement.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#081c3b",
+  "theme_color": "#17458F",
+  "icons": [
+    {
+      "src": "/assets/rotary_gold_logo.png",
+      "sizes": "447x447",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/rotary_gold_logo.png",
+      "sizes": "447x447",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

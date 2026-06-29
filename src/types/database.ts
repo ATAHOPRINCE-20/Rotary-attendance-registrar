@@ -60,6 +60,8 @@ export interface Organization {
   website:    string | null;
   created_at: string;
   buddy_groups?: string | null;
+  whatsapp_webhook_url?: string | null;
+  whatsapp_welcome_template?: string | null;
 }
 
 export interface Profile {
@@ -87,6 +89,8 @@ export interface Event {
   created_at:      string;
   updated_at:      string;
   buddy_groups?:   string | null;
+  buddy_group_of_the_day?: string | null;
+  is_archived?:    boolean | null;
 }
 
 export interface Registration {

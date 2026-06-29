@@ -13,10 +13,10 @@ export function useAdminEvents(organizationId: string | undefined) {
         .from("events")
         .select("*")
         .eq("organization_id", organizationId!)
+        .or("is_archived.is.null,is_archived.eq.false")
         .order("date", { ascending: true });
       if (error) throw error;
-      const deletedIds = JSON.parse(localStorage.getItem("deleted_events") || "[]");
-      return (data as Event[]).filter(e => !deletedIds.includes(e.id));
+      return data as Event[];
     },
   });
 }
@@ -32,10 +32,10 @@ export function usePublicEvents(organizationId: string | undefined) {
         .select("*")
         .eq("organization_id", organizationId!)
         .eq("status", "published")
+        .or("is_archived.is.null,is_archived.eq.false")
         .order("date", { ascending: true });
       if (error) throw error;
-      const deletedIds = JSON.parse(localStorage.getItem("deleted_events") || "[]");
-      return (data as Event[]).filter(e => !deletedIds.includes(e.id));
+      return data as Event[];
     },
   });
 }
@@ -126,11 +126,11 @@ export function useDeleteEvent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const deletedIds = JSON.parse(localStorage.getItem("deleted_events") || "[]");
-      if (!deletedIds.includes(id)) {
-        deletedIds.push(id);
-        localStorage.setItem("deleted_events", JSON.stringify(deletedIds));
-      }
+      const { error } = await supabase
+        .from("events")
+        .update({ is_archived: true })
+        .eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-events"] });

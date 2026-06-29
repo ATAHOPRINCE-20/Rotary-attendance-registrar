@@ -75,3 +75,47 @@ export function sanitizeRequiredInput(val: string): string {
   return sanitized;
 }
 
+export function formatUgandanPhone(phoneStr: string | null | undefined): string | null {
+  if (!phoneStr) return null;
+  
+  // Remove all non-digit characters (except leading + if present)
+  const cleaned = phoneStr.trim();
+  const digitsOnly = cleaned.replace(/[^\d+]/g, ""); // keeps digits and '+'
+  
+  if (!digitsOnly) return null;
+  
+  // If it already starts with '+' (like +256... or +1...), leave as is
+  if (digitsOnly.startsWith("+")) {
+    return digitsOnly;
+  }
+  
+  // If it starts with '256' and has 12 digits, prepend '+'
+  if (digitsOnly.startsWith("256") && digitsOnly.length === 12) {
+    return `+${digitsOnly}`;
+  }
+  
+  // If it starts with '0' (like 0772...) and has 10 digits, replace '0' with '+256'
+  if (digitsOnly.startsWith("0") && digitsOnly.length === 10) {
+    return `+256${digitsOnly.slice(1)}`;
+  }
+  
+  // If it starts with '7' or '3' (like 772...) and has 9 digits, prepend '+256'
+  if ((digitsOnly.startsWith("7") || digitsOnly.startsWith("3")) && digitsOnly.length === 9) {
+    return `+256${digitsOnly}`;
+  }
+  
+  // Fallbacks for standard 9/10 digit inputs
+  if (digitsOnly.length === 9) {
+    return `+256${digitsOnly}`;
+  } else if (digitsOnly.length === 10 && digitsOnly.startsWith("0")) {
+    return `+256${digitsOnly.slice(1)}`;
+  }
+  
+  // If it looks like a long international number without +, prepend +
+  if (digitsOnly.length >= 10 && !digitsOnly.startsWith("0")) {
+    return `+${digitsOnly}`;
+  }
+  
+  return digitsOnly;
+}
+

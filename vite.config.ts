@@ -69,13 +69,13 @@ export default defineConfig({
         icons: [
           {
             src: '/assets/rotary_gold_logo.png',
-            sizes: '192x192',
+            sizes: '447x447',
             type: 'image/png',
             purpose: 'any',
           },
           {
             src: '/assets/rotary_gold_logo.png',
-            sizes: '512x512',
+            sizes: '447x447',
             type: 'image/png',
             purpose: 'maskable',
           },

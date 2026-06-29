@@ -29,6 +29,11 @@ CREATE POLICY "Public read members"
   ON members FOR SELECT
   USING (true);
 
+-- Allow public inserts to the members table (for self-enrollment during event registration)
+CREATE POLICY "Public insert members"
+  ON members FOR INSERT
+  WITH CHECK (true);
+
 -- 4. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_members_org ON members(organization_id);
 CREATE INDEX IF NOT EXISTS idx_members_org_name ON members(organization_id, full_name);

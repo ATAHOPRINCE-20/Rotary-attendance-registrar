@@ -148,6 +148,7 @@ export function EventsPage() {
     }
   }
 
+
   async function handleDelete(id: string) {
     if (!confirm("Are you sure you want to permanently delete this event? This will also delete registrations.")) return;
 
@@ -358,6 +359,9 @@ export function EventsPage() {
                 value={status}
                 onChange={setStatus}
               />
+
+              {/* Buddy Group of the Day is now calculated dynamically from check-ins */}
+
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold text-foreground font-sans">
