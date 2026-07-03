@@ -241,12 +241,15 @@ export function DonatePage() {
               </div>
               
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Or type custom amount in UGX"
                 value={customAmount}
                 onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, "");
                   setAmount(0);
-                  setCustomAmount(e.target.value);
+                  setCustomAmount(cleaned);
                 }}
                 className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#F7A81B] transition-all mt-1.5"
               />
@@ -282,6 +285,7 @@ export function DonatePage() {
               </label>
               <input
                 type="text"
+                autoComplete="off"
                 placeholder="e.g. 0772 123456 or 0701 123456"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}

@@ -109,6 +109,8 @@ export default defineConfig(({ mode }) => {
             const apiPath = urlObj.pathname;
             const filename = apiPath.replace('/api/', '') + '.ts';
             const filePath = path.resolve('api', filename);
+            console.log(`[Local API Runner] Request: ${req.url} -> filename: ${filename} -> filePath: ${filePath}`);
+            console.log(`[Local API Runner] Exists: ${fs.existsSync(filePath)}`);
 
             try {
               if (fs.existsSync(filePath)) {

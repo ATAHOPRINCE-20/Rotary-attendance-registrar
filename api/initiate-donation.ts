@@ -8,15 +8,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 function formatMsisdn(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.startsWith('0') && digits.length === 10) {
-    return '256' + digits.substring(1);
+    return '+256' + digits.substring(1);
   }
   if (digits.length === 9) {
-    return '256' + digits;
+    return '+256' + digits;
   }
   if (digits.startsWith('256') && digits.length === 12) {
-    return digits;
+    return '+' + digits;
   }
-  return digits;
+  return '+' + digits;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
