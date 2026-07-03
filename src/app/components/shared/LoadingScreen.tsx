@@ -64,7 +64,7 @@ export function LoadingScreen({ variant = "blue", fullScreen = true }: LoadingSc
         <p 
           className="text-xs uppercase tracking-[0.25em] font-extrabold opacity-80"
           style={{ 
-            fontFamily: "Montserrat, sans-serif",
+            fontFamily: "var(--font-sans)",
             color: variant === "blue" ? "#F7A81B" : "#17458F"
           }}
         >

@@ -107,7 +107,7 @@ export function CommsPage() {
     >
       {/* Page heading */}
       <div className="mb-6">
-        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Communications</h1>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Communications</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Send notifications, email invites, and follow-up templates to registered attendees.</p>
       </div>
 
@@ -164,7 +164,7 @@ export function CommsPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-md overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
-              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Send New Broadcast</h2>
+              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Send New Broadcast</h2>
               <button onClick={() => setModalOpen(false)} className="p-1 text-muted-foreground hover:bg-muted rounded">
                 <Clock size={16} />
               </button>

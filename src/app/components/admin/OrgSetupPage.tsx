@@ -165,7 +165,7 @@ export function OrgSetupPage() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
-          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             Configure Your Club
           </h1>
           <p className="text-sm text-muted-foreground text-center">
@@ -185,7 +185,7 @@ export function OrgSetupPage() {
 
             {/* Club Logo Upload */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+              <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
                 Club Logo (Optional)
               </label>
               <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export function OrgSetupPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>
+              <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>
                 Custom Portal URL Slug
               </label>
               <div className="flex items-center rounded-xl border border-border bg-input-background overflow-hidden focus-within:ring-2 focus-within:ring-[#17458F]/50">

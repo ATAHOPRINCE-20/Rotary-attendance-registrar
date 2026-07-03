@@ -104,7 +104,7 @@ export function PWAInstallBanner() {
             <Smartphone size={20} />
           </div>
           <div>
-            <h3 className="font-bold text-sm leading-tight text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+            <h3 className="font-bold text-sm leading-tight text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
               Install Rotary Ntinda
             </h3>
             <p className="text-[11px] text-muted-foreground">

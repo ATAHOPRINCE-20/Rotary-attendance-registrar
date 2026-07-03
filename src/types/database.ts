@@ -41,6 +41,11 @@ export interface Database {
         Insert: Omit<Campaign, "id" | "created_at">;
         Update: Partial<Omit<Campaign, "id" | "created_at">>;
       };
+      organization_payments: {
+        Row: OrganizationPayments;
+        Insert: Omit<OrganizationPayments, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<OrganizationPayments, "id" | "created_at">>;
+      };
     };
     Functions: {
       my_org_id: { Args: Record<string, never>; Returns: string };
@@ -135,6 +140,17 @@ export interface Donation {
   status:          "pending" | "completed" | "failed";
   receipt_number:  string;
   created_at:      string;
+  phone_number?:   string | null;
+}
+
+export interface OrganizationPayments {
+  id:              string;
+  organization_id: string;
+  api_key:         string | null;
+  account_no:      string | null;
+  is_sandbox:      boolean;
+  created_at:      string;
+  updated_at:      string;
 }
 
 export interface Campaign {

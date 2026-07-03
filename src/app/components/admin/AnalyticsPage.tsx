@@ -53,7 +53,7 @@ export function AnalyticsPage() {
   return (
     <AdminLayout pageTitle="Analytics">
       <div className="mb-6">
-        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Analytics</h1>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Analytics</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Review stats on check-ins, attendee metrics, and donation campaign metrics.</p>
       </div>
 

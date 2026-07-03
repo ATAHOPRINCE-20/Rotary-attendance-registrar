@@ -20,7 +20,7 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p
       className="text-xs font-bold tracking-widest uppercase mb-2"
-      style={{ color: "#F7A81B", fontFamily: "Montserrat, sans-serif" }}
+      style={{ color: "#F7A81B", fontFamily: "var(--font-sans)" }}
     >
       {children}
     </p>
@@ -31,7 +31,7 @@ export function PageTitle({ children }: { children: ReactNode }) {
   return (
     <h1
       className="text-2xl sm:text-3xl font-black"
-      style={{ color: "#17458F", fontFamily: "Montserrat, sans-serif" }}
+      style={{ color: "#17458F", fontFamily: "var(--font-sans)" }}
     >
       {children}
     </h1>
@@ -41,7 +41,7 @@ export function PageTitle({ children }: { children: ReactNode }) {
 export function FieldGroup({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+      <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
         {label}{required && <span style={{ color: "#F7A81B" }}> *</span>}
       </label>
       {children}

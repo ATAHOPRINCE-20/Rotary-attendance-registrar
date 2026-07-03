@@ -49,7 +49,7 @@ export function AdminLoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
-          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             Admin Portal
           </h1>
           <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -60,7 +60,7 @@ export function AdminLoginPage() {
         <PageCard>
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>Email Address</label>
+              <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Email Address</label>
               <input
                 type="email"
                 placeholder="you@rotaryclub.org"
@@ -71,7 +71,7 @@ export function AdminLoginPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>Password</label>
+              <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Password</label>
               <input
                 type="password"
                 placeholder="••••••••"

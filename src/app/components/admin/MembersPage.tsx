@@ -292,7 +292,7 @@ export function MembersPage() {
     >
       {/* ── HEADER ── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
           Club Members
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -381,66 +381,109 @@ export function MembersPage() {
               )}
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/5 font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
-                  <th className="px-6 py-4">Full Name</th>
-                  <th className="px-6 py-4">Contact Info</th>
-                  <th className="px-6 py-4">Buddy Group</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/30">
+            <>
+              {/* Desktop Table View */}
+              <table className="hidden sm:table w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-muted/5 font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
+                    <th className="px-6 py-4">Full Name</th>
+                    <th className="px-6 py-4">Contact Info</th>
+                    <th className="px-6 py-4">Buddy Group</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {filteredMembers.map((m) => (
+                    <tr key={m.id} className="hover:bg-muted/10 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-full text-white text-[11px] font-black flex items-center justify-center shrink-0"
+                            style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
+                          >
+                            {m.full_name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-foreground">{m.full_name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Member ID: {m.id.substring(0, 8)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          {m.email ? (
+                            <span className="flex items-center gap-1.5 text-foreground">
+                              <Mail size={11} className="text-muted-foreground" />
+                              {m.email}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/60 italic">No email</span>
+                          )}
+                          {m.phone ? (
+                            <span className="flex items-center gap-1.5 text-foreground">
+                              <Phone size={11} className="text-muted-foreground" />
+                              {m.phone}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/60 italic">No phone</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {m.buddy_group ? (
+                          <span
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-[#17458F] border border-[#17458F]/20"
+                            style={{ backgroundColor: `${NAVY}08` }}
+                          >
+                            {m.buddy_group}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50 italic">None assigned</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditModal(m)}
+                            className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
+                            title="Edit member"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMember(m.id)}
+                            className="p-2 rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
+                            title="Delete member"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Mobile Card List View */}
+              <div className="sm:hidden divide-y divide-border/30">
                 {filteredMembers.map((m) => (
-                  <tr key={m.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-6 py-4">
+                  <div key={m.id} className="p-4 flex flex-col gap-3 hover:bg-muted/5 transition-colors">
+                    {/* Header: Avatar, Name & Actions */}
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-8 h-8 rounded-full text-white text-[11px] font-black flex items-center justify-center shrink-0"
+                          className="w-9 h-9 rounded-full text-white text-[12px] font-black flex items-center justify-center shrink-0"
                           style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
                         >
                           {m.full_name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-foreground">{m.full_name}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Member ID: {m.id.substring(0, 8)}</p>
+                          <p className="font-bold text-foreground text-sm leading-tight">{m.full_name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">ID: {m.id.substring(0, 8)}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        {m.email ? (
-                          <span className="flex items-center gap-1.5 text-foreground">
-                            <Mail size={11} className="text-muted-foreground" />
-                            {m.email}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/60 italic">No email</span>
-                        )}
-                        {m.phone ? (
-                          <span className="flex items-center gap-1.5 text-foreground">
-                            <Phone size={11} className="text-muted-foreground" />
-                            {m.phone}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/60 italic">No phone</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {m.buddy_group ? (
-                        <span
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-[#17458F] border border-[#17458F]/20"
-                          style={{ backgroundColor: `${NAVY}08` }}
-                        >
-                          {m.buddy_group}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/50 italic">None assigned</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-1.5">
+                      
+                      <div className="flex items-center gap-0.5">
                         <button
                           onClick={() => openEditModal(m)}
                           className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
@@ -456,11 +499,50 @@ export function MembersPage() {
                           <Trash2 size={13} />
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+
+                    {/* Middle: Details (Buddy group & contacts) */}
+                    <div className="grid grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Buddy Group</p>
+                        <div className="mt-1">
+                          {m.buddy_group ? (
+                            <span
+                              className="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold text-[#17458F] border border-[#17458F]/20"
+                              style={{ backgroundColor: `${NAVY}08` }}
+                            >
+                              {m.buddy_group}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/50 italic">None assigned</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Contact Info</p>
+                        {m.email ? (
+                          <span className="flex items-center gap-1.5 text-[11px] text-foreground min-w-0" title={m.email}>
+                            <Mail size={11} className="text-muted-foreground shrink-0" />
+                            <span className="truncate">{m.email}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/60 italic">No email</span>
+                        )}
+                        {m.phone ? (
+                          <span className="flex items-center gap-1.5 text-[11px] text-foreground min-w-0">
+                            <Phone size={11} className="text-muted-foreground shrink-0" />
+                            <span className="truncate">{m.phone}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/60 italic">No phone</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -470,7 +552,7 @@ export function MembersPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
-              <h2 className="text-base font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              <h2 className="text-base font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                 {editingMember ? "Modify Member Profile" : "Enroll New Member"}
               </h2>
               <button
@@ -544,7 +626,7 @@ export function MembersPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
-              <h2 className="text-base font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              <h2 className="text-base font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                 Import Roster via CSV
               </h2>
               <button

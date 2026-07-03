@@ -43,7 +43,7 @@ export function AdminSignupPage() {
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center mb-8">
             <RotaryLogo size={56} />
-            <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               Check Your Email
             </h1>
             <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -72,7 +72,7 @@ export function AdminSignupPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
-          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             Create Admin Account
           </h1>
           <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -89,7 +89,7 @@ export function AdminSignupPage() {
               { label: "Confirm Password", value: confirm, set: setConfirm, type: "password", ph: "Repeat password" },
             ].map(({ label, value, set, type, ph }) => (
               <div key={label} className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold" style={{ fontFamily: "Montserrat, sans-serif" }}>{label}</label>
+                <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>{label}</label>
                 <input
                   type={type}
                   placeholder={ph}

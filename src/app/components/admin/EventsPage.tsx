@@ -176,7 +176,7 @@ export function EventsPage() {
     >
       {/* Page heading */}
       <div className="mb-6">
-        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Events</h1>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Events</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Create and publish gatherings, generate check-in codes, and monitor RSVPs.</p>
       </div>
 
@@ -228,7 +228,7 @@ export function EventsPage() {
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                    <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                       {ev.title}
                     </h3>
 
@@ -292,7 +292,7 @@ export function EventsPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
-              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                 {editingEvent ? "Edit Event" : "Create New Event"}
               </h2>
               <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">

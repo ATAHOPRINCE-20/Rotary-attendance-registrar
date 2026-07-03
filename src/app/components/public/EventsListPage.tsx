@@ -29,7 +29,7 @@ export function EventsListPage() {
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
             Upcoming Gatherings
           </p>
-          <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-3xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             Club Events
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -79,7 +79,7 @@ export function EventsListPage() {
                             </span>
                           )}
                         </div>
-                        <h2 className="text-xl font-bold" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                        <h2 className="text-xl font-bold" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                           {ev.title}
                         </h2>
                         {ev.description && (

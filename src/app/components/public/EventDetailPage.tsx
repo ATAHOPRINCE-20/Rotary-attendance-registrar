@@ -91,7 +91,7 @@ export function EventDetailPage() {
             </span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black mb-6" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-2xl sm:text-3xl font-black mb-6" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             {event.title}
           </h1>
 
@@ -143,7 +143,7 @@ export function EventDetailPage() {
 
           {event.description && (
             <div className="mb-8">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3" style={{ fontFamily: "Montserrat, sans-serif" }}>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3" style={{ fontFamily: "var(--font-sans)" }}>
                 About This Event
               </h3>
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">

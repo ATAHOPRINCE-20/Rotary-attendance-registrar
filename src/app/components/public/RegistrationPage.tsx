@@ -49,7 +49,7 @@ export function RegistrationPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <PageCard className="text-center max-w-md flex flex-col items-center gap-4">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
-          <h2 className="text-lg font-bold text-amber-600" style={{ fontFamily: "Montserrat, sans-serif" }}>On-Site Registration Closed</h2>
+          <h2 className="text-lg font-bold text-amber-600" style={{ fontFamily: "var(--font-sans)" }}>On-Site Registration Closed</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Registration for <strong className="text-foreground">{event.title}</strong> is currently closed. Attendance registration is strictly available on-site at the venue when the event is set active by the host.
           </p>
@@ -230,8 +230,12 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
     setError(null);
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
-    const sanitizedEmail = regType === "club_member" ? `member@${organization?.slug || "rotary"}.org` : sanitizeRequiredInput(email);
-    const sanitizedPhone = regType === "club_member" ? null : formatUgandanPhone(phone);
+    const sanitizedEmail = regType === "club_member"
+      ? (isManualInput ? sanitizeRequiredInput(email) : `member@${organization?.slug || "rotary"}.org`)
+      : sanitizeRequiredInput(email);
+    const sanitizedPhone = regType === "club_member"
+      ? (isManualInput ? formatUgandanPhone(phone) : null)
+      : formatUgandanPhone(phone);
     const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -246,6 +250,10 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
     if (regType === "club_member") {
       if (!sanitizedFullName || !sanitizedBuddyGroup) {
         setError("Please enter your Full Name and select your Buddy Group.");
+        return;
+      }
+      if (isManualInput && (!sanitizedEmail || !sanitizedPhone)) {
+        setError("Please fill out all required fields (Name, Email, Phone, and Buddy Group).");
         return;
       }
     } else {
@@ -299,8 +307,8 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
             const newMember = await createMemberMutation.mutateAsync({
               organization_id: organization?.id || "",
               full_name: sanitizedFullName,
-              email: null,
-              phone: null,
+              email: isManualInput ? sanitizedEmail : null,
+              phone: sanitizedPhone,
               buddy_group: sanitizedBuddyGroup || null,
             });
             finalMemberId = newMember.id;
@@ -352,23 +360,15 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
 
         <PageCard>
           <div className="mb-6 pb-4 border-b border-border">
-            <h1 className="text-2xl font-black font-sans" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h1 className="text-2xl font-black font-sans" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               {event.title} Checkin
             </h1>
-            {event.buddy_group_of_the_day && (
-              <div className="mt-2.5 px-3.5 py-2 rounded-xl bg-[#F7A81B]/10 border border-[#F7A81B]/20 text-xs font-semibold flex items-center gap-1.5 text-amber-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                <span>🌟 Hosting Buddy Group today:</span>
-                <span className="bg-[#F7A81B] text-white px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                  {event.buddy_group_of_the_day}
-                </span>
-              </div>
-            )}
           </div>
 
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-3">
-              <label className="text-sm font-bold text-foreground font-sans" style={{ fontFamily: "Montserrat, sans-serif" }}>
+              <label className="text-sm font-bold text-foreground font-sans" style={{ fontFamily: "var(--font-sans)" }}>
                 Select Registration Type:
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -389,7 +389,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                           : "border-border bg-card hover:bg-muted/30"
                       }`}
                     >
-                      <span className="font-bold text-sm text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                      <span className="font-bold text-sm text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
                         {type.label}
                       </span>
                       <span className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
@@ -405,7 +405,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
               <div className="flex flex-col gap-5 mt-2 animate-in fade-in duration-300">
                 {regType === "club_member" && !isManualInput ? (
                   <div className="relative flex flex-col gap-1.5" ref={dropdownRef}>
-                    <label className="text-sm font-semibold text-foreground flex justify-between items-center" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                    <label className="text-sm font-semibold text-foreground flex justify-between items-center" style={{ fontFamily: "var(--font-sans)" }}>
                       <span>Select Your Name <span style={{ color: "#F7A81B" }}>*</span></span>
                       <button
                         type="button"
@@ -512,7 +512,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                   </div>
                 )}
 
-                {regType !== "club_member" && (
+                {(regType !== "club_member" || isManualInput) && (
                   <>
                     <TextInput
                       label="Email Address"
@@ -520,7 +520,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                       placeholder="e.g. you@example.com"
                       value={email}
                       onChange={setEmail}
-                      required
+                      required={regType !== "club_member" || isManualInput}
                     />
 
                     <TextInput
@@ -529,7 +529,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                       placeholder="e.g. +256 700 000000"
                       value={phone}
                       onChange={setPhone}
-                      required
+                      required={regType !== "club_member" || isManualInput}
                     />
                   </>
                 )}
@@ -569,7 +569,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
 
                     <div className="flex flex-col gap-6 p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] dark:bg-[#18181B] dark:border-[#27272A] animate-in fade-in slide-in-from-top-2">
                       <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "var(--font-sans)" }}>
                           Recent Club Activities
                         </h3>
                         <p className="text-[11px] text-muted-foreground mt-1">
@@ -580,14 +580,14 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                       {/* VISITS SECTION */}
                       <div className="flex flex-col gap-3">
                         <div className="flex justify-between items-center">
-                          <label className="text-xs font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                          <label className="text-xs font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "var(--font-sans)" }}>
                             Other Clubs Visited <span className="text-[10px] bg-[#E2E8F0] text-slate-600 px-1.5 py-0.5 rounded font-normal dark:bg-zinc-800 dark:text-zinc-300">Unlimited</span>
                           </label>
                           <button
                             type="button"
                             onClick={() => setVisits([...visits, { club_name: "", date: new Date().toISOString().split("T")[0] }])}
                             className="text-xs font-bold text-[#17458F] hover:text-[#17458F]/80 flex items-center gap-1 transition-colors cursor-pointer font-sans"
-                            style={{ fontFamily: "Montserrat, sans-serif" }}
+                            style={{ fontFamily: "var(--font-sans)" }}
                           >
                             <Plus size={14} /> Add Visit
                           </button>
@@ -634,7 +634,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                       <div className="flex flex-col gap-3 pt-3 border-t border-border/50">
                         <div className="flex justify-between items-center">
                           <div className="flex flex-col">
-                            <label className="text-xs font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                            <label className="text-xs font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "var(--font-sans)" }}>
                               Make-ups Done <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30">Max 2 / Month</span>
                             </label>
                             <span className="text-[10px] text-muted-foreground mt-0.5">
@@ -656,7 +656,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                                 ? "text-muted-foreground cursor-not-allowed opacity-50"
                                 : "text-[#17458F] hover:text-[#17458F]/80"
                             }`}
-                            style={{ fontFamily: "Montserrat, sans-serif" }}
+                            style={{ fontFamily: "var(--font-sans)" }}
                           >
                             <Plus size={14} /> Add Make-up
                           </button>
@@ -720,7 +720,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                 )}
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                  <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
                     Comment (Optional)
                   </label>
                   <textarea

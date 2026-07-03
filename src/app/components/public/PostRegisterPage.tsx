@@ -51,7 +51,7 @@ export function PostRegisterPage() {
         <PageCard className="text-center flex flex-col items-center gap-6">
           <div className="flex flex-col items-center gap-2">
             <CheckCircle2 className="w-16 h-16 text-[#48BB78] animate-bounce" />
-            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               Thank You!
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">

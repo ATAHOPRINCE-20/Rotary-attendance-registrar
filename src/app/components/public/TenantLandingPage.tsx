@@ -103,12 +103,11 @@ export function TenantLandingPage() {
               </button>
             )}
             <button
-              disabled
-              className="px-8 py-2.5 border border-white/10 text-white/40 bg-white/5 backdrop-blur-md font-semibold rounded-xl text-center flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
-              title="Donations are temporarily offline"
+              onClick={() => navigate(`/org/${slug}/donate`)}
+              className="px-8 py-2.5 border border-white/20 text-white hover:bg-white/10 bg-white/5 backdrop-blur-md font-semibold rounded-xl text-center flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 shadow-lg"
             >
-              <Heart size={18} />
-              Support / Donate (Offline)
+              <Heart size={18} className="text-[#F7A81B] fill-[#F7A81B]" />
+              Support / Donate
             </button>
           </div>
         </div>

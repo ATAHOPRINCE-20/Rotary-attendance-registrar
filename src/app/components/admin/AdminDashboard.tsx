@@ -40,6 +40,7 @@ export function AdminDashboard() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+
   useEffect(() => {
     if (organization) {
       const list = organization.buddy_groups
@@ -148,7 +149,7 @@ export function AdminDashboard() {
 
   const activeEventsCount  = events?.filter(e => e.status === "published").length ?? 0;
   const totalRegistrations = registrations?.length ?? 0;
-  const totalDonations     = donations?.reduce((a, d) => a + Number(d.amount), 0) ?? 0;
+  const totalDonations     = donations?.filter(d => d.status === "completed").reduce((a, d) => a + Number(d.amount), 0) ?? 0;
   const checkedInCount     = registrations?.filter(r => r.status === "checked-in").length ?? 0;
 
   return (
@@ -167,7 +168,7 @@ export function AdminDashboard() {
       <main className="flex-1">
         {/* Page heading */}
         <div className="mb-6">
-          <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+          <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
             Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -237,7 +238,7 @@ export function AdminDashboard() {
                 {/* Club Buddy Groups Card */}
                 <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col justify-between gap-4">
                   <div>
-                    <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                    <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                       Club Buddy Groups
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -291,7 +292,7 @@ export function AdminDashboard() {
                 {/* WhatsApp Settings Card */}
                 <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4">
                   <div>
-                    <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                    <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                       WhatsApp Welcomer Integration
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -369,9 +370,20 @@ export function AdminDashboard() {
                               </p>
                             </div>
                           </div>
-                          <span className="text-sm font-black" style={{ color: "#17458F" }}>
-                            +UGX {Number(d.amount).toLocaleString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {d.status === "pending" && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-amber-100 text-amber-600">Pending</span>
+                            )}
+                            {d.status === "failed" && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-red-100 text-red-600">Failed</span>
+                            )}
+                            {d.status === "completed" && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-100 text-emerald-600">Success</span>
+                            )}
+                            <span className="text-sm font-black" style={{ color: d.status === "completed" ? "#10B981" : d.status === "failed" ? "#EF4444" : "#17458F" }}>
+                              +UGX {Number(d.amount).toLocaleString()}
+                            </span>
+                          </div>
                         </div>
                       ))
                     )}
@@ -391,7 +403,7 @@ export function AdminDashboard() {
                   <AlertTriangle size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
                     Warning: Changing Webhook URL
                   </h3>
                   <p className="text-[10px] text-muted-foreground">Critical configuration update</p>

@@ -59,7 +59,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
           <RotaryLogo size={56} />
           <p
             className="font-extrabold text-xs mt-3 tracking-wider uppercase text-center truncate max-w-[200px]"
-            style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}
+            style={{ color: NAVY, fontFamily: "var(--font-sans)" }}
           >
             {organization?.name ?? "RotaryConnect"}
           </p>
@@ -78,10 +78,9 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
                 onClick={() => navigate(to)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
                   active
-                    ? "text-white shadow-sm"
+                    ? "bg-muted text-primary shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
-                style={{ background: active ? NAVY : undefined }}
               >
                 <Icon size={16} />
                 {label}
@@ -158,6 +157,43 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
           {children}
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden bg-white/95 backdrop-blur-md border-t border-border/50 shrink-0 px-2 py-2 flex items-center justify-around pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.05)]">
+          {[
+            { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
+            { label: "Events",    to: "/admin/events",    icon: Calendar        },
+            { label: "Members",   to: "/admin/members",   icon: Users           },
+            { label: "Reports",   to: "/admin/reports",   icon: FolderArchive   },
+          ].map(({ label, to, icon: Icon }) => {
+            const active = location.pathname === to;
+            return (
+              <button
+                key={to}
+                onClick={() => navigate(to)}
+                className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 cursor-pointer"
+                style={{
+                  color: active ? NAVY : "#64748B",
+                }}
+              >
+                <Icon size={18} className={active ? "scale-110 transition-transform" : ""} style={{ strokeWidth: active ? 2.5 : 2 }} />
+                <span className="text-[9px] font-bold" style={{ fontFamily: "var(--font-sans)" }}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+          
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[#64748B] hover:text-foreground transition-all duration-200 cursor-pointer"
+          >
+            <Menu size={18} />
+            <span className="text-[9px] font-bold" style={{ fontFamily: "var(--font-sans)" }}>
+              More
+            </span>
+          </button>
+        </nav>
       </div>
 
       {/* ── MOBILE DRAWER OVERLAY ────────────────────────────────────── */}
@@ -169,7 +205,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
             <div className="flex items-center justify-between px-5 py-5 border-b border-border/40">
               <div className="flex-1 flex items-center justify-center gap-2">
                 <RotaryLogo size={36} />
-                <p className="font-extrabold text-xs uppercase truncate max-w-[140px]" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                <p className="font-extrabold text-xs uppercase truncate max-w-[140px]" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                   {organization?.name ?? "RotaryConnect"}
                 </p>
               </div>
@@ -197,10 +233,9 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
                       active
-                        ? "text-white shadow-sm"
+                        ? "bg-muted text-primary shadow-sm"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
-                    style={{ background: active ? NAVY : undefined }}
                   >
                     <Icon size={16} />
                     {label}

@@ -250,7 +250,7 @@ export function ReportsPage() {
     .club-meta p { font-size: 9px; color: #666; font-weight: 600; }
     .header-right { text-align: right; }
     .header-right .timestamp { font-size: 8px; color: #888; margin-top: 4px; font-style: italic; }
-    .report-title { font-size: 16px; font-weight: 900; color: #17458F; text-transform: uppercase; margin-bottom: 4px; font-family: 'Montserrat', sans-serif; }
+    .report-title { font-size: 16px; font-weight: 900; color: #17458F; text-transform: uppercase; margin-bottom: 4px; font-family: var(--font-sans); }
     .report-meta { display: flex; gap: 14px; font-size: 9px; color: #444; }
     .report-meta span { display: inline-block; }
     .summary { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -416,7 +416,7 @@ export function ReportsPage() {
         {/* Header Block */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black flex items-center gap-2.5" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h1 className="text-2xl font-black flex items-center gap-2.5" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               <FolderArchive size={26} className="text-[#F7A81B]" />
               Meeting Reports Archive
             </h1>
@@ -520,7 +520,7 @@ export function ReportsPage() {
                             {ev.status}
                           </span>
                         </div>
-                        <h3 className="text-sm font-extrabold text-foreground leading-snug" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+                        <h3 className="text-sm font-extrabold text-foreground leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                           {ev.title}
                         </h3>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground mt-1 font-medium">

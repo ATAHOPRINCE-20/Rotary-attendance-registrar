@@ -52,7 +52,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
                 onClick={() => navigate(l.to)}
                 className="px-4 py-2 text-sm font-semibold text-foreground hover:text-primary transition-colors duration-150"
                 style={{
-                  fontFamily: "Montserrat, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   color:      isActive(l.to) ? NAVY : undefined,
                   boxShadow:  isActive(l.to) ? `inset 0 -2px 0 ${GOLD}` : "none",
                 }}
@@ -70,7 +70,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
               <button
                 onClick={() => navigate("/admin/dashboard")}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-                style={{ fontFamily: "Montserrat, sans-serif" }}
+                style={{ fontFamily: "var(--font-sans)" }}
               >
                 Dashboard
               </button>
@@ -96,7 +96,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
               onClick={() => { navigate(l.to); setOpen(false); }}
               className="w-full text-left px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted rounded-xl transition-all"
               style={{
-                fontFamily:  "Montserrat, sans-serif",
+                fontFamily: "var(--font-sans)",
                 color:       isActive(l.to) ? NAVY : undefined,
                 borderLeft:  isActive(l.to) ? `3px solid ${GOLD}` : "3px solid transparent",
               }}
@@ -110,7 +110,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
               <button
                 onClick={() => { navigate("/admin/dashboard"); setOpen(false); }}
                 className="text-sm text-muted-foreground hover:text-primary py-2 font-semibold text-left px-4"
-                style={{ fontFamily: "Montserrat, sans-serif" }}
+                style={{ fontFamily: "var(--font-sans)" }}
               >
                 Dashboard
               </button>

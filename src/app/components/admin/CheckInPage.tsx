@@ -510,8 +510,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     e.preventDefault();
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
-    const sanitizedEmail = regType === "club_member" ? `member@${organization?.slug || "rotary"}.org` : sanitizeRequiredInput(email);
-    const sanitizedPhone = regType === "club_member" ? null : formatUgandanPhone(phone);
+    const sanitizedEmail = sanitizeRequiredInput(email);
+    const sanitizedPhone = formatUgandanPhone(phone);
     const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -519,8 +519,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     const sanitizedComments = sanitizeInput(comments);
 
     if (regType === "club_member") {
-      if (!sanitizedFullName || !sanitizedBuddyGroup) {
-        toast.error("Please enter Full Name and select a Buddy Group.");
+      if (!sanitizedFullName || !sanitizedBuddyGroup || !sanitizedEmail || !sanitizedPhone) {
+        toast.error("Please fill out all required fields (Name, Email, Phone, and Buddy Group).");
         return;
       }
     } else {
@@ -575,8 +575,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
             const newMember = await createMemberMutation.mutateAsync({
               organization_id: organization?.id || "",
               full_name: sanitizedFullName,
-              email: null,
-              phone: null,
+              email: sanitizedEmail,
+              phone: sanitizedPhone,
               buddy_group: sanitizedBuddyGroup || null,
             });
             finalMemberId = newMember.id;
@@ -681,7 +681,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         >
           <ChevronLeft size={14} /> Back to events
         </button>
-        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>Check-In & Registrations</h1>
+        <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Check-In & Registrations</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground mt-1">
           <span>Event: <strong className="text-foreground">{event.title}</strong></span>
           {dynamicBuddyGroup && (
@@ -698,7 +698,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex flex-col justify-between gap-3">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Club Attendance Rate</span>
-            <h3 className="text-2xl font-black mt-1" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h3 className="text-2xl font-black mt-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               {memberAttendancePct.toFixed(1)}%
             </h3>
           </div>
@@ -992,7 +992,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <div className="bg-card w-full max-w-xl rounded-2xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <h2 className="text-base font-bold" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+              <h2 className="text-base font-bold" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                 Register & Check In Attendee
               </h2>
               <button
@@ -1017,30 +1017,26 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 required
               />
 
-              {regType !== "club_member" && (
-                <>
-                  <TextInput
-                    label="Email Address"
-                    type="email"
-                    placeholder="e.g. name@domain.com"
-                    value={email}
-                    onChange={setEmail}
-                    required
-                  />
+              <TextInput
+                label="Email Address"
+                type="email"
+                placeholder="e.g. name@domain.com"
+                value={email}
+                onChange={setEmail}
+                required
+              />
 
-                  <TextInput
-                    label="Phone Number"
-                    type="tel"
-                    placeholder="e.g. +256 700 000000"
-                    value={phone}
-                    onChange={setPhone}
-                    required
-                  />
-                </>
-              )}
+              <TextInput
+                label="Phone Number"
+                type="tel"
+                placeholder="e.g. +256 700 000000"
+                value={phone}
+                onChange={setPhone}
+                required
+              />
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "var(--font-sans)" }}>
                   Registration Type
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -1098,7 +1094,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
                   <div className="flex flex-col gap-5 p-4 rounded-xl bg-card border border-border mt-2">
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "var(--font-sans)" }}>
                         Recent Club Activities
                       </h4>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1109,7 +1105,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                     {/* VISITS SECTION */}
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center">
-                        <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                        <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "var(--font-sans)" }}>
                           Other Clubs Visited <span className="text-[9px] bg-[#E2E8F0] text-slate-600 px-1.5 py-0.5 rounded font-normal dark:bg-zinc-800 dark:text-zinc-300">Unlimited</span>
                         </label>
                         <button
@@ -1162,7 +1158,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                     <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
                       <div className="flex justify-between items-center">
                         <div className="flex flex-col">
-                          <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                          <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: "var(--font-sans)" }}>
                             Make-ups Done <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30">Max 2 / Month</span>
                           </label>
                           <span className="text-[9px] text-muted-foreground mt-0.5">
@@ -1245,7 +1241,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
               )}
 
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "Montserrat, sans-serif" }}>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "var(--font-sans)" }}>
                   Comments / Notes (Optional)
                 </label>
                 <textarea

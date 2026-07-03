@@ -68,7 +68,7 @@ export function EventQRPage() {
             <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
               EVENT GATEWAY CODE
             </p>
-            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "Montserrat, sans-serif" }}>
+            <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               Registration QR Code
             </h1>
             <p className="text-xs text-muted-foreground mt-1 px-4">
