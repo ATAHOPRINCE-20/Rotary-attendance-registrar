@@ -1,9 +1,53 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const proxyUrl = process.env.HTTPS_PROXY || process.env.FIXIE_URL || '';
+    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+
+    const reqOptions: https.RequestOptions = {
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      agent: agent as any,
+    };
+
+    const req = https.request(urlStr, reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve({
+          ok: (res.statusCode || 200) >= 200 && (res.statusCode || 200) < 300,
+          status: res.statusCode || 200,
+          json: async () => {
+            try {
+              return JSON.parse(data);
+            } catch {
+              return {};
+            }
+          }
+        });
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    if (options.body) {
+      req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+    }
+    req.end();
+  });
+}
 
 function formatMsisdn(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -114,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const description = `Donation to Rotary Club - ${fullName}`;
 
     if (paymentMethod === 'mobile') {
-      const response = await fetch('https://payments.relworx.com/api/mobile-money/request-payment', {
+      const response = await fetchRelworx('https://payments.relworx.com/api/mobile-money/request-payment', {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.relworx.v2',
@@ -144,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
     } else if (paymentMethod === 'card') {
-      const response = await fetch('https://payments.relworx.com/api/visa/request-session', {
+      const response = await fetchRelworx('https://payments.relworx.com/api/visa/request-session', {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.relworx.v2',

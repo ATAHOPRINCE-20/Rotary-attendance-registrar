@@ -55,7 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -72,44 +71,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 1. Fetch current donation record
-    const { data: donation, error: dbError } = await supabase
-      .from('donations')
+    // 1. Fetch current withdrawal record
+    const { data: withdrawal, error: dbError } = await supabase
+      .from('withdrawals')
       .select('*')
-      .eq('receipt_number', reference)
+      .eq('reference', reference)
       .eq('organization_id', organizationId)
       .maybeSingle();
 
-    if (!donation) {
-      return res.status(404).json({ error: 'Donation record not found' });
+    if (!withdrawal) {
+      return res.status(404).json({ error: 'Withdrawal record not found' });
     }
 
-    // If it's already marked as completed or failed, return it immediately to avoid unnecessary API calls
-    if (donation.status === 'completed' || donation.status === 'failed') {
-      return res.status(200).json({ success: true, status: donation.status, donation });
+    // If it's already completed or failed, return it immediately
+    if (withdrawal.status === 'completed' || withdrawal.status === 'failed') {
+      return res.status(200).json({ success: true, status: withdrawal.status, withdrawal });
     }
 
-    // 2. Resolve Credentials (using global platform environment variables only)
+    // 2. Resolve credentials
     const apiKey = process.env.RELWORX_API_KEY || '';
     const accountNo = process.env.RELWORX_ACCOUNT_NO || '';
-    const isSandbox = process.env.RELWORX_SANDBOX === 'true' || !apiKey || !accountNo || reference.startsWith('DON-SIM-');
+    const isSandbox = process.env.RELWORX_SANDBOX === 'true' || !apiKey || !accountNo;
 
     let finalStatus: 'pending' | 'completed' | 'failed' = 'pending';
 
-    // 3. Handle Sandbox Polling Simulation
     if (isSandbox) {
-      const createdAt = new Date(donation.created_at).getTime();
+      // Sandbox auto-completes after 3 seconds
+      const createdAt = new Date(withdrawal.created_at).getTime();
       const now = Date.now();
       const elapsedSeconds = (now - createdAt) / 1000;
 
-      // Automatically succeed after 5 seconds in sandbox
-      if (elapsedSeconds >= 5) {
+      if (elapsedSeconds >= 3) {
         finalStatus = 'completed';
       } else {
         finalStatus = 'pending';
       }
     } else {
-      // 4. Call live Relworx API to check request status
+      // 3. Call live Relworx API to check payout request status
       const response = await fetchRelworx(`https://payments.relworx.com/api/mobile-money/check-request-status?internal_reference=${reference}&account_no=${accountNo}`, {
         method: 'GET',
         headers: {
@@ -125,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(result.message || result.error || 'Failed to check status with Relworx');
       }
 
-      // Check request status field (can be 'success', 'completed', 'failed', 'cancelled', 'pending')
+      // Parse status
       const gatewayStatus = (
         result.status || 
         result.request_status || 
@@ -134,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'pending'
       ).toLowerCase();
 
-      if (gatewayStatus === 'success' || gatewayStatus === 'completed') {
+      if (gatewayStatus === 'success' || gatewayStatus === 'completed' || gatewayStatus === 'successful') {
         finalStatus = 'completed';
       } else if (gatewayStatus === 'failed' || gatewayStatus === 'cancelled') {
         finalStatus = 'failed';
@@ -143,36 +141,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // 5. If status changed, update in Database
-    if (finalStatus !== donation.status) {
-      const { data: updatedDonation, error: updateError } = await supabase
-        .from('donations')
+    // 4. Update status in database if changed
+    if (finalStatus !== withdrawal.status) {
+      const { data: updatedWithdrawal, error: updateError } = await supabase
+        .from('withdrawals')
         .update({ status: finalStatus })
-        .eq('id', donation.id)
+        .eq('id', withdrawal.id)
         .select()
         .single();
 
       if (updateError) {
-        throw new Error(`Failed to update donation status in database: ${updateError.message}`);
+        throw new Error(`Failed to update withdrawal status: ${updateError.message}`);
       }
 
       return res.status(200).json({
         success: true,
         status: finalStatus,
-        donation: updatedDonation,
-        isSimulated: isSandbox
+        withdrawal: updatedWithdrawal
       });
     }
 
     return res.status(200).json({
       success: true,
-      status: donation.status,
-      donation,
-      isSimulated: isSandbox
+      status: withdrawal.status,
+      withdrawal
     });
 
   } catch (error: any) {
-    console.error('Check donation error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to verify donation status' });
+    console.error('Check withdrawal error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to verify withdrawal status' });
   }
 }

@@ -46,6 +46,11 @@ export interface Database {
         Insert: Omit<OrganizationPayments, "id" | "created_at" | "updated_at">;
         Update: Partial<Omit<OrganizationPayments, "id" | "created_at">>;
       };
+      withdrawals: {
+        Row: Withdrawal;
+        Insert: Omit<Withdrawal, "id" | "reference" | "created_at" | "updated_at">;
+        Update: Partial<Omit<Withdrawal, "id" | "created_at" | "updated_at">>;
+      };
     };
     Functions: {
       my_org_id: { Args: Record<string, never>; Returns: string };
@@ -149,6 +154,19 @@ export interface OrganizationPayments {
   api_key:         string | null;
   account_no:      string | null;
   is_sandbox:      boolean;
+  created_at:      string;
+  updated_at:      string;
+}
+
+export interface Withdrawal {
+  id:              string;
+  organization_id: string;
+  amount:          number;
+  currency:        string;
+  recipient_phone: string;
+  recipient_name:  string | null;
+  status:          "pending" | "completed" | "failed";
+  reference:       string;
   created_at:      string;
   updated_at:      string;
 }

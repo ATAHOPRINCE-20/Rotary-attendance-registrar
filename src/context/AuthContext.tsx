@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .single();
             if (org) {
               const orgData = { ...org };
-              if (!orgData.logo_url) orgData.logo_url = "/logo.jpg";
+              if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
               setOrg(orgData);
             } else {
               setOrg(null);

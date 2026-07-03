@@ -41,7 +41,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         } else {
           const orgData = { ...data };
           if (!orgData.logo_url) {
-            orgData.logo_url = "/logo.jpg";
+            orgData.logo_url = "/assets/rotary_gold_logo.png";
           }
           setOrg(orgData);
         }

@@ -16,6 +16,7 @@ import {
   X,
   Users,
   FolderArchive,
+  Wallet,
 } from "lucide-react";
 
 const MENU_ITEMS = [
@@ -23,6 +24,7 @@ const MENU_ITEMS = [
   { label: "Events",         to: "/admin/events",         icon: Calendar        },
   { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
   { label: "Members",        to: "/admin/members",        icon: Users           },
+  { label: "Withdrawals",     to: "/admin/withdrawals",    icon: Wallet          },
   { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
   { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
 ];

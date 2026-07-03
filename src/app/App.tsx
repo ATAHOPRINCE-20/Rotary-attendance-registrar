@@ -76,6 +76,7 @@ const CommsPage = lazyWithRetry(() => import("./components/admin/CommsPage"), "C
 const AnalyticsPage = lazyWithRetry(() => import("./components/admin/AnalyticsPage"), "AnalyticsPage");
 const MembersPage = lazyWithRetry(() => import("./components/admin/MembersPage"), "MembersPage");
 const ReportsPage = lazyWithRetry(() => import("./components/admin/ReportsPage"), "ReportsPage");
+const AdminWithdrawalsPage = lazyWithRetry(() => import("./components/admin/AdminWithdrawalsPage"), "AdminWithdrawalsPage");
 
 import { PWAInstallBanner }  from "./components/shared/PWAInstallBanner";
 
@@ -159,6 +160,7 @@ function AppRoutes() {
       <Route path="/admin/analytics"          element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
       <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+      <Route path="/admin/withdrawals"        element={<ProtectedRoute><AdminWithdrawalsPage /></ProtectedRoute>} />
 
       {/* Tenant (public attendee) routes — all scoped to :slug */}
       <Route
