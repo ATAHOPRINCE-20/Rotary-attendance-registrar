@@ -91,9 +91,17 @@ export function PostRegisterPage() {
             </GoldButton>
           </div>
 
-          <OutlineButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
-            Explore Other Events
-          </OutlineButton>
+          <div className="flex flex-col gap-2 w-full mt-2">
+            <OutlineButton 
+              onClick={() => navigate(`/org/${slug}/register/${registration.event_id}?edit=${registration.qr_ref}`)} 
+              className="w-full justify-center border-dashed border-2 hover:bg-muted/50"
+            >
+              Edit Registration
+            </OutlineButton>
+            <OutlineButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
+              Explore Other Events
+            </OutlineButton>
+          </div>
         </PageCard>
       </div>
     </div>

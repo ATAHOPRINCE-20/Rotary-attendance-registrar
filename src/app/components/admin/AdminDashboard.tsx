@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   X,
   AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -231,6 +232,27 @@ export function AdminDashboard() {
                     </p>
                   </div>
                 ))}
+              </div>
+
+              {/* Directory Quick Link */}
+              <div
+                className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-[#17458F]/30 transition-all group"
+                onClick={() => navigate("/admin/directory")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && navigate("/admin/directory")}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: `${NAVY}12`, color: NAVY }}
+                >
+                  <BookOpen size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground font-semibold">Club Directory</p>
+                  <p className="text-sm font-black mt-0.5" style={{ color: NAVY }}>View All Visitors &amp; Rotarians</p>
+                </div>
+                <ArrowUpRight size={16} className="text-muted-foreground group-hover:text-[#17458F] transition-colors" />
               </div>
 
               {/* Configuration Settings Grid */}

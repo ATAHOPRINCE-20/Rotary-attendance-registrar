@@ -206,10 +206,8 @@ export function ReportsPage() {
             <td>${r.buddy_group || "—"}</td>
             <td>${r.phone ?? "—"}</td>
             <td>${r.email}</td>
-            <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-            <td class="sig"></td>
           </tr>`;
-      }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
+      }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
 
       const visitingRotarianRows = visitingRotarians.length > 0 ? visitingRotarians.map((r, i) => {
         const isCheckedIn = r.status === "checked-in";
@@ -221,10 +219,8 @@ export function ReportsPage() {
             <td>${r.district || "—"}</td>
             <td>${r.phone ?? "—"}</td>
             <td>${r.email}</td>
-            <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-            <td class="sig"></td>
           </tr>`;
-      }).join("") : `<tr><td colspan="8" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
+      }).join("") : `<tr><td colspan="6" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
 
       const guestRows = guests.length > 0 ? guests.map((r, i) => {
         const isCheckedIn = r.status === "checked-in";
@@ -235,10 +231,8 @@ export function ReportsPage() {
             <td>${r.occupation || "—"}</td>
             <td>${r.phone ?? "—"}</td>
             <td>${r.email}</td>
-            <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-            <td class="sig"></td>
           </tr>`;
-      }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
+      }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
 
       const html = `<!DOCTYPE html>
 <html lang="en">
@@ -275,7 +269,6 @@ export function ReportsPage() {
     td.center { text-align: center; }
     span.checkedin { color: #047857; font-weight: bold; }
     span.pending { color: #b45309; font-weight: 500; font-style: italic; }
-    td.sig { width: 100px; border-bottom: 1px solid #cbd5e1; }
     .signature-block { display: flex; justify-content: space-between; margin-top: 36px; page-break-inside: avoid; }
     .sig-line { width: 30%; border-top: 1px solid #64748b; text-align: center; padding-top: 6px; font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; margin-top: 24px; }
     .footer { display: flex; justify-content: space-between; font-size: 7px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 24px; page-break-inside: avoid; }
@@ -344,8 +337,6 @@ export function ReportsPage() {
         <th>Buddy Group</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${clubMemberRows}</tbody>
@@ -366,8 +357,6 @@ export function ReportsPage() {
         <th>District</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${visitingRotarianRows}</tbody>
@@ -385,8 +374,6 @@ export function ReportsPage() {
         <th>Profession / Classification</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${guestRows}</tbody>

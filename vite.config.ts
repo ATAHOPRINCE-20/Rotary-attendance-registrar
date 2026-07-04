@@ -75,13 +75,25 @@ export default defineConfig(({ mode }) => {
         icons: [
           {
             src: '/assets/rotary_gold_logo.png',
-            sizes: '447x447',
+            sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
             src: '/assets/rotary_gold_logo.png',
-            sizes: '447x447',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/assets/rotary_gold_logo.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/assets/rotary_gold_logo.png',
+            sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
           },

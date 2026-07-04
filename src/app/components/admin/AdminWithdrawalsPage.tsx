@@ -167,7 +167,9 @@ export function AdminWithdrawalsPage() {
                   >
                     <CheckCircle2 size={18} />
                   </div>
-                  <HelpCircle size={14} className="text-muted-foreground cursor-help" title="Total completed donations received" />
+                  <span title="Total completed donations received">
+                    <HelpCircle size={14} className="text-muted-foreground cursor-help" />
+                  </span>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Total Raised</p>
@@ -184,7 +186,9 @@ export function AdminWithdrawalsPage() {
                   >
                     <ArrowUpRight size={18} />
                   </div>
-                  <HelpCircle size={14} className="text-muted-foreground cursor-help" title="Total withdrawn or pending payouts" />
+                  <span title="Total withdrawn or pending payouts">
+                    <HelpCircle size={14} className="text-muted-foreground cursor-help" />
+                  </span>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Total Withdrawn</p>
@@ -201,7 +205,9 @@ export function AdminWithdrawalsPage() {
                   >
                     <Wallet size={18} />
                   </div>
-                  <HelpCircle size={14} className="text-muted-foreground cursor-help" title="Funds available to withdraw" />
+                  <span title="Funds available to withdraw">
+                    <HelpCircle size={14} className="text-muted-foreground cursor-help" />
+                  </span>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Withdrawable Balance</p>

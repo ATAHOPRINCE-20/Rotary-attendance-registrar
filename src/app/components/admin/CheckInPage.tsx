@@ -253,10 +253,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <td>${r.buddy_group || "—"}</td>
           <td>${r.phone ?? "—"}</td>
           <td>${r.email}</td>
-          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-          <td class="sig"></td>
         </tr>`;
-    }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
 
     // Generate table rows for Visiting Rotarians
     const visitingRotarianRows = visitingRotarians.length > 0 ? visitingRotarians.map((r, i) => {
@@ -269,10 +267,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <td>${r.district || "—"}</td>
           <td>${r.phone ?? "—"}</td>
           <td>${r.email}</td>
-          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-          <td class="sig"></td>
         </tr>`;
-    }).join("") : `<tr><td colspan="8" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
 
     // Generate table rows for Guests
     const guestRows = guests.length > 0 ? guests.map((r, i) => {
@@ -284,10 +280,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <td>${r.occupation || "—"}</td>
           <td>${r.phone ?? "—"}</td>
           <td>${r.email}</td>
-          <td class="center">${isCheckedIn ? "<span class='checkedin'>✓ Checked In</span>" : "<span class='pending'>Pending</span>"}</td>
-          <td class="sig"></td>
         </tr>`;
-    }).join("") : `<tr><td colspan="7" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -412,8 +406,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         <th>Buddy Group</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${clubMemberRows}</tbody>
@@ -435,8 +427,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         <th>District</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${visitingRotarianRows}</tbody>
@@ -455,8 +445,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         <th>Profession / Classification</th>
         <th>Phone</th>
         <th>Email</th>
-        <th style="text-align:center">Status</th>
-        <th>Signature</th>
       </tr>
     </thead>
     <tbody>${guestRows}</tbody>
@@ -521,7 +509,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
     : organization?.buddy_groups
     ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Table 1", "Table 2", "Table 3", "Table 4"];
+    : ["Group A", "Group B", "Group C", "Group D"];
 
   const filteredRegs = registrations?.filter((r) => {
     return (
@@ -1121,7 +1109,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
               {regType === "club_member" && (
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/40 animate-in fade-in slide-in-from-top-1 flex flex-col gap-4">
                   <SelectInput
-                    label="Buddy Group / Table Name"
+                  label="Buddy Group"
                     options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
                     value={buddyGroup}
                     onChange={buddy => setBuddyGroup(buddy)}

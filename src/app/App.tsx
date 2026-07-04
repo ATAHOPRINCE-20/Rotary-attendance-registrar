@@ -77,8 +77,8 @@ const AnalyticsPage = lazyWithRetry(() => import("./components/admin/AnalyticsPa
 const MembersPage = lazyWithRetry(() => import("./components/admin/MembersPage"), "MembersPage");
 const ReportsPage = lazyWithRetry(() => import("./components/admin/ReportsPage"), "ReportsPage");
 const AdminWithdrawalsPage = lazyWithRetry(() => import("./components/admin/AdminWithdrawalsPage"), "AdminWithdrawalsPage");
+const DirectoryPage = lazyWithRetry(() => import("./components/admin/DirectoryPage"), "DirectoryPage");
 
-import { PWAInstallBanner }  from "./components/shared/PWAInstallBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -159,6 +159,7 @@ function AppRoutes() {
       <Route path="/admin/communications"     element={<ProtectedRoute><CommsPage /></ProtectedRoute>} />
       <Route path="/admin/analytics"          element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
+      <Route path="/admin/directory"          element={<ProtectedRoute><DirectoryPage /></ProtectedRoute>} />
       <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="/admin/withdrawals"        element={<ProtectedRoute><AdminWithdrawalsPage /></ProtectedRoute>} />
 
@@ -193,7 +194,6 @@ export default function App() {
           <Suspense fallback={<RouteLoadingFallback />}>
             <AppRoutes />
           </Suspense>
-          <PWAInstallBanner />
           <Toaster richColors position="top-right" />
         </BrowserRouter>
       </AuthProvider>

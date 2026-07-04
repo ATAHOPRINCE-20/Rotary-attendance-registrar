@@ -1,8 +1,8 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useTenant } from "../../../context/TenantContext";
 import { useEvent } from "../../../hooks/useEvents";
-import { useSubmitRegistration } from "../../../hooks/useRegistrations";
+import { useSubmitRegistration, useUpdateRegistration, useRegistrationByQR } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
@@ -17,11 +17,18 @@ import type { ClubActivity } from "../../../types/database";
 export function RegistrationPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editQrRef = searchParams.get("edit");
+
   const { organization, loading: tenantLoading } = useTenant();
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const mutation = useSubmitRegistration();
+  
+  const { data: existingReg, isLoading: existingRegLoading } = useRegistrationByQR(editQrRef || undefined);
 
-  const loading = tenantLoading || eventLoading;
+  const mutation = useSubmitRegistration();
+  const updateMutation = useUpdateRegistration();
+
+  const loading = tenantLoading || eventLoading || (editQrRef ? existingRegLoading : false);
 
   if (loading) {
     return <LoadingScreen variant="blue" />;
@@ -44,7 +51,7 @@ export function RegistrationPage() {
   const { activeEventId } = parseOrgWebsite(organization?.website || null);
   const isActiveEvent = activeEventId === event.id;
 
-  if (!isActiveEvent) {
+  if (!isActiveEvent && !editQrRef) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <PageCard className="text-center max-w-md flex flex-col items-center gap-4">
@@ -68,6 +75,9 @@ export function RegistrationPage() {
       organization={organization}
       slug={slug}
       mutation={mutation}
+      updateMutation={updateMutation}
+      existingReg={existingReg}
+      editQrRef={editQrRef}
     />
   );
 }
@@ -77,9 +87,12 @@ interface RegistrationFormProps {
   organization: any;
   slug?: string;
   mutation: any;
+  updateMutation?: any;
+  existingReg?: any;
+  editQrRef?: string | null;
 }
 
-function RegistrationForm({ event, organization, slug, mutation }: RegistrationFormProps) {
+function RegistrationForm({ event, organization, slug, mutation, updateMutation, existingReg, editQrRef }: RegistrationFormProps) {
   const navigate = useNavigate();
   const storageKey = `rotary-reg-${event.id}`;
 
@@ -110,6 +123,23 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
 
   // Read saved form data if exists
   const savedData = (() => {
+    if (editQrRef && existingReg) {
+      return {
+        fullName: existingReg.full_name || "",
+        email: existingReg.email && existingReg.email.startsWith("member-") ? "" : existingReg.email || "",
+        phone: existingReg.phone || "",
+        regType: existingReg.is_member ? (existingReg.member_id || (existingReg.buddy_group && !existingReg.club_name) ? "club_member" : "rotarian") : "guest",
+        clubName: existingReg.club_name || "",
+        district: existingReg.district || "",
+        buddyGroup: existingReg.buddy_group || "",
+        occupation: existingReg.occupation || "",
+        comments: existingReg.comments || "",
+        selectedMemberId: existingReg.member_id || null,
+        isManualInput: existingReg.is_member && !existingReg.club_name && !existingReg.member_id,
+        visits: existingReg.visits || [],
+        makeups: existingReg.makeups || [],
+      };
+    }
     try {
       const data = sessionStorage.getItem(storageKey);
       return data ? JSON.parse(data) : {};
@@ -131,13 +161,13 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
   const [error, setError] = useState<string | null>(null);
 
   // Autocomplete states
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(savedData.selectedMemberId || null);
   const [searchMemberQuery, setSearchMemberQuery] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
-  const [isManualInput, setIsManualInput] = useState(false);
+  const [isManualInput, setIsManualInput] = useState(!!savedData.isManualInput);
 
-  const [visits, setVisits] = useState<ClubActivity[]>([]);
-  const [makeups, setMakeups] = useState<ClubActivity[]>([]);
+  const [visits, setVisits] = useState<ClubActivity[]>(savedData.visits || []);
+  const [makeups, setMakeups] = useState<ClubActivity[]>(savedData.makeups || []);
   const [existingMakeupsCount, setExistingMakeupsCount] = useState(0);
 
   // Fetch existing make-ups count for the calendar month of the event
@@ -223,7 +253,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
     ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
     : organization?.buddy_groups
     ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Table 1", "Table 2", "Table 3", "Table 4"];
+    : ["Group A", "Group B", "Group C", "Group D"];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -231,7 +261,9 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
     const sanitizedEmail = regType === "club_member"
-      ? (isManualInput ? sanitizeRequiredInput(email) : `member@${organization?.slug || "rotary"}.org`)
+      ? (isManualInput
+          ? sanitizeRequiredInput(email)
+          : (email.trim() ? sanitizeRequiredInput(email) : `member-${selectedMemberId ?? "x"}@${organization?.slug || "rotary"}.org`))
       : sanitizeRequiredInput(email);
     const sanitizedPhone = regType === "club_member"
       ? (isManualInput ? formatUgandanPhone(phone) : null)
@@ -318,7 +350,7 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
         }
       }
 
-      const reg = await mutation.mutateAsync({
+      const payload = {
         event_id: event.id,
         organization_id: organization?.id || "",
         full_name: sanitizedFullName,
@@ -334,9 +366,20 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
         member_id: finalMemberId || null,
         visits: regType === "club_member" && filteredVisits.length > 0 ? filteredVisits : null,
         makeups: regType === "club_member" && filteredMakeups.length > 0 ? filteredMakeups : null,
-      });
+      };
 
-      toast.success("Successfully registered!");
+      let reg;
+      if (editQrRef && updateMutation) {
+        reg = await updateMutation.mutateAsync({
+          qr_ref: editQrRef,
+          ...payload
+        });
+        toast.success("Registration updated successfully!");
+      } else {
+        reg = await mutation.mutateAsync(payload);
+        toast.success("Successfully registered!");
+      }
+
       sessionStorage.removeItem(storageKey);
       // Redirect to post-register confirmation page with the QR ref
       navigate(`/org/${slug}/post-register?ref=${reg.qr_ref}`);
@@ -413,6 +456,8 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                           setIsManualInput(true);
                           setFullName("");
                           setBuddyGroup("");
+                          setEmail("");
+                          setPhone("");
                         }}
                         className="text-xs font-bold text-[#F7A81B] hover:underline cursor-pointer animate-in fade-in duration-200"
                       >
@@ -458,9 +503,10 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                                 onClick={() => {
                                   setFullName(m.full_name);
                                   setSelectedMemberId(m.id);
-                                  if (m.buddy_group) {
-                                    setBuddyGroup(m.buddy_group);
-                                  }
+                                  if (m.buddy_group) setBuddyGroup(m.buddy_group);
+                                  // Auto-fill email and phone from members table
+                                  if (m.email) setEmail(m.email);
+                                  if (m.phone) setPhone(m.phone);
                                   setShowMemberDropdown(false);
                                 }}
                                 className="w-full text-left px-4 py-3 text-xs text-foreground hover:bg-muted/30 transition-all font-semibold flex justify-between items-center cursor-pointer"
@@ -512,6 +558,30 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                   </div>
                 )}
 
+                {/* Show captured email/phone from DB for roster-selected club members */}
+                {regType === "club_member" && !isManualInput && selectedMemberId && (
+                  <div className="flex flex-col gap-2 p-3 rounded-xl bg-[#17458F]/5 border border-[#17458F]/15 animate-in fade-in duration-200">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#17458F]">Contact On File</p>
+                    {email ? (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-muted-foreground w-10 shrink-0">Email</span>
+                          <span className="text-xs font-semibold text-foreground bg-white border border-border/40 px-3 py-1.5 rounded-lg flex-1 truncate">{email}</span>
+                        </div>
+                        {phone && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-muted-foreground w-10 shrink-0">Phone</span>
+                            <span className="text-xs font-semibold text-foreground bg-white border border-border/40 px-3 py-1.5 rounded-lg flex-1">{phone}</span>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-muted-foreground mt-0.5">These contact details are from your member record and will be used for your registration.</p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No email on file for this member. Your registration will proceed without email contact details.</p>
+                    )}
+                  </div>
+                )}
+
                 {(regType !== "club_member" || isManualInput) && (
                   <>
                     <TextInput
@@ -557,13 +627,13 @@ function RegistrationForm({ event, organization, slug, mutation }: RegistrationF
                   <div className="animate-in fade-in slide-in-from-top-1 flex flex-col gap-5">
                     <div>
                       <SelectInput
-                        label="Buddy Group / Table Name"
+                        label="Buddy Group"
                         options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
                         value={buddyGroup}
                         onChange={setBuddyGroup}
                       />
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        Please specify the name of the Buddy Group or Table you belong to.
+                        Please select the Buddy Group you belong to.
                       </p>
                     </div>
 

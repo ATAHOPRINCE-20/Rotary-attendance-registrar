@@ -17,6 +17,7 @@ import {
   Users,
   FolderArchive,
   Wallet,
+  BookOpen,
 } from "lucide-react";
 
 const MENU_ITEMS = [
@@ -24,6 +25,7 @@ const MENU_ITEMS = [
   { label: "Events",         to: "/admin/events",         icon: Calendar        },
   { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
   { label: "Members",        to: "/admin/members",        icon: Users           },
+  { label: "Directory",      to: "/admin/directory",      icon: BookOpen        },
   { label: "Withdrawals",     to: "/admin/withdrawals",    icon: Wallet          },
   { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
   { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
@@ -166,7 +168,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
             { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
             { label: "Events",    to: "/admin/events",    icon: Calendar        },
             { label: "Members",   to: "/admin/members",   icon: Users           },
-            { label: "Reports",   to: "/admin/reports",   icon: FolderArchive   },
+            { label: "Directory", to: "/admin/directory", icon: BookOpen        },
           ].map(({ label, to, icon: Icon }) => {
             const active = location.pathname === to;
             return (

@@ -66,7 +66,7 @@ export function MembersPage() {
   // Options for Buddy Groups from organization setting
   const buddyGroupsList = organization?.buddy_groups
     ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Table 1", "Table 2", "Table 3", "Table 4"];
+    : ["Group A", "Group B", "Group C", "Group D"];
 
   // Open modal for single member creation
   function openAddModal() {
@@ -585,7 +585,7 @@ export function MembersPage() {
                 onChange={setPhone}
               />
               <SelectInput
-                label="Buddy Group / Table Assignment (Optional)"
+                label="Buddy Group (Optional)"
                 options={buddyGroupsList.map(g => ({ value: g, label: g }))}
                 value={buddyGroup}
                 onChange={setBuddyGroup}
@@ -594,7 +594,7 @@ export function MembersPage() {
               <div className="flex flex-col gap-1 -mt-2">
                 <input
                   type="text"
-                  placeholder="Or enter custom table name..."
+                  placeholder="Or type a custom buddy group name..."
                   value={buddyGroup}
                   onChange={(e) => setBuddyGroup(e.target.value)}
                   className="px-4 py-2.5 text-xs rounded-xl border border-border bg-input-background text-foreground focus:outline-none"
