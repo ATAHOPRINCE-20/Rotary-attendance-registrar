@@ -1,0 +1,75 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // We support both GET (for polling status) and POST (for starting session)
+  const isPost = req.method === 'POST';
+  
+  // Extract parameters from body (POST) or query (GET)
+  const params = isPost ? req.body : req.query;
+  
+  const { action, gatewayUrl, sessionId, phone } = params;
+
+  if (!action || !gatewayUrl || !sessionId) {
+    return res.status(400).json({ error: 'Missing action, gatewayUrl, or sessionId' });
+  }
+
+  // Ensure gatewayUrl doesn't have a trailing slash
+  const cleanGateway = gatewayUrl.replace(/\/$/, '');
+
+  try {
+    let targetUrl = '';
+    let method = 'GET';
+    let body: any = undefined;
+    
+    if (action === 'start') {
+      targetUrl = `${cleanGateway}/session/start/${sessionId}`;
+      method = 'POST';
+      if (phone) {
+        body = JSON.stringify({ phone });
+      }
+    } else if (action === 'status') {
+      targetUrl = `${cleanGateway}/session/status/${sessionId}`;
+      method = 'GET';
+    } else if (action === 'delete') {
+      targetUrl = `${cleanGateway}/session/delete/${sessionId}`;
+      method = 'POST';
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    const fetchOptions: any = {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+    if (body !== undefined) {
+      fetchOptions.body = body;
+    }
+
+    const response = await fetch(targetUrl, fetchOptions);
+
+    const result = await response.json().catch(() => ({}));
+    
+    if (!response.ok) {
+      if (response.status === 404 && action === 'delete') {
+        // If the delete endpoint isn't deployed yet or session not found, treat as success
+        return res.status(200).json({ success: true, message: 'Session assumed deleted' });
+      }
+      throw new Error(result.error || `Gateway returned ${response.status}`);
+    }
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('WhatsApp Proxy Error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to connect to WhatsApp Gateway' });
+  }
+}

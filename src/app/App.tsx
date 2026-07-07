@@ -78,6 +78,7 @@ const MembersPage = lazyWithRetry(() => import("./components/admin/MembersPage")
 const ReportsPage = lazyWithRetry(() => import("./components/admin/ReportsPage"), "ReportsPage");
 const AdminWithdrawalsPage = lazyWithRetry(() => import("./components/admin/AdminWithdrawalsPage"), "AdminWithdrawalsPage");
 const DirectoryPage = lazyWithRetry(() => import("./components/admin/DirectoryPage"), "DirectoryPage");
+const TeamPage = lazyWithRetry(() => import("./components/admin/TeamPage"), "TeamPage");
 
 
 const queryClient = new QueryClient({
@@ -95,7 +96,7 @@ function RouteLoadingFallback() {
 }
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
   const { user, profile, loading, profileLoading, profileError, refreshProfile } = useAuth();
 
   // Wait for auth AND profile fetch to both complete before making routing decisions
@@ -136,6 +137,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Only redirect to org-setup if profile fetch completed successfully with no record (new user)
   if (!profile) return <Navigate to="/org-setup" replace />;
 
+  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
   return <>{children}</>;
 }
 
@@ -156,12 +161,13 @@ function AppRoutes() {
       <Route path="/admin/events"             element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
       <Route path="/admin/events/:id/qr"      element={<ProtectedRoute><EventQRPage /></ProtectedRoute>} />
       <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute><CheckInPage /></ProtectedRoute>} />
-      <Route path="/admin/communications"     element={<ProtectedRoute><CommsPage /></ProtectedRoute>} />
-      <Route path="/admin/analytics"          element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+      <Route path="/admin/communications"     element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CommsPage /></ProtectedRoute>} />
+      <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
       <Route path="/admin/directory"          element={<ProtectedRoute><DirectoryPage /></ProtectedRoute>} />
       <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-      <Route path="/admin/withdrawals"        element={<ProtectedRoute><AdminWithdrawalsPage /></ProtectedRoute>} />
+      <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
+      <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
 
       {/* Tenant (public attendee) routes — all scoped to :slug */}
       <Route
@@ -172,6 +178,7 @@ function AppRoutes() {
               <Route index               element={<TenantLandingPage />} />
               <Route path="events"       element={<EventsListPage />} />
               <Route path="event/:id"    element={<EventDetailPage />} />
+              <Route path="register"     element={<RegistrationPage />} />
               <Route path="register/:id" element={<RegistrationPage />} />
               <Route path="post-register" element={<PostRegisterPage />} />
               <Route path="donate"       element={<DonatePage />} />

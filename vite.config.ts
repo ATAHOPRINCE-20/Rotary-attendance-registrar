@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
       // Precache all app shell assets
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['**/rotary_gold_logo.png'],
         // Don't cache Supabase API calls — always fetch fresh
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/rest/, /^\/auth/],

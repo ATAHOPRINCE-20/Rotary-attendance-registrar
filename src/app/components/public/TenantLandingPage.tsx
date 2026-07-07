@@ -39,7 +39,7 @@ export function TenantLandingPage() {
   const { activeEventId } = parseOrgWebsite(organization.website);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] overflow-x-hidden flex items-center py-16 px-6 sm:px-12 lg:px-24">
+    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex items-center py-16 px-6 sm:px-12 lg:px-24">
       {/* Giant faint background logo */}
       <div className="absolute -right-48 -bottom-48 opacity-[0.03] pointer-events-none select-none text-white w-[800px] h-[800px] flex items-center justify-center">
         <RotaryLogo size={800} />

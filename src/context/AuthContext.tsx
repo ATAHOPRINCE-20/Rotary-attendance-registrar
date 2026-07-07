@@ -13,7 +13,7 @@ interface AuthContextValue {
   profileLoading: boolean;
   profileError:   boolean;
   signIn:         (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp:         (email: string, password: string, fullName: string) => Promise<{ error: string | null; session: Session | null }>;
+  signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) => Promise<{ error: string | null; session: Session | null }>;
   signOut:        () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -55,6 +55,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn("[AuthContext] loadProfile error:", profErr.code, profErr.message);
           // PGRST116 = row not found → genuinely new user, no profile yet
           if (profErr.code === "PGRST116") {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            const inviteOrgId = currentUser?.user_metadata?.organization_id;
+            const inviteRole = currentUser?.user_metadata?.role || "staff";
+            
+            if (inviteOrgId) {
+              const { data: newProf, error: insertErr } = await supabase
+                .from("profiles")
+                .insert({
+                  id: userId,
+                  organization_id: inviteOrgId,
+                  full_name: currentUser?.user_metadata?.full_name || "New Staff",
+                  role: inviteRole,
+                })
+                .select()
+                .single();
+              
+              if (!insertErr && newProf) {
+                setProfileError(false);
+                setProfile(newProf);
+                const { data: org } = await supabase
+                  .from("organizations")
+                  .select("*")
+                  .eq("id", inviteOrgId)
+                  .single();
+                if (org) {
+                  const orgData = { ...org };
+                  if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
+                  setOrg(orgData);
+                } else {
+                  setOrg(null);
+                }
+                return;
+              } else {
+                console.error("[AuthContext] Auto-insert profile error:", insertErr);
+              }
+            }
             setProfile(null);
             setOrg(null);
           } else {
@@ -160,13 +196,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
-  async function signUp(email: string, password: string, fullName: string) {
+  async function signUp(email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) {
     setLoading(true);
     const sanitizedName = sanitizeRequiredInput(fullName);
+    const metadata: any = { full_name: sanitizedName };
+    if (orgId) {
+      metadata.organization_id = orgId;
+      metadata.role = role || "staff";
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: sanitizedName } },
+      options: { data: metadata },
     });
     if (error) {
       setLoading(false);

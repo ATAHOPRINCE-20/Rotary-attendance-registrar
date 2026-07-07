@@ -12,6 +12,7 @@ import { GoldButton, NavyButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
 import { NAVY, GOLD, EVENT_TYPES, parseOrgWebsite, serializeOrgWebsite } from "../../../lib/constants";
 import { supabase } from "../../../lib/supabase";
+import { QRCodeSVG } from "qrcode.react";
 import {
   Calendar,
   Plus,
@@ -24,12 +25,16 @@ import {
   AlertCircle,
   X,
   FileImage,
+  Printer,
+  Copy,
+  Check,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function EventsPage() {
-  const { organization, refreshProfile } = useAuth();
+  const { profile, organization, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   // Queries/Mutations
@@ -39,6 +44,126 @@ export function EventsPage() {
   const deleteMutation = useDeleteEvent();
 
   const { activeEventId } = parseOrgWebsite(organization?.website || null);
+
+  const [showAllInOneQR, setShowAllInOneQR] = useState(false);
+  const [copiedGeneralQR, setCopiedGeneralQR] = useState(false);
+
+  const generalRegUrl = `${window.location.origin}/org/${organization?.slug}/register`;
+
+  const handlePrintAllInOne = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("Popup blocker prevented printing. Please allow popups.");
+      return;
+    }
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Registration QR Code - ${organization?.name}</title>
+          <style>
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              text-align: center;
+              padding: 40px;
+              color: #17458F;
+            }
+            .container {
+              max-width: 500px;
+              margin: 0 auto;
+              border: 3px solid #F7A81B;
+              padding: 40px;
+              border-radius: 24px;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            }
+            .logo-placeholder {
+              font-size: 24px;
+              font-weight: 900;
+              margin-bottom: 20px;
+              letter-spacing: 1px;
+            }
+            .title {
+              font-size: 28px;
+              font-weight: 900;
+              margin: 10px 0;
+            }
+            .subtitle {
+              font-size: 14px;
+              color: #64748B;
+              margin-bottom: 30px;
+              line-height: 1.5;
+            }
+            .qr-container {
+              background: white;
+              padding: 20px;
+              display: inline-block;
+              border-radius: 16px;
+              border: 1px solid #E2E8F0;
+              margin-bottom: 20px;
+            }
+            .footer-info {
+              margin-top: 20px;
+              background: #F8FAFC;
+              padding: 15px;
+              border-radius: 12px;
+              border: 1px solid #E2E8F0;
+            }
+            .active-badge {
+              display: inline-block;
+              background: #10B981;
+              color: white;
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              padding: 4px 8px;
+              border-radius: 9999px;
+              margin-bottom: 5px;
+            }
+            .event-name {
+              font-weight: bold;
+              font-size: 16px;
+              color: #0F172A;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo-placeholder">ROTARY CONNECT</div>
+            <div class="active-badge">Scan to Register</div>
+            <h1 class="title">Event Registration</h1>
+            <p class="subtitle">Please scan this QR code with your mobile camera to quickly check-in and register for today's event.</p>
+            
+            <div class="qr-container">
+              <div id="qrcode-svg"></div>
+            </div>
+            
+            <div class="footer-info">
+              <div class="event-name">${organization?.name}</div>
+              <p style="font-size: 11px; color: #64748B; margin: 4px 0 0 0; word-break: break-all;">${generalRegUrl}</p>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              const svgContent = window.opener.document.getElementById('general-qr-svg').outerHTML;
+              document.getElementById('qrcode-svg').innerHTML = svgContent;
+              
+              const svgElement = document.getElementById('qrcode-svg').querySelector('svg');
+              if (svgElement) {
+                svgElement.setAttribute('width', '260');
+                svgElement.setAttribute('height', '260');
+              }
+              
+              setTimeout(function() {
+                window.print();
+                window.close();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const handleSetActiveEvent = async (eventId: string | null) => {
     if (!organization) return;
@@ -165,13 +290,23 @@ export function EventsPage() {
     <AdminLayout
       pageTitle="Events"
       actions={
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all"
-          style={{ background: NAVY }}
-        >
-          <Plus size={14} /> Create Event
-        </button>
+        <div className="flex items-center gap-2">
+          <OutlineButton
+            onClick={() => setShowAllInOneQR(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold"
+          >
+            <QrCode size={13} /> All-in-One QR Code
+          </OutlineButton>
+          {profile?.role !== "staff" && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all cursor-pointer"
+              style={{ background: NAVY }}
+            >
+              <Plus size={14} /> Create Event
+            </button>
+          )}
+        </div>
       }
     >
       {/* Page heading */}
@@ -254,32 +389,44 @@ export function EventsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
-                    <button
-                      type="button"
-                      onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
-                      className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
-                        isActive
-                          ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
-                          : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
-                      }`}
-                    >
-                      <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
-                    </button>
-                    <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
-                      <Edit2 size={12} /> Edit
-                    </OutlineButton>
-                    <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
-                      <QrCode size={12} /> QR Codes
-                    </OutlineButton>
+                    {profile?.role !== "staff" && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
+                        className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
+                          isActive
+                            ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
+                            : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
+                        }`}
+                      >
+                        <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
+                      </button>
+                    )}
+                    {profile?.role !== "staff" ? (
+                      <>
+                        <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
+                          <Edit2 size={12} /> Edit
+                        </OutlineButton>
+                        <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
+                          <QrCode size={12} /> QR Codes
+                        </OutlineButton>
+                      </>
+                    ) : (
+                      <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
+                        <QrCode size={12} /> QR Codes
+                      </OutlineButton>
+                    )}
                     <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
                       <Users size={12} /> Attendees & Check‑In
                     </OutlineButton>
-                    <OutlineButton
-                      onClick={() => handleDelete(ev.id)}
-                      className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
-                    >
-                      <Trash2 size={12} /> Delete Event
-                    </OutlineButton>
+                    {profile?.role !== "staff" && (
+                      <OutlineButton
+                        onClick={() => handleDelete(ev.id)}
+                        className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
+                      >
+                        <Trash2 size={12} /> Delete Event
+                      </OutlineButton>
+                    )}
                   </div>
                 </PageCard>
               );
@@ -392,6 +539,89 @@ export function EventsPage() {
                 </GoldButton>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* All-in-One QR Code Modal */}
+      {showAllInOneQR && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
+              <h2 className="text-lg font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                All-in-One QR Code
+              </h2>
+              <button 
+                onClick={() => setShowAllInOneQR(false)} 
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex flex-col items-center gap-5 text-center">
+              <p className="text-xs text-muted-foreground leading-relaxed px-2">
+                This is a <strong>permanent QR code</strong>. Scanners will automatically be routed to whichever event you set as <strong>Active</strong>. Print this once and display it at your venue!
+              </p>
+
+              <div className="bg-white p-5 rounded-2xl border border-border shadow-sm flex flex-col items-center gap-4">
+                <div id="general-qr-svg" className="inline-block">
+                  <QRCodeSVG 
+                    value={generalRegUrl} 
+                    size={200} 
+                    level="H" 
+                    includeMargin={true} 
+                  />
+                </div>
+                <div className="text-center px-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Current Active Event</span>
+                  {activeEventId ? (
+                    <p className="text-sm font-bold text-emerald-600 mt-0.5 leading-snug">
+                      ✓ {events?.find(e => e.id === activeEventId)?.title || "Active Event"}
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-amber-600 mt-0.5 leading-snug">
+                      ⚠ No Event Set Active (Directs to Events List)
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-center gap-2 p-3 bg-muted/40 border border-border rounded-xl text-xs overflow-hidden">
+                  <span className="font-semibold text-muted-foreground select-none">Link:</span>
+                  <span className="flex-1 font-mono truncate text-left">
+                    {generalRegUrl}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generalRegUrl);
+                      setCopiedGeneralQR(true);
+                      toast.success("All-in-One Registration link copied!");
+                      setTimeout(() => setCopiedGeneralQR(false), 2000);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 transition-colors cursor-pointer"
+                  >
+                    {copiedGeneralQR ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-1">
+                  <OutlineButton onClick={handlePrintAllInOne} className="w-full justify-center flex items-center gap-1.5 py-2.5">
+                    <Printer size={14} /> Print Poster
+                  </OutlineButton>
+                  <GoldButton 
+                    onClick={() => {
+                      navigator.clipboard.writeText(generalRegUrl);
+                      toast.success("Link shared to clipboard!");
+                    }} 
+                    className="w-full justify-center flex items-center gap-1.5 py-2.5"
+                  >
+                    <Share2 size={14} /> Share Link
+                  </GoldButton>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

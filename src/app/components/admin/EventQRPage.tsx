@@ -63,6 +63,15 @@ export function EventQRPage() {
           <ChevronLeft size={16} /> Back to events
         </button>
 
+        {/* All-in-One QR code recommendation tip */}
+        <div className="bg-[#17458F]/5 border border-[#17458F]/15 rounded-2xl p-4 mb-6 flex gap-3 text-xs leading-relaxed text-[#17458F] print:hidden">
+          <div className="text-lg shrink-0">💡</div>
+          <div>
+            <span className="font-bold">Pro-Tip: </span>
+            Want a permanent registration poster for all your club events? Use the <strong>All-in-One QR Code</strong> on the main Events dashboard. You can print it once and place it at your venue entrance—it dynamically routes attendees to whichever event is currently set as "Active Event" on your dashboard.
+          </div>
+        </div>
+
         <PageCard className="flex flex-col items-center gap-6 print:border-none print:shadow-none print:p-0">
           <div className="text-center">
             <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>

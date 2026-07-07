@@ -18,6 +18,10 @@ export function AdminSignupPage() {
   const [loading, setLoading]   = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  const params = new URLSearchParams(window.location.search);
+  const orgId = params.get("orgId");
+  const role = params.get("role");
+
   async function handleSignUp() {
     setError(null);
     if (!fullName || !email || !password) { setError("All fields are required."); return; }
@@ -25,14 +29,18 @@ export function AdminSignupPage() {
     if (password !== confirm) { setError("Passwords do not match."); return; }
 
     setLoading(true);
-    const { error: err, session } = await signUp(email, password, fullName);
+    const { error: err, session } = await signUp(email, password, fullName, orgId, role);
     setLoading(false);
     if (err) { setError(err); return; }
     
     if (!session) {
       setIsSubmitted(true);
     } else {
-      navigate("/org-setup");
+      if (orgId) {
+        navigate("/admin/dashboard");
+      } else {
+        navigate("/org-setup");
+      }
     }
   }
 
@@ -73,10 +81,10 @@ export function AdminSignupPage() {
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
           <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-            Create Admin Account
+            {orgId ? "Join Organization Team" : "Create Admin Account"}
           </h1>
           <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
-            Set up your Rotary club's event management platform
+            {orgId ? "Set up your account to access your organization dashboard" : "Set up your Rotary club's event management platform"}
           </p>
         </div>
 

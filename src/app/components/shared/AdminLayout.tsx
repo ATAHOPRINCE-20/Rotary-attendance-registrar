@@ -18,18 +18,8 @@ import {
   FolderArchive,
   Wallet,
   BookOpen,
+  ShieldCheck,
 } from "lucide-react";
-
-const MENU_ITEMS = [
-  { label: "Dashboard",      to: "/admin/dashboard",      icon: LayoutDashboard },
-  { label: "Events",         to: "/admin/events",         icon: Calendar        },
-  { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
-  { label: "Members",        to: "/admin/members",        icon: Users           },
-  { label: "Directory",      to: "/admin/directory",      icon: BookOpen        },
-  { label: "Withdrawals",     to: "/admin/withdrawals",    icon: Wallet          },
-  { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
-  { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
-];
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -44,6 +34,20 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
   const navigate  = useNavigate();
   const location  = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const menuItems = [
+    { label: "Dashboard",       to: "/admin/dashboard",      icon: LayoutDashboard },
+    { label: "Events",          to: "/admin/events",         icon: Calendar        },
+    { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
+    { label: "Members",         to: "/admin/members",        icon: Users           },
+    { label: "Directory",       to: "/admin/directory",      icon: BookOpen        },
+    ...(profile?.role !== "staff" ? [
+      { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet          },
+      { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
+      { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
+      { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
+    ] : []),
+  ];
 
   const initials = profile?.full_name
     ?.split(" ")
@@ -74,7 +78,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
           <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">
             Menu
           </p>
-          {MENU_ITEMS.map(({ label, to, icon: Icon }) => {
+          {menuItems.map(({ label, to, icon: Icon }) => {
             const active = location.pathname === to;
             return (
               <button
@@ -226,7 +230,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">
                 Menu
               </p>
-              {MENU_ITEMS.map(({ label, to, icon: Icon }) => {
+              {menuItems.map(({ label, to, icon: Icon }) => {
                 const active = location.pathname === to;
                 return (
                   <button

@@ -12,6 +12,7 @@ export function useCampaigns(organizationId: string | undefined) {
         .from("campaigns")
         .select("*, events(title)")
         .eq("organization_id", organizationId!)
+        .not("name", "ilike", "%WhatsApp Welcome%")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as (Campaign & { events: { title: string } | null })[];

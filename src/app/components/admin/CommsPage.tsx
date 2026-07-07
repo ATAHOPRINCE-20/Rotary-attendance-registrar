@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../context/AuthContext";
 import { useCampaigns, useCreateCampaign } from "../../../hooks/useCampaigns";
 import { useAdminEvents } from "../../../hooks/useEvents";
@@ -41,6 +42,22 @@ export function CommsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const audienceOptions = [
+    { value: "all", label: "All Registered Attendees" },
+    { value: "checked-in", label: "Only Checked-In Guests" },
+    { value: "pending", label: "Pending (Not Checked-In)" },
+    { value: "members", label: "Club Members Only" },
+    { value: "rotarians", label: "Visiting Rotarians Only" },
+    { value: "visitors", label: "Guests & Non-Rotarians" },
+  ];
+  
+  if (organization?.buddy_groups) {
+    const groups = organization.buddy_groups.split(",").map(g => g.trim()).filter(Boolean);
+    groups.forEach(g => {
+      audienceOptions.push({ value: `group:${g}`, label: `Group: ${g}` });
+    });
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -53,7 +70,48 @@ export function CommsPage() {
     setLoading(true);
 
     try {
-      // Create campaign in db
+      // 1. Fetch matching contacts
+      let query = supabase
+        .from("registrations")
+        .select("phone, full_name, is_member, club_name, district, buddy_group, member_id")
+        .eq("organization_id", organization!.id);
+      
+      if (eventId) {
+        query = query.eq("event_id", eventId);
+      }
+      if (audience === "checked-in") {
+        query = query.not("checked_in_at", "is", null);
+      } else if (audience === "pending") {
+        query = query.is("checked_in_at", null);
+      } else if (audience.startsWith("group:")) {
+        query = query.eq("buddy_group", audience.split(":")[1]);
+      }
+
+      const { data: contacts, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
+      let filteredContacts = contacts || [];
+      if (audience === "members") {
+        filteredContacts = filteredContacts.filter(
+          (r) => r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)
+        );
+      } else if (audience === "rotarians") {
+        filteredContacts = filteredContacts.filter(
+          (r) => r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name
+        );
+      } else if (audience === "visitors") {
+        filteredContacts = filteredContacts.filter((r) => !r.is_member);
+      }
+
+      const validContacts = filteredContacts.filter(c => c.phone && c.phone.trim().length > 8);
+
+      if (validContacts.length === 0) {
+        setError("No contacts found matching the selected audience with valid phone numbers.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Create campaign log in db
       const campaign = await createMutation.mutateAsync({
         organization_id: organization?.id || "",
         event_id: eventId ? eventId : null,
@@ -67,12 +125,34 @@ export function CommsPage() {
         created_by: null,
       });
 
-      // Simulate sending communications (API trigger hooks)
-      toast.success(`Broadcasting campaign via ${channel.toUpperCase()}...`);
+      // 3. Dispatch messages if WhatsApp
+      if (channel === "whatsapp") {
+        toast.success(`Broadcasting WhatsApp campaign to ${validContacts.length} contacts...`);
+        
+        const GATEWAY_BASE_URL = "http://ugpay.tech:3000";
+        const webhookUrl = `${GATEWAY_BASE_URL}/send-whatsapp/${organization!.id}`;
+
+        // Fire off requests concurrently
+        Promise.all(validContacts.map(contact => {
+           const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
+           return fetch("/api/send-whatsapp", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({
+               webhookUrl: webhookUrl,
+               phone: contact.phone,
+               message: customizedMessage
+             })
+           }).catch(err => console.error("WhatsApp broadcast failed for", contact.phone, err));
+        }));
+      } else {
+        toast.success(`Simulating broadcast for ${channel.toUpperCase()} to ${validContacts.length} contacts...`);
+      }
+
       setTimeout(() => {
-        toast.success(`Campaign "${name}" sent to matching attendees!`);
+        toast.success(`Campaign "${name}" sent successfully!`);
         setModalOpen(false);
-      }, 1500);
+      }, 1000);
 
     } catch (err: any) {
       console.error(err);
@@ -110,7 +190,6 @@ export function CommsPage() {
         <h1 className="text-2xl font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>Communications</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Send notifications, email invites, and follow-up templates to registered attendees.</p>
       </div>
-
       <div className="bg-white rounded-2xl border border-border/40 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border/40">
           <MessageSquare size={15} style={{ color: NAVY }} />
@@ -159,6 +238,7 @@ export function CommsPage() {
           )}
         </div>
       </div>
+
       {/* Campaign Dialog Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -173,7 +253,7 @@ export function CommsPage() {
               <TextInput label="Campaign Name" placeholder="e.g. Thank You for attending Gala" value={name} onChange={setName} required />
               <SelectInput label="Broadcast Channel" options={[{ value: "email", label: "Email Campaign" }, { value: "sms", label: "SMS Broadcast" }, { value: "whatsapp", label: "WhatsApp Template" }]} value={channel} onChange={(val) => setChannel(val as any)} />
               <SelectInput label="Target Event (Optional)" options={events ? [{ value: "", label: "All Contacts" }, ...events.map(e => ({ value: e.id, label: e.title }))] : [{ value: "", label: "All Contacts" }]} value={eventId} onChange={setEventId} />
-              <SelectInput label="Target Audience" options={[{ value: "all", label: "All Registered Attendees" }, { value: "checked-in", label: "Only Checked-In Guests" }, { value: "pending", label: "Pending (Not Checked-In)" }]} value={audience} onChange={setAudience} />
+              <SelectInput label="Target Audience" options={audienceOptions} value={audience} onChange={setAudience} />
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold text-foreground">Message Body</label>
                 <textarea placeholder="Type your message..." value={message} onChange={e => setMessage(e.target.value)} rows={4} required className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all resize-none" />

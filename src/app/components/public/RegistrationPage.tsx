@@ -21,26 +21,55 @@ export function RegistrationPage() {
   const editQrRef = searchParams.get("edit");
 
   const { organization, loading: tenantLoading } = useTenant();
-  const { data: event, isLoading: eventLoading } = useEvent(id);
+
+  const { activeEventId } = parseOrgWebsite(organization?.website || null);
+  const targetEventId = (id === undefined || id === "active") ? (activeEventId || undefined) : id;
+
+  const { data: event, isLoading: eventLoading } = useEvent(targetEventId);
   
   const { data: existingReg, isLoading: existingRegLoading } = useRegistrationByQR(editQrRef || undefined);
 
   const mutation = useSubmitRegistration();
   const updateMutation = useUpdateRegistration();
 
-  const loading = tenantLoading || eventLoading || (editQrRef ? existingRegLoading : false);
+  const loading = tenantLoading || (targetEventId ? eventLoading : false) || (editQrRef ? existingRegLoading : false);
 
   if (loading) {
     return <LoadingScreen variant="blue" />;
   }
 
+  // Handle case where dynamic active event was scanned but no event is active
+  if ((id === undefined || id === "active") && !activeEventId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <PageCard className="text-center max-w-md flex flex-col items-center gap-4 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl p-8 border border-border">
+          <AlertCircle className="w-16 h-16 text-amber-500 mx-auto animate-bounce" />
+          <h2 className="text-xl font-bold text-amber-600 font-sans" style={{ fontFamily: "var(--font-sans)" }}>No Active Event</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            There is currently no active event configured for on-site registration at <strong className="text-foreground">{organization?.name || "the club"}</strong>.
+            Please check with the host at the venue, or browse upcoming events below.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
+            <OutlineButton onClick={() => navigate(`/org/${slug}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+              Club Home
+            </OutlineButton>
+            <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+              View Events List
+            </GoldButton>
+          </div>
+        </PageCard>
+      </div>
+    );
+  }
+
   if (!event) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <PageCard className="text-center max-w-sm flex flex-col gap-4">
+        <PageCard className="text-center max-w-sm flex flex-col gap-4 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl p-8 border border-border">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
           <h2 className="text-lg font-bold" style={{ color: NAVY }}>Event Not Found</h2>
-          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
+          <p className="text-xs text-muted-foreground">The event registration page you are looking for does not exist or may have been deleted.</p>
+          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center text-xs font-bold uppercase tracking-wider py-2.5">
             Back to Events
           </GoldButton>
         </PageCard>
@@ -48,19 +77,48 @@ export function RegistrationPage() {
     );
   }
 
-  const { activeEventId } = parseOrgWebsite(organization?.website || null);
+  // Check if user is already registered on this device
+  const registeredRef = targetEventId ? localStorage.getItem(`reg-ref-${targetEventId}`) : null;
+  if (registeredRef && !editQrRef) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <PageCard className="text-center max-w-md flex flex-col items-center gap-4 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl p-8 border border-border">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-2">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-foreground font-sans animate-in fade-in" style={{ fontFamily: "var(--font-sans)", color: NAVY }}>
+            Already Registered
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You have already registered for <strong className="text-foreground">{event.title}</strong> using this phone/device. Each attendee may only register once.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
+            <OutlineButton onClick={() => navigate(`/org/${slug}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+              Club Home
+            </OutlineButton>
+            <GoldButton onClick={() => navigate(`/org/${slug}/post-register?ref=${registeredRef}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+              View My Ticket
+            </GoldButton>
+          </div>
+        </PageCard>
+      </div>
+    );
+  }
+
   const isActiveEvent = activeEventId === event.id;
 
   if (!isActiveEvent && !editQrRef) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <PageCard className="text-center max-w-md flex flex-col items-center gap-4">
+        <PageCard className="text-center max-w-md flex flex-col items-center gap-4 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl p-8 border border-border">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
           <h2 className="text-lg font-bold text-amber-600" style={{ fontFamily: "var(--font-sans)" }}>On-Site Registration Closed</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Registration for <strong className="text-foreground">{event.title}</strong> is currently closed. Attendance registration is strictly available on-site at the venue when the event is set active by the host.
           </p>
-          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center mt-2">
+          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center mt-2 text-xs font-bold uppercase tracking-wider py-2.5">
             Back to Events
           </GoldButton>
         </PageCard>
@@ -378,6 +436,8 @@ function RegistrationForm({ event, organization, slug, mutation, updateMutation,
       } else {
         reg = await mutation.mutateAsync(payload);
         toast.success("Successfully registered!");
+        // Store registration reference in localStorage to enforce one registration per device
+        localStorage.setItem(`reg-ref-${event.id}`, reg.qr_ref);
       }
 
       sessionStorage.removeItem(storageKey);

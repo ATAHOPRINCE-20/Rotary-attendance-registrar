@@ -31,7 +31,7 @@ import { LoadingScreen } from "../shared/LoadingScreen";
 import type { Member } from "../../../types/database";
 
 export function MembersPage() {
-  const { organization } = useAuth();
+  const { profile, organization } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Queries/Mutations
@@ -274,19 +274,23 @@ export function MembersPage() {
       pageTitle="Club Members"
       actions={
         <div className="flex gap-2">
-          <button
-            onClick={() => setImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#F4F6FB] border border-border hover:bg-muted text-foreground transition-all cursor-pointer"
-          >
-            <Upload size={13} /> Import CSV
-          </button>
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer"
-            style={{ background: NAVY }}
-          >
-            <Plus size={13} /> New Member
-          </button>
+          {profile?.role !== "staff" && (
+            <>
+              <button
+                onClick={() => setImportModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#F4F6FB] border border-border hover:bg-muted text-foreground transition-all cursor-pointer"
+              >
+                <Upload size={13} /> Import CSV
+              </button>
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer"
+                style={{ background: NAVY }}
+              >
+                <Plus size={13} /> New Member
+              </button>
+            </>
+          )}
         </div>
       }
     >
@@ -389,7 +393,7 @@ export function MembersPage() {
                     <th className="px-6 py-4">Full Name</th>
                     <th className="px-6 py-4">Contact Info</th>
                     <th className="px-6 py-4">Buddy Group</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    {profile?.role !== "staff" && <th className="px-6 py-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
@@ -441,24 +445,26 @@ export function MembersPage() {
                           <span className="text-muted-foreground/50 italic">None assigned</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            onClick={() => openEditModal(m)}
-                            className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
-                            title="Edit member"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMember(m.id)}
-                            className="p-2 rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
-                            title="Delete member"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
+                      {profile?.role !== "staff" && (
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => openEditModal(m)}
+                              className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
+                              title="Edit member"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMember(m.id)}
+                              className="p-2 rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
+                              title="Delete member"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -483,22 +489,24 @@ export function MembersPage() {
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => openEditModal(m)}
-                          className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
-                          title="Edit member"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMember(m.id)}
-                          className="p-2 rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
-                          title="Delete member"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                      {profile?.role !== "staff" && (
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => openEditModal(m)}
+                            className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
+                            title="Edit member"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMember(m.id)}
+                            className="p-2 rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
+                            title="Delete member"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Middle: Details (Buddy group & contacts) */}

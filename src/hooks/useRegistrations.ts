@@ -146,12 +146,11 @@ export function useSubmitRegistration() {
       try {
         const [eventRes, orgRes] = await Promise.all([
           supabase.from("events").select("title").eq("id", reg.event_id).single(),
-          supabase.from("organizations").select("name, whatsapp_webhook_url, whatsapp_welcome_template").eq("id", reg.organization_id).single()
+          supabase.from("organizations").select("name, whatsapp_welcome_template").eq("id", reg.organization_id).single()
         ]);
 
         const eventTitle = eventRes.data?.title || "Event";
         const orgName = orgRes.data?.name || "Rotary Club";
-        const webhookUrl = orgRes.data?.whatsapp_webhook_url;
         const customTemplate = orgRes.data?.whatsapp_welcome_template;
 
         // Construct welcoming message content
@@ -166,49 +165,22 @@ export function useSubmitRegistration() {
           welcomeMessage = `Welcome to *${orgName}*!\n\nDear *${reg.full_name}*, thank you for registering for *${eventTitle}*.\n\nYour Registration Code is: *${reg.qr_ref}*.\n\nWe look forward to hosting you!`;
         }
 
-        // 1. Insert campaign log row to Supabase so it shows up in Comms history
-        await supabase.from("campaigns").insert({
-          organization_id: reg.organization_id,
-          event_id: reg.event_id,
-          name: `Auto WhatsApp Welcome (${reg.full_name})`,
-          channel: "whatsapp",
-          audience: reg.full_name,
-          message: welcomeMessage,
-          status: "sent",
-          sent_count: 1,
-          sent_at: new Date().toISOString()
-        });
-
-        // 2. HTTP POST dispatch (direct on localhost, proxied in production to bypass CORS/mixed-content blocks)
-        if (webhookUrl && webhookUrl.trim() && reg.phone) {
-          const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-
-          if (isLocalhost) {
-            // On localhost, we can fetch the HTTP VPS directly since browsers allow mixed content in development
-            fetch(webhookUrl.trim(), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                phone: reg.phone,
-                message: welcomeMessage
-              })
-            }).catch((err) => {
-              console.error("Failed to post directly to WhatsApp gateway on localhost:", err);
-            });
-          } else {
-            // In production (HTTPS), route via secure Vercel API proxy to bypass browser mixed-content blocks
-            fetch("/api/send-whatsapp", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                webhookUrl: webhookUrl.trim(),
-                phone: reg.phone,
-                message: welcomeMessage
-              })
-            }).catch((err) => {
-              console.error("Failed to proxy whatsapp welcome message in production:", err);
-            });
-          }
+        // 2. HTTP POST dispatch (always proxied via backend to bypass CORS/mixed-content blocks)
+        if (reg.phone) {
+          const GATEWAY_BASE_URL = "http://ugpay.tech:3000";
+          const webhookUrl = `${GATEWAY_BASE_URL}/send-whatsapp/${reg.organization_id}`;
+          
+          fetch("/api/send-whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              webhookUrl: webhookUrl,
+              phone: reg.phone,
+              message: welcomeMessage
+            })
+          }).catch((err) => {
+            console.error("Failed to proxy whatsapp welcome message:", err);
+          });
         }
       } catch (triggerErr) {
         console.error("Error in automated welcome WhatsApp flow:", triggerErr);
