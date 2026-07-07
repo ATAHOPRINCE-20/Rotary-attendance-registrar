@@ -19,6 +19,7 @@ import {
   Wallet,
   BookOpen,
   ShieldCheck,
+  Heart,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -42,6 +43,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
     { label: "Members",         to: "/admin/members",        icon: Users           },
     { label: "Directory",       to: "/admin/directory",      icon: BookOpen        },
     ...(profile?.role !== "staff" ? [
+      { label: "Donation Campaigns", to: "/admin/donation-campaigns", icon: Heart        },
       { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet          },
       { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
       { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
@@ -69,7 +71,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
             className="font-extrabold text-xs mt-3 tracking-wider uppercase text-center truncate max-w-[200px]"
             style={{ color: NAVY, fontFamily: "var(--font-sans)" }}
           >
-            {organization?.name ?? "RotaryConnect"}
+            {organization?.name ?? "agoroll"}
           </p>
         </div>
 
@@ -214,7 +216,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               <div className="flex-1 flex items-center justify-center gap-2">
                 <RotaryLogo size={36} />
                 <p className="font-extrabold text-xs uppercase truncate max-w-[140px]" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                  {organization?.name ?? "RotaryConnect"}
+                  {organization?.name ?? "agoroll"}
                 </p>
               </div>
               <button

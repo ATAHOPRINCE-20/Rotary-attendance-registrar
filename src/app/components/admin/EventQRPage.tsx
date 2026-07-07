@@ -6,6 +6,7 @@ import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
 import { NAVY, GOLD } from "../../../lib/constants";
 import { QRCodeSVG } from "qrcode.react";
+import { getTenantUrl } from "../../../lib/subdomain";
 import { ChevronLeft, Download, Printer, Share2, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -36,7 +37,7 @@ export function EventQRPage() {
   }
 
   // The landing/registration link for attendees
-  const publicUrl = `${window.location.origin}/org/${organization?.slug}/register/${event.id}`;
+  const publicUrl = organization?.slug ? getTenantUrl(organization.slug, `/register/${event.id}`) : "";
 
   function copyLink() {
     navigator.clipboard.writeText(publicUrl);

@@ -13,6 +13,7 @@ import { AdminLayout } from "../shared/AdminLayout";
 import { NAVY, GOLD, EVENT_TYPES, parseOrgWebsite, serializeOrgWebsite } from "../../../lib/constants";
 import { supabase } from "../../../lib/supabase";
 import { QRCodeSVG } from "qrcode.react";
+import { getTenantUrl } from "../../../lib/subdomain";
 import {
   Calendar,
   Plus,
@@ -48,7 +49,7 @@ export function EventsPage() {
   const [showAllInOneQR, setShowAllInOneQR] = useState(false);
   const [copiedGeneralQR, setCopiedGeneralQR] = useState(false);
 
-  const generalRegUrl = `${window.location.origin}/org/${organization?.slug}/register`;
+  const generalRegUrl = organization?.slug ? getTenantUrl(organization.slug, "/register") : "";
 
   const handlePrintAllInOne = () => {
     const printWindow = window.open("", "_blank");
@@ -128,7 +129,7 @@ export function EventsPage() {
         </head>
         <body>
           <div class="container">
-            <div class="logo-placeholder">ROTARY CONNECT</div>
+            <div class="logo-placeholder">AGOROLL</div>
             <div class="active-badge">Scan to Register</div>
             <h1 class="title">Event Registration</h1>
             <p class="subtitle">Please scan this QR code with your mobile camera to quickly check-in and register for today's event.</p>

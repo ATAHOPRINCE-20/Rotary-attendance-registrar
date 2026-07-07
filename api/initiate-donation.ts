@@ -89,7 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     category,
     paymentMethod,
     phone,
-    slug // Used for constructing local sandbox redirects
+    slug, // Used for constructing local sandbox redirects
+    campaignId
   } = req.body;
 
   if (!organizationId || !amount || !fullName || !paymentMethod) {
@@ -117,6 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         organization_id: organizationId,
         event_id: eventId || null,
         registration_id: registrationId || null,
+        campaign_id: campaignId || null,
         full_name: fullName.trim() || 'Anonymous',
         email: email ? email.trim() : null,
         amount: Number(amount),

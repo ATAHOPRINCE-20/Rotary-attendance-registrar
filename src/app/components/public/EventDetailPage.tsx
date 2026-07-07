@@ -7,10 +7,12 @@ import { NavBar } from "../shared/NavBar";
 import { NAVY, GOLD, parseOrgWebsite } from "../../../lib/constants";
 import { Calendar, MapPin, Users, ChevronLeft, ShieldAlert } from "lucide-react";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getTenantBase } from "../../../lib/subdomain";
 
 export function EventDetailPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
   const navigate = useNavigate();
+  const base = getTenantBase(slug);
   const { organization, loading: tenantLoading } = useTenant();
   const { data: event, isLoading: eventLoading, error } = useEvent(id);
   const { data: regCount, isLoading: countLoading } = useEventRegistrationCount(id);
@@ -26,7 +28,7 @@ export function EventDetailPage() {
 
   // Redirect directly to the registration form only if the event is active
   if (event && isActiveEvent) {
-    return <Navigate to={`/org/${slug}/register/${event.id}`} replace />;
+    return <Navigate to={`${base}/register/${event.id}`} replace />;
   }
 
   if (error || !event) {
@@ -40,7 +42,7 @@ export function EventDetailPage() {
             <p className="text-muted-foreground text-sm">
               We couldn't retrieve the details for this event. It might have been deleted or set back to draft.
             </p>
-            <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
+            <GoldButton onClick={() => navigate(`${base}/events`)} className="w-full justify-center">
               Back to Events
             </GoldButton>
           </PageCard>
@@ -57,7 +59,7 @@ export function EventDetailPage() {
 
       <div className="max-w-3xl mx-auto px-4">
         <button
-          onClick={() => navigate(`/org/${slug}/events`)}
+          onClick={() => navigate(`${base}/events`)}
           className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors mb-6"
         >
           <ChevronLeft size={16} /> Back to events
@@ -167,7 +169,7 @@ export function EventDetailPage() {
               )}
             </div>
             <GoldButton
-              onClick={() => navigate(`/org/${slug}/register/${event.id}`)}
+              onClick={() => navigate(`${base}/register/${event.id}`)}
               disabled={!isActiveEvent || isSoldOut || event.status !== "published"}
               className="w-full sm:w-auto justify-center"
             >

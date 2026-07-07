@@ -1,4 +1,4 @@
-const CACHE_NAME = "rotaryconnect-cache-v1";
+const CACHE_NAME = "agoroll-cache-v1";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",

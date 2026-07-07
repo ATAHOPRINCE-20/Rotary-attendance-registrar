@@ -33,4 +33,16 @@ window.addEventListener("beforeinstallprompt", (e) => {
 });
 
 
-// Service worker is auto-registered by vite-plugin-pwa (registerType: 'autoUpdate')
+// Unregister any active service workers to clear stale client cache and prevent chunk load errors
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister().then((success) => {
+        if (success) {
+          console.log("[Service Worker] Unregistered successfully to refresh cache.");
+          window.location.reload();
+        }
+      });
+    }
+  });
+}

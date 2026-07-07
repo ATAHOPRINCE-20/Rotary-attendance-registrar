@@ -8,7 +8,7 @@ export function RootLandingPage() {
   const { user, loading } = useAuth()
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex items-center py-16 px-6 sm:px-12 lg:px-24">
+    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex flex-col overflow-hidden py-16 px-6 sm:px-12 lg:px-24">
       {/* Giant faint background logo */}
       <div className="absolute -right-48 -bottom-48 opacity-[0.03] pointer-events-none select-none text-white w-[800px] h-[800px] flex items-center justify-center">
         <RotaryLogo size={800} />
@@ -18,7 +18,7 @@ export function RootLandingPage() {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[10%] w-[40%] h-[40%] rounded-full bg-amber-500/5 blur-[100px] pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center relative z-10">
+      <div className="max-w-7xl mx-auto w-full my-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center relative z-10">
         
         {/* Left Content Column */}
         <div className="lg:col-span-7 flex flex-col items-start text-left relative z-20">
@@ -29,7 +29,7 @@ export function RootLandingPage() {
               className="text-xs uppercase tracking-[0.25em] font-extrabold"
               style={{ color: GOLD }}
             >
-              Rotary Connect Platform
+              agoroll Platform
             </span>
           </div>
 

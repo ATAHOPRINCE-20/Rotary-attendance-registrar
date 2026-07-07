@@ -8,9 +8,12 @@ import { NAVY, GOLD } from "../../../lib/constants";
 import { Calendar, MapPin, Tag, ArrowRight } from "lucide-react";
 import { LoadingScreen } from "../shared/LoadingScreen";
 
+import { getTenantBase } from "../../../lib/subdomain";
+
 export function EventsListPage() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
+  const base = getTenantBase(slug);
   const { organization, loading: tenantLoading } = useTenant();
   const { data: events, isLoading: eventsLoading } = usePublicEvents(organization?.id);
 
@@ -44,7 +47,7 @@ export function EventsListPage() {
             <p className="text-sm text-muted-foreground mt-1">
               There are currently no upcoming events listed for this club. Please check back later!
             </p>
-            <OutlineButton onClick={() => navigate(`/org/${slug}`)} className="mt-4">
+            <OutlineButton onClick={() => navigate(base || "/")} className="mt-4">
               Back to Home
             </OutlineButton>
           </PageCard>
@@ -113,7 +116,7 @@ export function EventsListPage() {
 
                         <div className="flex gap-2">
                           <GoldButton
-                            onClick={() => navigate(`/org/${slug}/event/${ev.id}`)}
+                            onClick={() => navigate(`${base}/event/${ev.id}`)}
                             className="py-2 px-4 flex items-center gap-1 text-xs"
                           >
                             Details <ArrowRight size={13} />

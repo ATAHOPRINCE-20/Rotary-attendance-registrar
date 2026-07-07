@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { TenantProvider } from "../context/TenantContext";
+import { getSubdomain } from "../lib/subdomain";
 import { LoadingScreen } from "./components/shared/LoadingScreen";
 
 // Helper utility to retry dynamic imports when they fail (e.g. during PWA updates or offline states)
@@ -79,6 +80,7 @@ const ReportsPage = lazyWithRetry(() => import("./components/admin/ReportsPage")
 const AdminWithdrawalsPage = lazyWithRetry(() => import("./components/admin/AdminWithdrawalsPage"), "AdminWithdrawalsPage");
 const DirectoryPage = lazyWithRetry(() => import("./components/admin/DirectoryPage"), "DirectoryPage");
 const TeamPage = lazyWithRetry(() => import("./components/admin/TeamPage"), "TeamPage");
+const DonationCampaignsPage = lazyWithRetry(() => import("./components/admin/DonationCampaignsPage"), "DonationCampaignsPage");
 
 
 const queryClient = new QueryClient({
@@ -146,6 +148,46 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
 
 // ─── App Router ───────────────────────────────────────────────────────────────
 function AppRoutes() {
+  const subdomain = getSubdomain();
+
+  if (subdomain) {
+    // Subdomain Mode (e.g. ntinda.agoroll.com): Tenant pages are at the root path
+    return (
+      <TenantProvider>
+        <Routes>
+          <Route index                element={<TenantLandingPage />} />
+          <Route path="/events"       element={<EventsListPage />} />
+          <Route path="/event/:id"    element={<EventDetailPage />} />
+          <Route path="/register"     element={<RegistrationPage />} />
+          <Route path="/register/:id" element={<RegistrationPage />} />
+          <Route path="/post-register" element={<PostRegisterPage />} />
+          <Route path="/donate"       element={<DonatePage />} />
+
+          {/* Admin routes remain accessible via the subdomain */}
+          <Route path="/admin"     element={<AdminLoginPage />} />
+          <Route path="/signup"    element={<AdminSignupPage />} />
+          <Route path="/org-setup" element={<OrgSetupPage />} />
+          <Route path="/admin/dashboard"          element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/events"             element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+          <Route path="/admin/events/:id/qr"      element={<ProtectedRoute><EventQRPage /></ProtectedRoute>} />
+          <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute><CheckInPage /></ProtectedRoute>} />
+          <Route path="/admin/communications"     element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CommsPage /></ProtectedRoute>} />
+          <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AnalyticsPage /></ProtectedRoute>} />
+          <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
+          <Route path="/admin/directory"          element={<ProtectedRoute><DirectoryPage /></ProtectedRoute>} />
+          <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
+          <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
+          <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </TenantProvider>
+    );
+  }
+
+  // Bare Platform Domain Mode (e.g. agoroll.com)
   return (
     <Routes>
       {/* Root landing — platform homepage */}
@@ -168,8 +210,9 @@ function AppRoutes() {
       <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
       <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
+      <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
 
-      {/* Tenant (public attendee) routes — all scoped to :slug */}
+      {/* Tenant (public attendee) routes — subpath fallback scoped to :slug */}
       <Route
         path="/org/:slug/*"
         element={

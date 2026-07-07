@@ -7,10 +7,13 @@ import { Calendar, Heart, ShieldAlert } from "lucide-react";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
 
+import { getTenantBase } from "../../../lib/subdomain";
+
 export function TenantLandingPage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const { organization, loading, notFound } = useTenant();
+  const base = getTenantBase(slug);
 
   if (loading) {
     return <LoadingScreen variant="blue" />;
@@ -26,7 +29,7 @@ export function TenantLandingPage() {
             We couldn't find a Rotary Club corresponding to "/org/{slug}".
           </p>
           <button 
-            onClick={() => navigate("/")} 
+            onClick={() => navigate(base || "/")} 
             className="w-full py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg transition-all text-center cursor-pointer"
           >
             Go to Homepage
@@ -39,7 +42,7 @@ export function TenantLandingPage() {
   const { activeEventId } = parseOrgWebsite(organization.website);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex items-center py-16 px-6 sm:px-12 lg:px-24">
+    <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex flex-col overflow-hidden py-16 px-6 sm:px-12 lg:px-24">
       {/* Giant faint background logo */}
       <div className="absolute -right-48 -bottom-48 opacity-[0.03] pointer-events-none select-none text-white w-[800px] h-[800px] flex items-center justify-center">
         <RotaryLogo size={800} />
@@ -49,7 +52,7 @@ export function TenantLandingPage() {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[10%] w-[40%] h-[40%] rounded-full bg-amber-500/5 blur-[100px] pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center relative z-10">
+      <div className="max-w-7xl mx-auto w-full my-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center relative z-10">
         
         {/* Left Content Column */}
         <div className="lg:col-span-7 flex flex-col items-start text-left relative z-20">
@@ -68,7 +71,7 @@ export function TenantLandingPage() {
             >
               {organization.district 
                 ? `District ${organization.district} • ${organization.country || "Global"}` 
-                : "Rotary Connect Partner"
+                : "agoroll Partner"
               }
             </span>
           </div>
@@ -87,7 +90,7 @@ export function TenantLandingPage() {
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             {activeEventId ? (
               <button
-                onClick={() => navigate(`/org/${slug}/register/${activeEventId}`)}
+                onClick={() => navigate(`${base}/register/${activeEventId}`)}
                 className="px-8 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg shadow-orange-500/15 transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 text-center flex items-center justify-center gap-2 cursor-pointer animate-pulse"
               >
                 <Calendar size={18} />
@@ -95,7 +98,7 @@ export function TenantLandingPage() {
               </button>
             ) : (
               <button
-                onClick={() => navigate(`/org/${slug}/events`)}
+                onClick={() => navigate(`${base}/events`)}
                 className="px-8 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg shadow-orange-500/15 transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 text-center flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Calendar size={18} />
@@ -103,7 +106,7 @@ export function TenantLandingPage() {
               </button>
             )}
             <button
-              onClick={() => navigate(`/org/${slug}/donate`)}
+              onClick={() => navigate(`${base}/donate`)}
               className="px-8 py-2.5 border border-white/20 text-white hover:bg-white/10 bg-white/5 backdrop-blur-md font-semibold rounded-xl text-center flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 shadow-lg"
             >
               <Heart size={18} className="text-[#F7A81B] fill-[#F7A81B]" />

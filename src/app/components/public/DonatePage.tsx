@@ -9,6 +9,8 @@ import { NAVY, GOLD, DONATION_CATEGORIES, formatUgandanPhone } from "../../../li
 import { Heart, CreditCard, Smartphone, CheckCircle2, ShieldCheck, Sparkles, Award } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getTenantBase } from "../../../lib/subdomain";
+import { useActiveDonationCampaigns } from "../../../hooks/useDonationCampaigns";
 
 // @ts-ignore
 import confetti from "canvas-confetti";
@@ -18,6 +20,7 @@ export function DonatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const regId = searchParams.get("reg_id");
+  const base = getTenantBase(slug);
 
   const { organization, loading: tenantLoading } = useTenant();
 
@@ -27,8 +30,28 @@ export function DonatePage() {
   const [amount, setAmount] = useState<number>(25000);
   const [customAmount, setCustomAmount] = useState("");
   const [category, setCategory] = useState("community");
-  const paymentMethod = "mobile";
+  const paymentMethod: "mobile" | "card" = "mobile";
   const [phone, setPhone] = useState("");
+
+  const { data: campaigns, isLoading: campaignsLoading } = useActiveDonationCampaigns(organization?.id);
+
+  const campaignIdParam = searchParams.get("campaignId") || searchParams.get("campaign_id");
+
+  // Update default selected campaign once campaigns are loaded
+  useEffect(() => {
+    if (campaigns && campaigns.length > 0) {
+      if (campaignIdParam) {
+        const matchingCampaign = campaigns.find(c => c.id === campaignIdParam);
+        if (matchingCampaign) {
+          setCategory(matchingCampaign.id);
+          return;
+        }
+      }
+      if (category === "community") {
+        setCategory(campaigns[0].id);
+      }
+    }
+  }, [campaigns, campaignIdParam]);
   
   // Payment progress states
   const [initiating, setInitiating] = useState(false);
@@ -37,6 +60,7 @@ export function DonatePage() {
   const [donationSuccess, setDonationSuccess] = useState<any | null>(null);
 
   const selectedAmount = amount === 0 ? parseFloat(customAmount) || 0 : amount;
+  const selectedCampaign = campaigns?.find(c => c.id === category);
 
   // Presets
   const presets = [
@@ -106,11 +130,12 @@ export function DonatePage() {
         organizationId: organization?.id || "",
         eventId: null,
         registrationId: regId || null,
+        campaignId: selectedCampaign ? selectedCampaign.id : null,
         fullName: fullName.trim() || "Anonymous",
         email: email.trim() || null,
         amount: selectedAmount,
         currency: "UGX",
-        category,
+        category: selectedCampaign ? selectedCampaign.title : category,
         paymentMethod,
         phone: paymentMethod === "mobile" ? phone.replace("+", "") : null,
         slug: slug
@@ -148,9 +173,17 @@ export function DonatePage() {
     }
   }
 
-  if (tenantLoading) {
+  if (tenantLoading || campaignsLoading) {
     return <LoadingScreen variant="blue" />;
   }
+
+  const campaignOptions = campaigns?.map(c => ({ value: c.id, label: c.title })) || [];
+  const defaultOptions = [
+    { value: "community", label: "General Community Projects" },
+    { value: "sponsorship", label: "Event Sponsorship" },
+    { value: "development", label: "Club Development & Operations" }
+  ];
+  const donationOptions = [...campaignOptions, ...defaultOptions];
 
   // 4. Success / Thank You screen
   if (donationSuccess) {
@@ -183,7 +216,7 @@ export function DonatePage() {
               <div className="grid grid-cols-3 py-0.5"><span className="text-muted-foreground">Date/Time:</span><span className="col-span-2 text-muted-foreground text-right">{new Date(donationSuccess.created_at).toLocaleString()}</span></div>
             </div>
 
-            <GoldButton onClick={() => navigate(`/org/${slug}`)} className="w-full justify-center shadow-lg shadow-orange-500/10">
+            <GoldButton onClick={() => navigate(base || "/")} className="w-full justify-center shadow-lg shadow-orange-500/10">
               Back to Club Home
             </GoldButton>
           </PageCard>
@@ -194,22 +227,62 @@ export function DonatePage() {
 
   // 5. Checkout Form
   return (
-    <div className="min-h-screen bg-background pt-24 pb-12 flex items-center justify-center">
+    <div className="min-h-0 md:min-h-screen bg-background pt-20 pb-6 md:pt-24 md:pb-12 flex items-start md:items-center justify-center">
       <NavBar organization={organization} currentPath={window.location.pathname} />
-      <div className="max-w-md w-full px-4">
-        <PageCard className="flex flex-col gap-6 shadow-xl border-border bg-white">
-          
-          {/* Header Card */}
-          <div className="flex flex-col items-center text-center gap-2">
-            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shadow-sm border border-amber-100">
-              <Heart className="w-6 h-6 fill-amber-500" />
+      <div className="max-w-6xl w-full px-4 flex flex-col md:grid md:grid-cols-12 md:bg-white md:border md:border-border/80 md:shadow-2xl md:rounded-2xl md:overflow-hidden gap-6 md:gap-0 items-stretch">
+        
+        {/* Left Section: Details */}
+        <div className="flex flex-col gap-5 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-5 md:bg-slate-50/40 md:border-0 md:border-r md:border-slate-100/80 md:rounded-none md:shadow-none md:p-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 border border-amber-100 shrink-0">
+              <Heart className="w-5 h-5 fill-amber-500" />
             </div>
-            <h1 className="text-xl font-black mt-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-              Support Rotary Connect
-            </h1>
-            <p className="text-xs text-muted-foreground leading-relaxed px-4">
-              Invest in service. Select a donation amount below or enter a custom sum to support our local projects.
+            <div>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-[#F7A81B]">Donation Drive</span>
+              <p className="text-xs text-muted-foreground truncate max-w-[200px]">Organized by {organization?.name || "agoroll"}</p>
+            </div>
+          </div>
+
+          <div className="mt-2 flex-1 flex flex-col justify-start">
+            {selectedCampaign ? (
+              <>
+                <h1 className="text-xl font-black tracking-tight" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                  {selectedCampaign.title}
+                </h1>
+                <div className="w-12 h-1 bg-[#F7A81B] rounded-full my-4" />
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {selectedCampaign.description || "Help support this targeted fundraising drive and make a difference."}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-black tracking-tight" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                  Support Our Mission
+                </h1>
+                <div className="w-12 h-1 bg-[#F7A81B] rounded-full my-4" />
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Your contributions directly fund our community service projects, event sponsorships, and club operations. Thank you for investing in our service to others.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 md:bg-white rounded-xl p-4 text-xs text-muted-foreground flex flex-col gap-2 mt-6 shadow-sm">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-[#17458F] uppercase tracking-wider">
+              <span>🔒 Secure Payment Gateway</span>
+            </div>
+            <p className="leading-relaxed">
+              Payments are securely processed via the Relworx API. We support Mobile Money (MTN & Airtel) and major credit cards.
             </p>
+          </div>
+        </div>
+
+        {/* Right Section: Payment Form */}
+        <div className="flex flex-col gap-6 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-7 md:border-0 md:rounded-none md:shadow-none md:p-8">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: NAVY }}>
+              Contribution Details
+            </h2>
           </div>
 
           <form onSubmit={handleDonate} className="flex flex-col gap-4">
@@ -255,101 +328,95 @@ export function DonatePage() {
               />
             </div>
 
-            {/* Donor Fields */}
-            <div className="grid grid-cols-1 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <TextInput
                 label="Full Name"
-                placeholder="Enter your name (leave blank for Anonymous)"
+                placeholder="Anonymous"
                 value={fullName}
                 onChange={setFullName}
               />
               <TextInput
-                label="Email Address (Optional)"
+                label="Email (Optional)"
                 type="email"
                 placeholder="donor@example.com"
                 value={email}
                 onChange={setEmail}
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <SelectInput
                 label="Direct Donation Contribution To"
                 value={category}
                 onChange={setCategory}
-                options={DONATION_CATEGORIES.map(c => ({ value: c.id, label: c.label }))}
+                options={donationOptions}
               />
+
+              {/* Phone Number Input */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
+                  Mobile Money Phone Number
+                </label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 0772123456"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#F7A81B] transition-all"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Phone Number Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
-                Phone Number <span style={{ color: "#F7A81B" }}>*</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                placeholder="e.g. 0772 123456 or 0701 123456"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onBlur={() => {
-                  const formatted = formatUgandanPhone(phone);
-                  if (formatted) setPhone(formatted);
-                }}
-                required
-                className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#F7A81B] transition-all font-mono"
-              />
-            </div>
-
-            {/* Submit Button */}
             <GoldButton
               type="submit"
               disabled={initiating}
-              className="w-full justify-center py-3 mt-2 text-base font-bold shadow-lg shadow-orange-500/10 cursor-pointer"
+              className="w-full justify-center py-3 text-xs uppercase font-extrabold tracking-wider shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 mt-4 cursor-pointer"
             >
-              {initiating ? "Processing Request..." : `Donate UGX ${selectedAmount.toLocaleString()}`}
+              {initiating ? "Initiating checkout..." : `Donate UGX ${selectedAmount.toLocaleString()}`}
             </GoldButton>
 
-            <OutlineButton
-              onClick={() => navigate(`/org/${slug}`)}
-              className="w-full justify-center"
-            >
-              Cancel
-            </OutlineButton>
-
+            <p className="text-[10px] text-center text-muted-foreground mt-2 leading-relaxed">
+              By contributing, you agree to support {organization?.name || "agoroll"}'s non-profit operations and projects.
+            </p>
           </form>
-        </PageCard>
+        </div>
+
       </div>
 
-      {/* 6. Polling Progress Overlay */}
+      {/* Mobile Money Polling Modal */}
       {isPolling && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 gap-6 items-center text-center animate-in zoom-in-95 duration-150">
-            <div className="relative flex items-center justify-center">
-              <div className="w-16 h-16 rounded-full border-4 border-t-[#F7A81B] border-border/40 animate-spin shrink-0"></div>
-              <Heart size={20} className="absolute text-[#F7A81B] animate-pulse" />
-            </div>
-            
-            <div>
-              <h3 className="text-base font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                Authorizing Transaction
-              </h3>
-              <p className="text-xs text-muted-foreground mt-2 leading-relaxed px-2">
-                We've pushed a payment request prompt to your phone: <strong>{phone}</strong>.
-                <br /><br />
-                Please unlock your screen, <strong>enter your Mobile Money PIN</strong> to authorize the deduction of <strong>UGX {selectedAmount.toLocaleString()}</strong>.
-              </p>
-            </div>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <PageCard className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 text-center animate-in zoom-in-95 duration-150 gap-6">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center border border-amber-100">
+                <Smartphone className="w-8 h-8 text-amber-500 animate-bounce" />
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-black" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                  Complete Payment
+                </h3>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed px-2">
+                  We've pushed a payment request prompt to your phone: <strong>{phone}</strong>.
+                  <br /><br />
+                  Please unlock your screen, <strong>enter your Mobile Money PIN</strong> to authorize the deduction of <strong>UGX {selectedAmount.toLocaleString()}</strong>.
+                </p>
+              </div>
 
-            <div className="w-full pt-4 border-t border-border/50 flex flex-col gap-2">
-              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider animate-pulse flex items-center justify-center gap-1">
-                <Sparkles size={10}/> Waiting for gateway confirmation...
-              </p>
-              <OutlineButton
-                onClick={() => setIsPolling(false)}
-                className="w-full justify-center mt-2 cursor-pointer"
-              >
-                Cancel and Retry
-              </OutlineButton>
+              <div className="w-full pt-4 border-t border-border/50 flex flex-col gap-2">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider animate-pulse flex items-center justify-center gap-1">
+                  <Sparkles size={10}/> Waiting for gateway confirmation...
+                </p>
+                <OutlineButton
+                  onClick={() => setIsPolling(false)}
+                  className="w-full justify-center mt-2 cursor-pointer"
+                >
+                  Cancel and Retry
+                </OutlineButton>
+              </div>
             </div>
-          </div>
+          </PageCard>
         </div>
       )}
     </div>

@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
     react(),
     tailwindcss(),
     VitePWA({
+      disable: true,
       // Auto-update the service worker silently in the background
       registerType: 'autoUpdate',
       // Include the service worker in the build output
@@ -64,9 +65,9 @@ export default defineConfig(({ mode }) => {
       },
       // Use the existing manifest.json values
       manifest: {
-        name: 'Rotary Connect — Attendance & Events',
-        short_name: 'RotaryConnect',
-        description: 'Streamline Rotary event registration, QR check-ins, and community engagement.',
+        name: 'agoroll — Attendance & Events',
+        short_name: 'agoroll',
+        description: 'Streamline Rotary event registration, QR check-ins, and community engagement with agoroll.',
         start_url: '/',
         display: 'standalone',
         orientation: 'portrait',

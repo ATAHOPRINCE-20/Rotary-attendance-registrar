@@ -19,21 +19,28 @@ const TenantContext = createContext<TenantContextValue>({
  * TenantProvider resolves the current organization from the :slug URL param.
  * Used in all public (attendee-facing) routes under /org/:slug.
  */
+import { getSubdomain } from "../lib/subdomain";
+
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug: urlSlug } = useParams<{ slug?: string }>();
   const [organization, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading]  = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  const activeSlug = getSubdomain() || urlSlug;
+
   useEffect(() => {
-    if (!slug) return;
+    if (!activeSlug) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setNotFound(false);
 
     supabase
       .from("organizations")
       .select("*")
-      .eq("slug", slug)
+      .eq("slug", activeSlug)
       .single()
       .then(({ data, error }) => {
         if (error || !data) {
@@ -47,7 +54,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
         setLoading(false);
       });
-  }, [slug]);
+  }, [activeSlug]);
 
   return (
     <TenantContext.Provider value={{ organization, loading, notFound }}>

@@ -13,11 +13,13 @@ import { LoadingScreen } from "../shared/LoadingScreen";
 import { useOrgMembers, useCreateMember } from "../../../hooks/useMembers";
 import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
+import { getTenantBase } from "../../../lib/subdomain";
 
 export function RegistrationPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const base = getTenantBase(slug);
   const editQrRef = searchParams.get("edit");
 
   const { organization, loading: tenantLoading } = useTenant();
@@ -50,10 +52,10 @@ export function RegistrationPage() {
             Please check with the host at the venue, or browse upcoming events below.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
-            <OutlineButton onClick={() => navigate(`/org/${slug}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+            <OutlineButton onClick={() => navigate(base || "/")} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
               Club Home
             </OutlineButton>
-            <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+            <GoldButton onClick={() => navigate(`${base}/events`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
               View Events List
             </GoldButton>
           </div>
@@ -69,7 +71,7 @@ export function RegistrationPage() {
           <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
           <h2 className="text-lg font-bold" style={{ color: NAVY }}>Event Not Found</h2>
           <p className="text-xs text-muted-foreground">The event registration page you are looking for does not exist or may have been deleted.</p>
-          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center text-xs font-bold uppercase tracking-wider py-2.5">
+          <GoldButton onClick={() => navigate(`${base}/events`)} className="w-full justify-center text-xs font-bold uppercase tracking-wider py-2.5">
             Back to Events
           </GoldButton>
         </PageCard>
@@ -95,10 +97,10 @@ export function RegistrationPage() {
             You have already registered for <strong className="text-foreground">{event.title}</strong> using this phone/device. Each attendee may only register once.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
-            <OutlineButton onClick={() => navigate(`/org/${slug}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+            <OutlineButton onClick={() => navigate(base || "/")} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
               Club Home
             </OutlineButton>
-            <GoldButton onClick={() => navigate(`/org/${slug}/post-register?ref=${registeredRef}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
+            <GoldButton onClick={() => navigate(`${base}/post-register?ref=${registeredRef}`)} className="flex-1 justify-center py-2.5 text-xs font-bold uppercase tracking-wider">
               View My Ticket
             </GoldButton>
           </div>
@@ -118,7 +120,7 @@ export function RegistrationPage() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             Registration for <strong className="text-foreground">{event.title}</strong> is currently closed. Attendance registration is strictly available on-site at the venue when the event is set active by the host.
           </p>
-          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center mt-2 text-xs font-bold uppercase tracking-wider py-2.5">
+          <GoldButton onClick={() => navigate(`${base}/events`)} className="w-full justify-center mt-2 text-xs font-bold uppercase tracking-wider py-2.5">
             Back to Events
           </GoldButton>
         </PageCard>
@@ -132,6 +134,7 @@ export function RegistrationPage() {
       event={event}
       organization={organization}
       slug={slug}
+      base={base}
       mutation={mutation}
       updateMutation={updateMutation}
       existingReg={existingReg}
@@ -144,13 +147,14 @@ interface RegistrationFormProps {
   event: any;
   organization: any;
   slug?: string;
+  base: string;
   mutation: any;
   updateMutation?: any;
   existingReg?: any;
   editQrRef?: string | null;
 }
 
-function RegistrationForm({ event, organization, slug, mutation, updateMutation, existingReg, editQrRef }: RegistrationFormProps) {
+function RegistrationForm({ event, organization, slug, base, mutation, updateMutation, existingReg, editQrRef }: RegistrationFormProps) {
   const navigate = useNavigate();
   const storageKey = `rotary-reg-${event.id}`;
 
@@ -442,7 +446,7 @@ function RegistrationForm({ event, organization, slug, mutation, updateMutation,
 
       sessionStorage.removeItem(storageKey);
       // Redirect to post-register confirmation page with the QR ref
-      navigate(`/org/${slug}/post-register?ref=${reg.qr_ref}`);
+      navigate(`${base}/post-register?ref=${reg.qr_ref}`);
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Failed to submit registration. Please try again.");

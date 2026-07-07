@@ -7,12 +7,14 @@ import { NavBar } from "../shared/NavBar";
 import { NAVY } from "../../../lib/constants";
 import { CheckCircle2, Heart, AlertCircle } from "lucide-react";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getTenantBase } from "../../../lib/subdomain";
 
 export function PostRegisterPage() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qrRef = searchParams.get("ref");
+  const base = getTenantBase(slug);
 
   const { organization, loading: tenantLoading } = useTenant();
   const { data: registration, isLoading: regLoading, error } = useRegistrationByQR(qrRef || undefined);
@@ -32,7 +34,7 @@ export function PostRegisterPage() {
           <p className="text-sm text-muted-foreground">
             We couldn't retrieve your registration details. Check your ticket link.
           </p>
-          <GoldButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
+          <GoldButton onClick={() => navigate(`${base}/events`)} className="w-full justify-center">
             Go to Events
           </GoldButton>
         </PageCard>
@@ -84,7 +86,7 @@ export function PostRegisterPage() {
               If you wish to make a voluntary contribution, you can support our upcoming charity campaigns.
             </p>
             <GoldButton
-              onClick={() => navigate(`/org/${slug}/donate?reg_id=${registration.id}`)}
+              onClick={() => navigate(`${base}/donate?reg_id=${registration.id}`)}
               className="w-full justify-center flex items-center gap-2 py-2.5"
             >
               <Heart size={16} /> Make a Donation
@@ -93,12 +95,12 @@ export function PostRegisterPage() {
 
           <div className="flex flex-col gap-2 w-full mt-2">
             <OutlineButton 
-              onClick={() => navigate(`/org/${slug}/register/${registration.event_id}?edit=${registration.qr_ref}`)} 
+              onClick={() => navigate(`${base}/register/${registration.event_id}?edit=${registration.qr_ref}`)} 
               className="w-full justify-center border-dashed border-2 hover:bg-muted/50"
             >
               Edit Registration
             </OutlineButton>
-            <OutlineButton onClick={() => navigate(`/org/${slug}/events`)} className="w-full justify-center">
+            <OutlineButton onClick={() => navigate(`${base}/events`)} className="w-full justify-center">
               Explore Other Events
             </OutlineButton>
           </div>

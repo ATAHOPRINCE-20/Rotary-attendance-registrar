@@ -6,7 +6,7 @@ export const WHITE = "#FFFFFF";
 export const GREEN = "#48BB78";
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-export const APP_NAME    = "RotaryConnect";
+export const APP_NAME    = "agoroll";
 export const APP_URL     = import.meta.env.VITE_APP_URL ?? window.location.origin;
 
 // ─── Event Types ─────────────────────────────────────────────────────────────

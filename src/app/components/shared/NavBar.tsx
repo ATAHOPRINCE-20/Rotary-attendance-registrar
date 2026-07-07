@@ -6,6 +6,7 @@ import { GoldButton } from "./Buttons";
 import { GOLD, NAVY } from "../../../lib/constants";
 import type { Organization } from "../../../types/database";
 import { useAuth } from "../../../context/AuthContext";
+import { getSubdomain, getTenantBase } from "../../../lib/subdomain";
 
 interface NavBarProps {
   organization?: Organization | null;
@@ -19,12 +20,13 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
   const { slug } = useParams<{ slug?: string }>();
   const { user } = useAuth();
 
-  const base   = slug ? `/org/${slug}` : "";
-  const isAdmin = currentPath.startsWith("/admin");
+  const activeSlug = getSubdomain() || slug;
+  const base       = getTenantBase(slug);
+  const isAdmin    = currentPath.startsWith("/admin");
 
-  const publicLinks = slug
+  const publicLinks = activeSlug
     ? [
-        { label: "Home",   to: `${base}` },
+        { label: "Home",   to: base || "/" },
         { label: "Events", to: `${base}/events` },
       ]
     : [];
@@ -36,7 +38,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Logo */}
         <button
-          onClick={() => navigate(slug ? `${base}` : "/")}
+          onClick={() => navigate(activeSlug ? (base || "/") : "/")}
           className="flex items-center justify-center cursor-pointer transition-transform hover:scale-105 duration-200"
           style={{ height: "40px", width: "40px" }}
         >
