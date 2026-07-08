@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -81,6 +81,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!amount || !phone || !organizationId) {
     return res.status(400).json({ error: 'Missing required parameters: amount, phone, organizationId' });
+  }
+
+  // 0. Validate authentication & permissions
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+  }
+  const token = authHeader.split(' ')[1];
+
+  // Verify the token by calling getUser
+  const { data: { user }, error: authError } = await (supabase.auth as any).getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+
+  // Get user profile to check role and organization
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single();
+
+  if (profileErr || !profile) {
+    return res.status(403).json({ error: 'Forbidden: Profile not found' });
+  }
+
+  if (profile.organization_id !== organizationId) {
+    return res.status(403).json({ error: 'Forbidden: You do not belong to this organization' });
+  }
+
+  if (!['admin', 'super_admin'].includes(profile.role)) {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
   }
 
   const payoutAmount = Number(amount);

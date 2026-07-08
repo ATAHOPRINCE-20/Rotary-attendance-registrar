@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../context/AuthContext";
 import {
   useDonationCampaigns,
@@ -66,6 +67,9 @@ export function DonationCampaignsPage() {
   const [description, setDescription] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
 
   const loading = campaignsLoading || donationsLoading;
@@ -77,6 +81,8 @@ export function DonationCampaignsPage() {
     setDescription("");
     setGoalAmount("");
     setIsActive(true);
+    setCoverImageFile(null);
+    setCoverImagePreview("");
     setModalOpen(true);
   }
 
@@ -87,7 +93,26 @@ export function DonationCampaignsPage() {
     setDescription(c.description || "");
     setGoalAmount(c.goal_amount.toString());
     setIsActive(c.is_active);
+    setCoverImageFile(null);
+    setCoverImagePreview(c.cover_image_url || "");
     setModalOpen(true);
+  }
+
+  function handleCoverImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Cover image file size must be less than 2MB");
+      return;
+    }
+
+    setCoverImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCoverImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -105,14 +130,44 @@ export function DonationCampaignsPage() {
       return;
     }
 
+    setUploadingImage(true);
     try {
+      let finalCoverImageUrl = coverImagePreview;
+
+      if (coverImageFile) {
+        try {
+          const fileExt = coverImageFile.name.split(".").pop();
+          const fileName = `campaign-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(filePath, coverImageFile, {
+              upsert: true,
+              contentType: coverImageFile.type
+            });
+
+          if (uploadErr) throw uploadErr;
+
+          const { data: publicUrlData } = supabase.storage
+            .from("logos")
+            .getPublicUrl(filePath);
+
+          finalCoverImageUrl = publicUrlData.publicUrl;
+        } catch (storageErr) {
+          console.warn("Storage upload failed, falling back to Base64:", storageErr);
+          finalCoverImageUrl = coverImagePreview;
+        }
+      }
+
       if (editingCampaign) {
         await updateMutation.mutateAsync({
           id: editingCampaign.id,
           title: title.trim(),
           description: description.trim() || null,
           goal_amount: goal,
-          is_active: isActive
+          is_active: isActive,
+          cover_image_url: finalCoverImageUrl || null
         });
         toast.success("Donation campaign updated successfully!");
       } else {
@@ -121,7 +176,8 @@ export function DonationCampaignsPage() {
           title: title.trim(),
           description: description.trim() || null,
           goal_amount: goal,
-          is_active: true
+          is_active: true,
+          cover_image_url: finalCoverImageUrl || null
         });
         toast.success("New donation campaign launched!");
       }
@@ -129,6 +185,8 @@ export function DonationCampaignsPage() {
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "An error occurred. Please try again.");
+    } finally {
+      setUploadingImage(false);
     }
   }
 
@@ -490,6 +548,13 @@ export function DonationCampaignsPage() {
                         </div>
                       </div>
 
+                      {/* Cover Image */}
+                      {c.cover_image_url && (
+                        <div className="w-full h-32 rounded-xl overflow-hidden mb-3 border border-border bg-slate-50">
+                          <img src={c.cover_image_url} className="w-full h-full object-cover" alt={c.title} />
+                        </div>
+                      )}
+
                       {/* Header */}
                       <h3 
                         onClick={() => setSelectedCampaignId(isSelected ? null : c.id)}
@@ -646,6 +711,54 @@ export function DonationCampaignsPage() {
                   required 
                 />
 
+                {/* Cover Image Upload */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    Campaign Cover Image (Optional)
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-14 rounded-xl border border-dashed border-border bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
+                      {coverImagePreview ? (
+                        <img src={coverImagePreview} className="w-full h-full object-cover" alt="Preview" />
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground font-semibold">No Image</span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCoverImageChange}
+                        className="hidden"
+                        id="campaign-cover-file"
+                      />
+                      <div className="flex gap-2">
+                        <label
+                          htmlFor="campaign-cover-file"
+                          className="inline-flex items-center justify-center px-3 py-1.5 border border-border rounded-xl text-xs font-bold text-foreground bg-card hover:bg-muted cursor-pointer transition-all"
+                        >
+                          Choose File
+                        </label>
+                        {coverImagePreview && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCoverImageFile(null);
+                              setCoverImagePreview("");
+                            }}
+                            className="px-3 py-1.5 border border-destructive/20 text-destructive rounded-xl text-xs font-bold bg-destructive/5 hover:bg-destructive/10 cursor-pointer transition-all"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-muted-foreground mt-1">
+                        Supports PNG, JPG, GIF up to 2MB.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Description / Call to Action</label>
                   <textarea
@@ -689,10 +802,10 @@ export function DonationCampaignsPage() {
                 </OutlineButton>
                 <GoldButton 
                   type="submit" 
-                  disabled={createMutation.isPending || updateMutation.isPending} 
+                  disabled={createMutation.isPending || updateMutation.isPending || uploadingImage} 
                   className="flex-1 justify-center"
                 >
-                  {editingCampaign ? "Save Changes" : "Launch Drive"}
+                  {uploadingImage ? "Uploading Image..." : (editingCampaign ? "Save Changes" : "Launch Drive")}
                 </GoldButton>
               </div>
             </form>

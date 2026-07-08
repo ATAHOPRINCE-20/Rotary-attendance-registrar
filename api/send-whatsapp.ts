@@ -1,4 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS Headers
@@ -19,6 +24,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!webhookUrl || !phone || !message) {
     return res.status(400).json({ error: 'Missing webhookUrl, phone, or message parameters' });
+  }
+
+  // 1. Secure proxy destination: only allow our known gateway domain
+  if (!webhookUrl.startsWith('http://ugpay.tech:3000/send-whatsapp/')) {
+    return res.status(400).json({ error: 'Unauthorized webhookUrl destination' });
+  }
+
+  // 2. Extract and verify organization ID from URL
+  const orgId = webhookUrl.split('/').pop();
+  if (!orgId) {
+    return res.status(400).json({ error: 'Invalid webhookUrl organization parameters' });
+  }
+
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('id', orgId)
+    .maybeSingle();
+
+  if (orgError || !org) {
+    return res.status(403).json({ error: 'Forbidden: Unauthorized or unregistered organization' });
   }
 
   try {

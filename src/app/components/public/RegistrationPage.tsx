@@ -458,18 +458,41 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       <NavBar organization={organization} currentPath={window.location.pathname} />
 
       <div className="max-w-2xl mx-auto px-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors mb-6"
-        >
-          <ChevronLeft size={16} /> Back to details
-        </button>
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={() => navigate(`${base}/event/${event.id}`)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+          >
+            <ChevronLeft size={16} /> View Event Details
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`${base}/events`)}
+            className="text-xs font-bold text-[#17458F] hover:underline cursor-pointer flex items-center gap-1"
+          >
+            Browse All Events →
+          </button>
+        </div>
 
         <PageCard>
-          <div className="mb-6 pb-4 border-b border-border">
+          <div className="mb-6 pb-4 border-b border-border flex flex-col gap-1.5">
             <h1 className="text-2xl font-black font-sans" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-              {event.title} Checkin
+              <button
+                type="button"
+                onClick={() => navigate(`${base}/event/${event.id}`)}
+                className="hover:underline hover:text-[#17458F] text-left cursor-pointer transition-colors"
+                title="View event details"
+              >
+                {event.title}
+              </button>
             </h1>
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/event/${event.id}`)}
+              className="text-xs font-semibold text-[#F7A81B] hover:underline flex items-center gap-1 cursor-pointer w-fit"
+            >
+              ℹ️ View Event Details & Description
+            </button>
           </div>
 
 

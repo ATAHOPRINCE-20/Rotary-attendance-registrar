@@ -40,6 +40,7 @@ export function TenantLandingPage() {
   }
 
   const { activeEventId } = parseOrgWebsite(organization.website);
+  const hasRegisteredForActive = activeEventId ? !!localStorage.getItem(`reg-ref-${activeEventId}`) : false;
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#081c3b] via-[#0d2c54] to-[#17458F] flex flex-col overflow-hidden py-16 px-6 sm:px-12 lg:px-24">
@@ -89,13 +90,23 @@ export function TenantLandingPage() {
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             {activeEventId ? (
-              <button
-                onClick={() => navigate(`${base}/register/${activeEventId}`)}
-                className="px-8 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg shadow-orange-500/15 transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 text-center flex items-center justify-center gap-2 cursor-pointer animate-pulse"
-              >
-                <Calendar size={18} />
-                Register Attendance
-              </button>
+              hasRegisteredForActive ? (
+                <button
+                  onClick={() => navigate(`${base}/events`)}
+                  className="px-8 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg shadow-orange-500/15 transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 text-center flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Calendar size={18} />
+                  View Coming events
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate(`${base}/register/${activeEventId}`)}
+                  className="px-8 py-2.5 bg-[#F7A81B] hover:bg-[#e09412] text-white font-bold rounded-xl shadow-lg shadow-orange-500/15 transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 text-center flex items-center justify-center gap-2 cursor-pointer animate-pulse"
+                >
+                  <Calendar size={18} />
+                  Register Attendance
+                </button>
+              )
             ) : (
               <button
                 onClick={() => navigate(`${base}/events`)}

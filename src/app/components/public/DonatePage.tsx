@@ -246,6 +246,15 @@ export function DonatePage() {
           <div className="mt-2 flex-1 flex flex-col justify-start">
             {selectedCampaign ? (
               <>
+                {selectedCampaign.cover_image_url && (
+                  <div className="w-full rounded-xl overflow-hidden mb-4 border border-slate-100 bg-slate-100 shadow-sm shrink-0">
+                    <img 
+                      src={selectedCampaign.cover_image_url} 
+                      className="w-full h-auto block" 
+                      alt={selectedCampaign.title} 
+                    />
+                  </div>
+                )}
                 <h1 className="text-xl font-black tracking-tight" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
                   {selectedCampaign.title}
                 </h1>

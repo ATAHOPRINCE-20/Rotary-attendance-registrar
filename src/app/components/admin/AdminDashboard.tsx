@@ -47,6 +47,18 @@ export function AdminDashboard() {
   const [qrStatus, setQrStatus] = useState<"not_started" | "initializing" | "waiting_for_qr" | "connected" | "disconnected">("not_started");
   const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
 
+  async function fetchWithAuth(url: string, options: RequestInit = {}) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+      }
+    });
+  }
+
   useEffect(() => {
     let interval: any;
     if (showQRModal && organization) {
@@ -55,7 +67,7 @@ export function AdminDashboard() {
 
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/whatsapp-proxy?action=status&sessionId=${sessionId}&gatewayUrl=${encodeURIComponent(gatewayBaseUrl)}`);
+          const res = await fetchWithAuth(`/api/whatsapp-proxy?action=status&sessionId=${sessionId}&gatewayUrl=${encodeURIComponent(gatewayBaseUrl)}`);
           const data = await res.json();
           if (data.status) setQrStatus(data.status);
           if (data.qr) setQrCodeData(data.qr);
@@ -95,7 +107,7 @@ export function AdminDashboard() {
         payload.phone = phone;
       }
 
-      await fetch('/api/whatsapp-proxy', {
+      await fetchWithAuth('/api/whatsapp-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -114,7 +126,7 @@ export function AdminDashboard() {
     
     // Clear any existing session on the server so the user always starts fresh and has to click a button.
     if (organization) {
-      fetch('/api/whatsapp-proxy', {
+      fetchWithAuth('/api/whatsapp-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,7 +146,7 @@ export function AdminDashboard() {
       const gatewayBaseUrl = "http://ugpay.tech:3000";
       const sessionId = organization.id;
       
-      await fetch('/api/whatsapp-proxy', {
+      await fetchWithAuth('/api/whatsapp-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -158,7 +170,7 @@ export function AdminDashboard() {
       setWelcomeTemplate(organization.whatsapp_welcome_template || "");
       
       // Check initial WhatsApp connection status
-      fetch(`/api/whatsapp-proxy?action=status&sessionId=${organization.id}&gatewayUrl=${encodeURIComponent("http://ugpay.tech:3000")}`)
+      fetchWithAuth(`/api/whatsapp-proxy?action=status&sessionId=${organization.id}&gatewayUrl=${encodeURIComponent("http://ugpay.tech:3000")}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === "connected") setIsWhatsAppConnected(true);

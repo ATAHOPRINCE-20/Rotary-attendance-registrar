@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../context/AuthContext";
+import { supabase } from "../../../lib/supabase";
 import { useOrgDonations } from "../../../hooks/useDonations";
 import { useOrgWithdrawals, useRequestWithdrawal } from "../../../hooks/useWithdrawals";
 import { AdminLayout } from "../shared/AdminLayout";
@@ -41,7 +42,14 @@ export function AdminWithdrawalsPage() {
     const checkPending = () => {
       pending.forEach(async (w) => {
         try {
-          const response = await fetch(`/api/check-withdrawal?reference=${w.reference}&organizationId=${organization.id}`);
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+
+          const response = await fetch(`/api/check-withdrawal?reference=${w.reference}&organizationId=${organization.id}`, {
+            headers: {
+              ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+            }
+          });
           if (response.ok) {
             const result = await response.json();
             if (result.success && result.status !== "pending") {

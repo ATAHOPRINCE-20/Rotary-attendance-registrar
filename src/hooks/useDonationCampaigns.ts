@@ -10,6 +10,7 @@ export interface DonationCampaign {
   description: string | null;
   goal_amount: number;
   is_active: boolean;
+  cover_image_url?: string | null;
   created_at: string;
 }
 
@@ -77,6 +78,7 @@ export function useCreateDonationCampaign() {
         title: sanitizeRequiredInput(payload.title),
         description: payload.description ? sanitizeInput(payload.description) : null,
         goal_amount: Number(payload.goal_amount) || 0,
+        cover_image_url: payload.cover_image_url || null,
       };
 
       const { data, error } = await supabase
@@ -106,6 +108,7 @@ export function useUpdateDonationCampaign() {
         title: payload.title ? sanitizeRequiredInput(payload.title) : undefined,
         description: payload.description !== undefined ? (payload.description ? sanitizeInput(payload.description) : null) : undefined,
         goal_amount: payload.goal_amount !== undefined ? Number(payload.goal_amount) || 0 : undefined,
+        cover_image_url: payload.cover_image_url !== undefined ? payload.cover_image_url || null : undefined,
       };
 
       const { data, error } = await supabase

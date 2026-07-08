@@ -136,6 +136,7 @@ export interface Donation {
   event_id:        string | null;
   organization_id: string;
   registration_id: string | null;
+  campaign_id:     string | null;
   full_name:       string | null;
   email:           string | null;
   amount:          number;

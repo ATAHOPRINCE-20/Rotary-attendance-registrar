@@ -26,10 +26,7 @@ export function EventDetailPage() {
   const { activeEventId } = parseOrgWebsite(organization?.website || null);
   const isActiveEvent = activeEventId === event?.id;
 
-  // Redirect directly to the registration form only if the event is active
-  if (event && isActiveEvent) {
-    return <Navigate to={`${base}/register/${event.id}`} replace />;
-  }
+
 
   if (error || !event) {
     return (
@@ -66,11 +63,11 @@ export function EventDetailPage() {
         </button>
 
         {event.cover_image_url && (
-          <div className="w-full h-64 md:h-80 rounded-2xl overflow-hidden shadow-sm mb-6 bg-muted">
+          <div className="w-full rounded-2xl overflow-hidden shadow-sm mb-6 bg-muted">
             <img
               src={event.cover_image_url}
               alt={event.title}
-              className="w-full h-full object-cover"
+              className="w-full h-auto block"
             />
           </div>
         )}
