@@ -2,8 +2,8 @@
 
 :root {
   --font-size: 16px;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
   
   /* Material Design 3 Light Color Tokens */
   --background: #F8F9FF; /* M3 surface variant / neutral light */
