@@ -6,7 +6,7 @@ import { useOrgRegistrations } from "../../../hooks/useRegistrations";
 import { useOrgDonations } from "../../../hooks/useDonations";
 import { supabase } from "../../../lib/supabase";
 import { toast } from "sonner";
-import { NAVY, GOLD, sanitizeInput } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -20,6 +20,8 @@ import {
   X,
   AlertTriangle,
   BookOpen,
+  MessageSquare,
+  Mail,
 } from "lucide-react";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -183,7 +185,7 @@ export function AdminDashboard() {
     e.preventDefault();
     if (!newGroup.trim() || !organization) return;
 
-    const groupToAdd = sanitizeInput(newGroup.trim());
+    const groupToAdd = sanitizeRequiredInput(newGroup.trim());
     if (buddyGroupsList.includes(groupToAdd)) {
       toast.error("This buddy group already exists.");
       return;
@@ -452,6 +454,7 @@ export function AdminDashboard() {
                       )}
                     </div>
                   </div>
+
                 </div>
               )}
 
@@ -512,6 +515,46 @@ export function AdminDashboard() {
                       ))
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* System Support & Assistance Card */}
+              <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mt-6">
+                <div className="max-w-md">
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-1.5" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                    <span className="text-lg">🛠️</span> System Support & Assistance
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Having issues or need technical help with your club registrar platform? Get in touch with our team for rapid support.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
+                  <a
+                    href="https://wa.me/256757136062"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-row items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-200/60 hover:border-emerald-300 transition-all cursor-pointer shadow-sm group w-full sm:w-auto min-w-[200px]"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                      <MessageSquare size={16} />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-[10px] text-emerald-600/70 font-semibold tracking-wide uppercase">WhatsApp or Call</div>
+                      <div className="text-xs font-black text-emerald-800 font-sans">+256 757 136 062</div>
+                    </div>
+                  </a>
+                  <a
+                    href="mailto:support@agoroll.com"
+                    className="flex flex-row items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 hover:border-slate-300 transition-all cursor-pointer shadow-sm group w-full sm:w-auto min-w-[200px]"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-slate-500/10 flex items-center justify-center text-slate-600 group-hover:scale-110 transition-transform">
+                      <Mail size={16} />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-[10px] text-slate-500/70 font-semibold tracking-wide uppercase">Email Support</div>
+                      <div className="text-xs font-black text-slate-800 font-sans">support@agoroll.com</div>
+                    </div>
+                  </a>
                 </div>
               </div>
             </>

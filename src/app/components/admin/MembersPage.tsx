@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import type { Member } from "../../../types/database";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function MembersPage() {
   const { profile, organization } = useAuth();
@@ -123,7 +124,7 @@ export function MembersPage() {
       setMemberModalOpen(false);
     } catch (err: any) {
       console.error(err);
-      setMemberFormError(err?.message || "Failed to save member. Please check details.");
+      setMemberFormError(getFriendlyErrorMessage(err));
     } finally {
       setSavingMember(false);
     }
@@ -141,7 +142,7 @@ export function MembersPage() {
       toast.success("Member deleted from directory.");
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to delete member.");
+      toast.error(getFriendlyErrorMessage(err));
     }
   }
 
@@ -238,7 +239,7 @@ export function MembersPage() {
       setParsedCsvData([]);
     } catch (err: any) {
       console.error(err);
-      setCsvError(err?.message || "Failed to bulk import members. Please try again.");
+      setCsvError(getFriendlyErrorMessage(err));
     } finally {
       setImportingCsv(false);
     }

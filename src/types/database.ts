@@ -51,6 +51,11 @@ export interface Database {
         Insert: Omit<Withdrawal, "id" | "reference" | "created_at" | "updated_at">;
         Update: Partial<Omit<Withdrawal, "id" | "created_at" | "updated_at">>;
       };
+      rotary_clubs: {
+        Row: RotaryClub;
+        Insert: Omit<RotaryClub, "id" | "created_at">;
+        Update: Partial<Omit<RotaryClub, "id" | "created_at">>;
+      };
     };
     Functions: {
       my_org_id: { Args: Record<string, never>; Returns: string };
@@ -198,6 +203,14 @@ export interface Member {
   buddy_group:     string | null;
   created_at:      string;
   updated_at:      string;
+}
+
+export interface RotaryClub {
+  id:          string;
+  name:        string;
+  district:    string;
+  area:        string | null;
+  created_at:  string;
 }
 
 // ─── Auth State ───────────────────────────────────────────────────────────────

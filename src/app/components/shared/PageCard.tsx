@@ -72,17 +72,19 @@ export function TextInput({
 }
 
 export function SelectInput({
-  label, options, value, onChange,
+  label, options, value, onChange, disabled,
 }: {
   label: string; options: { value: string; label: string }[];
   value?: string; onChange?: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <FieldGroup label={label}>
       <select
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 transition-all appearance-none"
+        disabled={disabled}
+        className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 transition-all appearance-none disabled:opacity-75 disabled:cursor-not-allowed"
       >
         <option value="">Select…</option>
         {options.map((o) => (

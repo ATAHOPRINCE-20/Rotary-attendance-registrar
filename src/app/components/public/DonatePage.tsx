@@ -36,6 +36,7 @@ export function DonatePage() {
   const { data: campaigns, isLoading: campaignsLoading } = useActiveDonationCampaigns(organization?.id);
 
   const campaignIdParam = searchParams.get("campaignId") || searchParams.get("campaign_id");
+  const isDirectCampaignLink = !!campaignIdParam && !!campaigns?.some(c => c.id === campaignIdParam);
 
   // Update default selected campaign once campaigns are loaded
   useEffect(() => {
@@ -44,11 +45,7 @@ export function DonatePage() {
         const matchingCampaign = campaigns.find(c => c.id === campaignIdParam);
         if (matchingCampaign) {
           setCategory(matchingCampaign.id);
-          return;
         }
-      }
-      if (category === "community") {
-        setCategory(campaigns[0].id);
       }
     }
   }, [campaigns, campaignIdParam]);
@@ -359,6 +356,7 @@ export function DonatePage() {
                 value={category}
                 onChange={setCategory}
                 options={donationOptions}
+                disabled={isDirectCampaignLink}
               />
 
               {/* Phone Number Input */}

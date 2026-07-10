@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { QRCodeSVG } from "qrcode.react";
 import { getTenantUrl } from "../../../lib/subdomain";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function DonationCampaignsPage() {
   const { organization } = useAuth();
@@ -184,7 +185,7 @@ export function DonationCampaignsPage() {
       setModalOpen(false);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "An error occurred. Please try again.");
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setUploadingImage(false);
     }
@@ -199,7 +200,7 @@ export function DonationCampaignsPage() {
       toast.success(c.is_active ? "Campaign archived!" : "Campaign reactivated!");
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to update status.");
+      toast.error(getFriendlyErrorMessage(err));
     }
   }
 
@@ -215,7 +216,7 @@ export function DonationCampaignsPage() {
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to delete campaign.");
+      toast.error(getFriendlyErrorMessage(err));
     }
   }
 

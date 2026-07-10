@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function EventsPage() {
   const { profile, organization, refreshProfile } = useAuth();
@@ -183,7 +184,7 @@ export function EventsPage() {
       await refreshProfile();
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to set active event.");
+      toast.error(getFriendlyErrorMessage(err));
     }
   };
 
@@ -270,7 +271,7 @@ export function EventsPage() {
       setModalOpen(false);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to save event. Please check inputs.");
+      setError(getFriendlyErrorMessage(err));
     }
   }
 
@@ -283,7 +284,7 @@ export function EventsPage() {
       toast.success("Event deleted.");
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to delete event.");
+      toast.error(getFriendlyErrorMessage(err));
     }
   }
 

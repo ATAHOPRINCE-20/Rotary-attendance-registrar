@@ -6,6 +6,7 @@ import { RotaryLogo } from "../shared/RotaryLogo";
 import { GoldButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
 import { NAVY } from "../../../lib/constants";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function AdminSignupPage() {
   const { signUp } = useAuth();
@@ -31,7 +32,7 @@ export function AdminSignupPage() {
     setLoading(true);
     const { error: err, session } = await signUp(email, password, fullName, orgId, role);
     setLoading(false);
-    if (err) { setError(err); return; }
+    if (err) { setError(getFriendlyErrorMessage(err)); return; }
     
     if (!session) {
       setIsSubmitted(true);

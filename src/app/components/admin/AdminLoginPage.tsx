@@ -6,6 +6,7 @@ import { RotaryLogo } from "../shared/RotaryLogo";
 import { GoldButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
 import { NAVY, GOLD } from "../../../lib/constants";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
 
@@ -39,7 +40,7 @@ export function AdminLoginPage() {
     setLoading(true);
     const { error: err } = await signIn(email, password);
     setLoading(false);
-    if (err) { setError(err); return; }
+    if (err) { setError(getFriendlyErrorMessage(err)); return; }
     navigate("/admin/dashboard");
   }
 

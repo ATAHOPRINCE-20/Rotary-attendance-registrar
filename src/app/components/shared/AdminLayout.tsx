@@ -22,6 +22,28 @@ import {
   Heart,
 } from "lucide-react";
 
+const SupportIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Headset Arc */}
+    <path d="M4 14c0-4.42 3.58-8 8-8s8 3.58 8 8" />
+    {/* Left Earpad */}
+    <rect x="2" y="11" width="4" height="6" rx="2" fill="white" />
+    {/* Right Earpad */}
+    <rect x="18" y="11" width="4" height="6" rx="2" fill="white" />
+    {/* Orange Microphone stem */}
+    <path d="M19 16c0 2-2 3.5-4 3.5" stroke="#F97316" strokeWidth="3" />
+  </svg>
+);
+
 interface AdminLayoutProps {
   children: ReactNode;
   /** Label shown in the top-bar (e.g. "Events") */
@@ -109,6 +131,15 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               <Globe size={16} />
               Public Portal
             </button>
+            <a
+              href="https://wa.me/256757136062"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+            >
+              <SupportIcon size={16} />
+              System Support
+            </a>
             <button
               onClick={signOut}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-all"
@@ -267,6 +298,16 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
                   <Globe size={16} />
                   Public Portal
                 </button>
+                <a
+                  href="https://wa.me/256757136062"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                >
+                  <SupportIcon size={16} />
+                  System Support
+                </a>
                 <button
                   onClick={() => {
                     signOut();

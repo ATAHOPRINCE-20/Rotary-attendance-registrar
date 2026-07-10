@@ -6,6 +6,7 @@ import { PageCard, TextInput } from "../shared/PageCard";
 import { GoldButton } from "../shared/Buttons";
 import { RotaryLogo } from "../shared/RotaryLogo";
 import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 import { AlertCircle, Building, Globe, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -90,6 +91,21 @@ export function OrgSetupPage() {
     setLoading(true);
 
     try {
+      // Pre-check if name or slug already exists to prevent duplicate club registration
+      const { data: existingOrgs, error: checkErr } = await supabase
+        .from("organizations")
+        .select("name, slug")
+        .or(`slug.eq.${slug.trim()},name.ilike.${orgName.trim()}`)
+        .limit(1);
+
+      if (checkErr) {
+        console.warn("Could not check duplicate organizations", checkErr);
+      } else if (existingOrgs && existingOrgs.length > 0) {
+        setError("This club is already registered.");
+        setLoading(false);
+        return;
+      }
+
       let logoUrl = null;
       if (logoFile) {
         try {
@@ -153,7 +169,7 @@ export function OrgSetupPage() {
       navigate("/admin/dashboard");
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to configure organization. The URL slug might already be in use.");
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -285,48 +301,7 @@ export function OrgSetupPage() {
               Sign Out & Cancel
             </button>
 
-            {/* Diagnostics Info for debugging */}
-            <div className="mt-6 pt-5 border-t border-border/60 text-left">
-              <details className="group">
-                <summary className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer select-none outline-none hover:text-foreground transition-colors flex items-center gap-1">
-                  <span>Diagnostics Info (Debug)</span>
-                  <span className="transition-transform group-open:rotate-90">▶</span>
-                </summary>
-                <div className="mt-3 bg-muted/40 rounded-xl p-3 text-[10px] font-mono text-muted-foreground border border-border/40 flex flex-col gap-1.5 overflow-x-auto">
-                  <div><strong>Build Time:</strong> 2026-06-22T13:17:00Z</div>
-                  <div><strong>Auth Loading:</strong> {authLoading ? "true" : "false"}</div>
-                  <div><strong>Profile Loading:</strong> {profileLoading ? "true" : "false"}</div>
-                  <div><strong>User ID:</strong> {user?.id ?? "none"}</div>
-                  <div><strong>User Email:</strong> {user?.email ?? "none"}</div>
-                  <div><strong>Profile:</strong> {profile ? JSON.stringify(profile) : "null"}</div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        if ('serviceWorker' in navigator) {
-                          const registrations = await navigator.serviceWorker.getRegistrations();
-                          for (const reg of registrations) {
-                            await reg.unregister();
-                          }
-                        }
-                        const cacheNames = await caches.keys();
-                        for (const cacheName of cacheNames) {
-                          await caches.delete(cacheName);
-                        }
-                        sessionStorage.clear();
-                        localStorage.clear();
-                        window.location.reload();
-                      } catch (e) {
-                        window.location.reload();
-                      }
-                    }}
-                    className="mt-3 w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-bold rounded-lg text-[9px] uppercase tracking-wider transition-colors cursor-pointer text-center"
-                  >
-                    Clear Cache & Hard Reload
-                  </button>
-                </div>
-              </details>
-            </div>
+
           </form>
         </PageCard>
       </div>

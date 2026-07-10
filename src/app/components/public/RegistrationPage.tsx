@@ -11,9 +11,11 @@ import { AlertCircle, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { useOrgMembers, useCreateMember } from "../../../hooks/useMembers";
+import { useRotaryClubs } from "../../../hooks/useRotaryClubs";
 import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
 import { getTenantBase } from "../../../lib/subdomain";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function RegistrationPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
@@ -160,8 +162,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
   const { data: members, error: membersError } = useOrgMembers(organization?.id);
   const createMemberMutation = useCreateMember();
+  const { data: dbClubs } = useRotaryClubs();
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const clubDropdownRef = useRef<HTMLDivElement>(null);
 
   // Fallback to manual if members table query fails
   useEffect(() => {
@@ -175,6 +179,9 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowMemberDropdown(false);
+      }
+      if (clubDropdownRef.current && !clubDropdownRef.current.contains(event.target as Node)) {
+        setShowClubDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -190,7 +197,11 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
         fullName: existingReg.full_name || "",
         email: existingReg.email && existingReg.email.startsWith("member-") ? "" : existingReg.email || "",
         phone: existingReg.phone || "",
-        regType: existingReg.is_member ? (existingReg.member_id || (existingReg.buddy_group && !existingReg.club_name) ? "club_member" : "rotarian") : "guest",
+        regType: existingReg.is_member 
+          ? (existingReg.member_id || (existingReg.buddy_group && !existingReg.club_name) 
+              ? "club_member" 
+              : (existingReg.club_name && existingReg.club_name.toLowerCase().includes("rotaract") ? "rotaractor" : "rotarian")) 
+          : "guest",
         clubName: existingReg.club_name || "",
         district: existingReg.district || "",
         buddyGroup: existingReg.buddy_group || "",
@@ -198,6 +209,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
         comments: existingReg.comments || "",
         selectedMemberId: existingReg.member_id || null,
         isManualInput: existingReg.is_member && !existingReg.club_name && !existingReg.member_id,
+        isManualClubInput: existingReg.is_member && existingReg.club_name && !existingReg.member_id && !existingReg.buddy_group,
         visits: existingReg.visits || [],
         makeups: existingReg.makeups || [],
       };
@@ -214,7 +226,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const [fullName, setFullName] = useState(savedData.fullName || "");
   const [email, setEmail] = useState(savedData.email || "");
   const [phone, setPhone] = useState(savedData.phone || "");
-  const [regType, setRegType] = useState<"guest" | "rotarian" | "club_member" | null>(savedData.regType || null);
+  const [regType, setRegType] = useState<"guest" | "rotarian" | "rotaractor" | "club_member" | null>(savedData.regType || null);
   const [clubName, setClubName] = useState(savedData.clubName || "");
   const [district, setDistrict] = useState(savedData.district || "");
   const [buddyGroup, setBuddyGroup] = useState(savedData.buddyGroup || "");
@@ -227,6 +239,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const [searchMemberQuery, setSearchMemberQuery] = useState("");
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [isManualInput, setIsManualInput] = useState(!!savedData.isManualInput);
+
+  // Rotary clubs autocomplete states
+  const [showClubDropdown, setShowClubDropdown] = useState(false);
+  const [isManualClubInput, setIsManualClubInput] = useState(!!savedData.isManualClubInput);
 
   const [visits, setVisits] = useState<ClubActivity[]>(savedData.visits || []);
   const [makeups, setMakeups] = useState<ClubActivity[]>(savedData.makeups || []);
@@ -307,9 +323,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       buddyGroup,
       occupation,
       comments,
+      isManualClubInput,
     };
     sessionStorage.setItem(storageKey, JSON.stringify(data));
-  }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, storageKey]);
+  }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, isManualClubInput, storageKey]);
 
   const buddyGroupsList = event?.buddy_groups
     ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
@@ -330,8 +347,8 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     const sanitizedPhone = regType === "club_member"
       ? (isManualInput ? formatUgandanPhone(phone) : null)
       : formatUgandanPhone(phone);
-    const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
-    const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
+    const sanitizedClubName = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(clubName) : null;
+    const sanitizedDistrict = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
     const sanitizedOccupation = regType !== "club_member" ? sanitizeInput(occupation) : null;
     const sanitizedComments = sanitizeInput(comments);
@@ -357,7 +374,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       }
     }
 
-    if (regType === "rotarian" && (!sanitizedClubName || !sanitizedDistrict)) {
+    if ((regType === "rotarian" || regType === "rotaractor") && (!sanitizedClubName || !sanitizedDistrict)) {
       setError("Please enter your Club Name and District.");
       return;
     }
@@ -382,7 +399,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     }
 
     try {
-      const isRotaryMember = regType === "rotarian" || regType === "club_member";
+      const isRotaryMember = regType === "rotarian" || regType === "rotaractor" || regType === "club_member";
 
       let finalMemberId = regType === "club_member" && !isManualInput ? selectedMemberId : null;
 
@@ -449,7 +466,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       navigate(`${base}/post-register?ref=${reg.qr_ref}`);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to submit registration. Please try again.");
+      setError(getFriendlyErrorMessage(err));
     }
   }
 
@@ -497,39 +514,68 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-              <label className="text-sm font-bold text-foreground font-sans" style={{ fontFamily: "var(--font-sans)" }}>
-                Select Registration Type:
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { id: "guest", label: "Guest", desc: "Visitor / Non-member" },
-                  { id: "rotarian", label: "Rotarian", desc: "Member of another Rotary Club" },
-                  { id: "club_member", label: "Club Member", desc: "Member of this Rotary Club" },
-                ].map((type) => {
-                  const isSelected = regType === type.id;
-                  return (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => setRegType(type.id as any)}
-                      className={`flex flex-col text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                        isSelected
-                          ? "border-[#17458F] bg-[#17458F]/5 shadow-sm"
-                          : "border-border bg-card hover:bg-muted/30"
-                      }`}
-                    >
-                      <span className="font-bold text-sm text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
-                        {type.label}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                        {type.desc}
-                      </span>
-                    </button>
-                  );
-                })}
+            {!regType ? (
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-bold text-foreground font-sans" style={{ fontFamily: "var(--font-sans)" }}>
+                  Select Registration Type:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    { id: "club_member", label: "Club Member", desc: "Member of this Rotary Club" },
+                    { id: "rotarian", label: "Rotarian", desc: "Member of another Rotary Club" },
+                    { id: "rotaractor", label: "Rotaractor", desc: "Member of a Rotaract Club" },
+                    { id: "guest", label: "Guest", desc: "Visitor / Non-member" },
+                  ].map((type) => {
+                    const isSelected = regType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setRegType(type.id as any)}
+                        className={`flex flex-col text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? "border-[#17458F] bg-[#17458F]/5 shadow-sm"
+                            : "border-border bg-card hover:bg-muted/30"
+                        }`}
+                      >
+                        <span className="font-bold text-sm text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
+                          {type.label}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                          {type.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between p-4 rounded-xl border border-[#17458F]/15 bg-[#17458F]/5 animate-in fade-in duration-300">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wider text-[#17458F] font-bold">Registration Category</span>
+                  <span className="text-sm font-bold text-foreground">
+                    {regType === "guest" && "Guest (Visitor)"}
+                    {regType === "rotarian" && "Visiting Rotarian"}
+                    {regType === "rotaractor" && "Visiting Rotaractor"}
+                    {regType === "club_member" && "Club Member"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegType(null);
+                    setClubName("");
+                    setDistrict("");
+                    setBuddyGroup("");
+                    setSelectedMemberId(null);
+                    setFullName("");
+                  }}
+                  className="text-xs font-bold text-[#F7A81B] hover:underline cursor-pointer"
+                >
+                  Change Category
+                </button>
+              </div>
+            )}
 
             {regType && (
               <div className="flex flex-col gap-5 mt-2 animate-in fade-in duration-300">
@@ -691,15 +737,122 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   </>
                 )}
 
-                {regType === "rotarian" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
-                    <TextInput
-                      label="Club Name"
-                      placeholder="e.g. Rotary Club of Accra"
-                      value={clubName}
-                      onChange={setClubName}
-                      required
-                    />
+                {(regType === "rotarian" || regType === "rotaractor") && (
+                  <div className="flex flex-col gap-5 mt-2 animate-in fade-in slide-in-from-top-1">
+                    {!isManualClubInput ? (
+                      <div className="relative flex flex-col gap-1.5" ref={clubDropdownRef}>
+                        <label className="text-sm font-semibold text-foreground flex justify-between items-center" style={{ fontFamily: "var(--font-sans)" }}>
+                          <span>Select Your {regType === "rotaractor" ? "Rotaract" : "Rotary"} Club <span style={{ color: "#F7A81B" }}>*</span></span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsManualClubInput(true);
+                              setClubName("");
+                              setDistrict("");
+                            }}
+                            className="text-xs font-bold text-[#F7A81B] hover:underline cursor-pointer animate-in fade-in duration-200"
+                          >
+                            Club not in list? Type manually
+                          </button>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Type to search your club..."
+                            value={clubName}
+                            onChange={(e) => {
+                              setClubName(e.target.value);
+                              setShowClubDropdown(true);
+                            }}
+                            onFocus={() => setShowClubDropdown(true)}
+                            className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 transition-all font-semibold"
+                            required
+                          />
+                          {showClubDropdown && (
+                            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto z-20 divide-y divide-border/40 animate-in fade-in duration-200">
+                              {(() => {
+                                const query = clubName.toLowerCase();
+                                const isRotaractMode = regType === "rotaractor";
+                                const filtered = dbClubs?.filter(c => {
+                                  const nameLower = c.name.toLowerCase();
+                                  const matchesQuery = nameLower.includes(query) || (c.area && c.area.toLowerCase().includes(query));
+                                  const isRotaractClub = nameLower.includes("rotaract");
+                                  return matchesQuery && (isRotaractMode ? isRotaractClub : !isRotaractClub);
+                                }) || [];
+
+                                if (filtered.length === 0) {
+                                  return (
+                                    <div className="px-4 py-3 text-xs text-muted-foreground flex flex-col gap-1">
+                                      <span>No clubs match "{clubName}"</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsManualClubInput(true);
+                                          setShowClubDropdown(false);
+                                        }}
+                                        className="font-bold text-[#17458F] hover:underline text-left cursor-pointer"
+                                      >
+                                        Type this club name manually
+                                      </button>
+                                    </div>
+                                  );
+                                }
+
+                                return filtered.map((c) => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setClubName(c.name);
+                                      setDistrict(c.district);
+                                      setShowClubDropdown(false);
+                                    }}
+                                    className="w-full text-left px-4 py-3 text-xs text-foreground hover:bg-muted/30 transition-all font-semibold flex justify-between items-center cursor-pointer"
+                                  >
+                                    <div className="flex flex-col gap-0.5">
+                                      <span>{c.name}</span>
+                                      {c.area && (
+                                        <span className="text-[10px] text-muted-foreground font-normal">
+                                          {c.area}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] bg-[#17458F]/5 text-[#17458F] px-1.5 py-0.5 rounded font-bold shrink-0">
+                                      D{c.district}
+                                    </span>
+                                  </button>
+                                ));
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        <TextInput
+                          label="Club Name"
+                          placeholder="e.g. Rotary Club of Accra"
+                          value={clubName}
+                          onChange={setClubName}
+                          required
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsManualClubInput(false);
+                              setClubName("");
+                              setDistrict("");
+                              setShowClubDropdown(false);
+                            }}
+                            className="text-[10px] font-bold text-[#17458F] hover:underline cursor-pointer"
+                          >
+                            ← Search from Ugandan clubs directory
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <TextInput
                       label="District"
                       placeholder="e.g. 9102"

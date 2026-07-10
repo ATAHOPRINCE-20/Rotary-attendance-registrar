@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useOrgMembers } from "../../../hooks/useMembers";
 import { useOrgRegistrations } from "../../../hooks/useRegistrations";
@@ -63,6 +63,26 @@ export function DirectoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const loading = membersLoading || regsLoading;
+
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabIntoView = (tabId: Tab) => {
+    const container = tabsRef.current;
+    if (!container) return;
+
+    const button = container.querySelector(`[data-tab-id="${tabId}"]`) as HTMLElement;
+    if (!button) return;
+
+    if (tabId === "members") {
+      container.scrollTo({ left: 0, behavior: "smooth" });
+    } else if (tabId === "rotarians") {
+      const membersButton = container.querySelector(`[data-tab-id="members"]`) as HTMLElement;
+      const scrollAmount = membersButton ? membersButton.offsetWidth : 80;
+      container.scrollTo({ left: scrollAmount, behavior: "smooth" });
+    } else if (tabId === "visitors") {
+      container.scrollTo({ left: container.scrollWidth, behavior: "smooth" });
+    }
+  };
 
   // ── Deduplicated visitors list built from registrations ──────────────────────
   // Group by email/phone to de-duplicate across multiple events, keeping visit count
@@ -246,7 +266,7 @@ export function DirectoryPage() {
         {/* Tab bar + search + filter */}
         <div className="border-b border-border/40 px-5 pt-4 pb-0 flex flex-col sm:flex-row sm:items-end gap-3">
           {/* Tabs */}
-          <div className="flex gap-1 overflow-x-auto scrollbar-none shrink-0 max-w-full -mx-5 px-5 sm:mx-0 sm:px-0">
+          <div ref={tabsRef} className="flex gap-1 overflow-x-auto scrollbar-none shrink-0 max-w-full -mx-5 px-5 sm:mx-0 sm:px-0">
             {[
               { id: "members"   as Tab, label: "Members",            icon: Users },
               { id: "rotarians" as Tab, label: "Visiting Rotarians", icon: Grid3x3 },
@@ -254,7 +274,12 @@ export function DirectoryPage() {
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => { setTab(id); setSearchQuery(""); }}
+                data-tab-id={id}
+                onClick={() => {
+                  setTab(id);
+                  setSearchQuery("");
+                  scrollTabIntoView(id);
+                }}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   tab === id
                     ? "border-[#17458F] text-[#17458F] bg-[#17458F]/5"

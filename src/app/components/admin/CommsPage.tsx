@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function CommsPage() {
   const { organization } = useAuth();
@@ -73,7 +74,7 @@ export function CommsPage() {
       // 1. Fetch matching contacts
       let query = supabase
         .from("registrations")
-        .select("phone, full_name, is_member, club_name, district, buddy_group, member_id")
+        .select("email, phone, full_name, is_member, club_name, district, buddy_group, member_id")
         .eq("organization_id", organization!.id);
       
       if (eventId) {
@@ -103,10 +104,20 @@ export function CommsPage() {
         filteredContacts = filteredContacts.filter((r) => !r.is_member);
       }
 
-      const validContacts = filteredContacts.filter(c => c.phone && c.phone.trim().length > 8);
+      const validContacts = filteredContacts.filter(c => {
+        if (channel === "email") {
+          return c.email && c.email.trim().includes("@") && !c.email.match(/^member-[a-f0-9\-]+@/);
+        } else {
+          return c.phone && c.phone.trim().length > 8;
+        }
+      });
 
       if (validContacts.length === 0) {
-        setError("No contacts found matching the selected audience with valid phone numbers.");
+        setError(
+          channel === "email"
+            ? "No contacts found matching the selected audience with valid email addresses."
+            : "No contacts found matching the selected audience with valid phone numbers."
+        );
         setLoading(false);
         return;
       }
@@ -125,7 +136,7 @@ export function CommsPage() {
         created_by: null,
       });
 
-      // 3. Dispatch messages if WhatsApp
+      // 3. Dispatch messages
       if (channel === "whatsapp") {
         toast.success(`Broadcasting WhatsApp campaign to ${validContacts.length} contacts...`);
         
@@ -145,6 +156,27 @@ export function CommsPage() {
              })
            }).catch(err => console.error("WhatsApp broadcast failed for", contact.phone, err));
         }));
+      } else if (channel === "email") {
+        toast.success(`Broadcasting Email campaign to ${validContacts.length} contacts...`);
+        
+        Promise.all(validContacts.map(contact => {
+          const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
+          const htmlMessage = `<div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
+            ${customizedMessage.replace(/\n/g, '<br />')}
+          </div>`;
+
+          return fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orgId: organization!.id,
+              toEmail: contact.email,
+              toName: contact.full_name,
+              subject: name.trim(),
+              htmlContent: htmlMessage
+            })
+          }).catch(err => console.error("Email broadcast failed for", contact.email, err));
+        }));
       } else {
         toast.success(`Simulating broadcast for ${channel.toUpperCase()} to ${validContacts.length} contacts...`);
       }
@@ -156,7 +188,7 @@ export function CommsPage() {
 
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Failed to create campaign. Please try again.");
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
