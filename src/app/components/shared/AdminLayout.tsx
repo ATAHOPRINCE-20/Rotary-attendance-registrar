@@ -20,6 +20,7 @@ import {
   BookOpen,
   ShieldCheck,
   Heart,
+  Building,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -53,13 +54,16 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) {
-  const { profile, organization, signOut } = useAuth();
+  const { profile, organization, signOut, impersonatedOrgId, impersonateOrganization } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const menuItems = [
     { label: "Dashboard",       to: "/admin/dashboard",      icon: LayoutDashboard },
+    ...(profile?.role === "super_admin" ? [
+      { label: "Tenants Directory", to: "/admin/tenants",        icon: Building        },
+    ] : []),
     { label: "Events",          to: "/admin/events",         icon: Calendar        },
     { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
     { label: "Members",         to: "/admin/members",        icon: Users           },
@@ -169,6 +173,24 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
 
       {/* ── CONTENT ───────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {impersonatedOrgId && (
+          <div className="bg-amber-500 text-white text-xs font-bold px-6 py-2 flex items-center justify-between shrink-0 shadow-sm z-50">
+            <span className="flex items-center gap-1.5">
+              <span>⚠️</span>
+              You are currently viewing and managing <strong>{organization?.name}</strong> as an administrator.
+            </span>
+            <button
+              onClick={() => {
+                impersonateOrganization(null);
+                navigate("/admin/tenants");
+              }}
+              className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition-all text-[11px] font-extrabold uppercase tracking-wide cursor-pointer"
+            >
+              Stop Impersonation
+            </button>
+          </div>
+        )}
 
         {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-border/40 shrink-0">

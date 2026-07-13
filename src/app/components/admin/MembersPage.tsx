@@ -65,9 +65,11 @@ export function MembersPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
 
   // Options for Buddy Groups from organization setting
-  const buddyGroupsList = organization?.buddy_groups
-    ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Group A", "Group B", "Group C", "Group D"];
+  const buddyGroupsList = Array.from(new Set<string>(
+    organization?.buddy_groups
+      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : ["Group A", "Group B", "Group C", "Group D"]
+  ));
 
   // Open modal for single member creation
   function openAddModal() {

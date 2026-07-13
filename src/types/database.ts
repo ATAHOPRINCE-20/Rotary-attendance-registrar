@@ -77,6 +77,10 @@ export interface Organization {
   buddy_groups?: string | null;
   whatsapp_webhook_url?: string | null;
   whatsapp_welcome_template?: string | null;
+  subscription_tier?: "free" | "standard" | "premium" | null;
+  subscription_expires_at?: string | null;
+  is_suspended?: boolean | null;
+  momo_phone?: string | null;
 }
 
 export interface Profile {
@@ -122,7 +126,7 @@ export interface Registration {
   occupation:        string | null;
   organization_name: string | null;
   comments:          string | null;
-  status:            "pending" | "checked-in";
+  status:            "pending" | "checked-in" | "apology";
   qr_ref:            string;
   checked_in_at:     string | null;
   created_at:        string;

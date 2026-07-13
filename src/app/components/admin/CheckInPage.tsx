@@ -112,6 +112,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   const [visits, setVisits] = useState<ClubActivity[]>([]);
   const [makeups, setMakeups] = useState<ClubActivity[]>([]);
   const [existingMakeupsCount, setExistingMakeupsCount] = useState(0);
+  const [statusVal, setStatusVal] = useState<"checked-in" | "apology">("checked-in");
   const createMemberMutation = useCreateMember();
 
   // Fetch existing monthly makeups count for manual registration
@@ -223,11 +224,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
       logoUrl = window.location.origin + logoUrl;
     }
     const checkedInCount = registrations.filter(r => r.status === "checked-in").length;
+    const apologyCount = registrations.filter(r => r.status === "apology").length;
 
-    // Filter registrations into groups
-    const clubMembers = registrations.filter(r => r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id));
-    const visitingRotarians = registrations.filter(r => r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name);
-    const guests = registrations.filter(r => !r.is_member);
+    // Filter registrations into groups (excluding apologies from present tables)
+    const clubMembers = registrations.filter(r => r.status !== "apology" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id));
+    const visitingRotarians = registrations.filter(r => r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name);
+    const guests = registrations.filter(r => r.status !== "apology" && !r.is_member);
+    const apologies = registrations.filter(r => r.status === "apology");
 
     // Calculate club attendance metrics
     const checkedInClubCount = clubMembers.filter(r => r.status === "checked-in").length;
@@ -241,7 +244,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     // Generate table rows for Club Members
     const clubMemberRows = clubMembers.length > 0 ? clubMembers.map((r, i) => {
-      const isCheckedIn = r.status === "checked-in";
       return `
         <tr class="${i % 2 === 0 ? "even" : "odd"}">
           <td class="no">${i + 1}</td>
@@ -258,7 +260,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     // Generate table rows for Visiting Rotarians
     const visitingRotarianRows = visitingRotarians.length > 0 ? visitingRotarians.map((r, i) => {
-      const isCheckedIn = r.status === "checked-in";
       return `
         <tr class="${i % 2 === 0 ? "even" : "odd"}">
           <td class="no">${i + 1}</td>
@@ -272,7 +273,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     // Generate table rows for Guests
     const guestRows = guests.length > 0 ? guests.map((r, i) => {
-      const isCheckedIn = r.status === "checked-in";
       return `
         <tr class="${i % 2 === 0 ? "even" : "odd"}">
           <td class="no">${i + 1}</td>
@@ -282,6 +282,18 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           <td>${r.email}</td>
         </tr>`;
     }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
+
+    // Generate table rows for Apologies
+    const apologyRows = apologies.length > 0 ? apologies.map((r, i) => {
+      return `
+        <tr class="${i % 2 === 0 ? "even" : "odd"}">
+          <td class="no">${i + 1}</td>
+          <td class="name">${r.full_name}</td>
+          <td>${r.buddy_group || "—"}</td>
+          <td>${r.phone ?? "—"}</td>
+          <td>${r.email}</td>
+        </tr>`;
+    }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No apologies registered for this event.</td></tr>`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -388,7 +400,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   <div class="summary">
     <div class="pill pill-blue">Total Registered: ${registrations.length}</div>
     <div class="pill pill-green">Checked In: ${checkedInCount}</div>
-    <div class="pill pill-gold">Absent: ${registrations.length - checkedInCount}</div>
+    <div class="pill pill-gold">Apologies: ${apologyCount}</div>
   </div>
 
   <!-- SECTION 1: CLUB MEMBERS -->
@@ -450,6 +462,24 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     <tbody>${guestRows}</tbody>
   </table>
 
+  <!-- SECTION 4: APOLOGIES -->
+  <div class="section-title">4. Apologies (Absent with Apology)</div>
+  <div class="section-meta">
+    <span>Total absent with apologies: <b>${apologies.length}</b></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Buddy Group</th>
+        <th>Phone</th>
+        <th>Email</th>
+      </tr>
+    </thead>
+    <tbody>${apologyRows}</tbody>
+  </table>
+
   <!-- Signature block -->
   <div class="signature-block">
     <div class="sig-line">Club President / Chairperson</div>
@@ -505,11 +535,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   }
 
 
-  const buddyGroupsList = event?.buddy_groups
-    ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : organization?.buddy_groups
-    ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Group A", "Group B", "Group C", "Group D"];
+  const buddyGroupsList = Array.from(new Set<string>(
+    event?.buddy_groups
+      ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : organization?.buddy_groups
+      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : ["Group A", "Group B", "Group C", "Group D"]
+  ));
 
   const filteredRegs = registrations?.filter((r) => {
     return (
@@ -519,13 +551,18 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     );
   }) ?? [];
 
-  async function handleCheckIn(regId: string) {
+  async function handleUpdateStatus(regId: string, status: "checked-in" | "apology" | "pending") {
     try {
-      await checkInMutation.mutateAsync({ id: regId, eventId: eventId! });
-      toast.success("Attendee successfully checked in!");
+      await checkInMutation.mutateAsync({ id: regId, eventId: eventId!, status });
+      const statusLabels = {
+        "checked-in": "checked in",
+        "apology": "marked with apology",
+        "pending": "reset to pending"
+      };
+      toast.success(`Attendee successfully ${statusLabels[status]}!`);
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to check in attendee.");
+      toast.error(err?.message || "Failed to update attendee status.");
     }
   }
 
@@ -625,6 +662,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         member_id: finalMemberId || null,
         visits: regType === "club_member" && filteredVisits.length > 0 ? filteredVisits : null,
         makeups: regType === "club_member" && filteredMakeups.length > 0 ? filteredMakeups : null,
+        status: statusVal,
       });
 
       toast.success("Attendee registered & checked in successfully!");
@@ -641,6 +679,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
       setComments("");
       setVisits([]);
       setMakeups([]);
+      setStatusVal("checked-in");
       setIsAddModalOpen(false);
     } catch (err: any) {
       console.error(err);
@@ -725,9 +764,14 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
               {memberAttendancePct.toFixed(1)}%
             </h3>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            <strong>{checkedInMembersCount}</strong> of <strong>{totalRosterCount}</strong> club members checked in today.
-          </p>
+          <div className="text-[11px] text-muted-foreground flex flex-col gap-1">
+            <p>
+              <strong>{checkedInMembersCount}</strong> of <strong>{totalRosterCount}</strong> club members checked in today.
+            </p>
+            <p className="text-[10px] text-amber-700 font-semibold border-t border-border/40 pt-1 mt-1">
+              Apologies: <strong>{registrations?.filter(r => r.status === "apology").length ?? 0}</strong> registered absent
+            </p>
+          </div>
         </div>
 
         {/* Visiting Clubs Card */}
@@ -787,6 +831,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                       <th className="hidden md:table-cell py-3 px-3 font-semibold text-muted-foreground">Email</th>
                       <th className="hidden sm:table-cell py-3 px-3 font-semibold text-muted-foreground">Role</th>
                       <th className="hidden md:table-cell py-3 px-3 font-semibold text-muted-foreground">Club</th>
+                      <th className="py-3 px-3 font-semibold text-muted-foreground">Apology</th>
                       <th className="w-10 py-3 px-3 text-center">Details</th>
                     </tr>
                   </thead>
@@ -858,6 +903,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                             </td>
                             <td className="hidden md:table-cell py-4 px-3 text-muted-foreground">
                               {r.is_member ? (r.club_name || "—") : "Guest"}
+                            </td>
+                            <td className="py-4 px-3 text-xs font-bold">
+                              {r.status === "apology" ? (
+                                <span className="text-amber-700 font-extrabold">Yes</span>
+                              ) : (
+                                <span className="text-muted-foreground font-normal">—</span>
+                              )}
                             </td>
                             <td className="py-4 px-3 text-center text-muted-foreground">
                               <div className="flex justify-center">
@@ -986,12 +1038,53 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                     </div>
                                   )}
 
-                                  {/* Auto checked-in indicator */}
+                                  {/* Status controls */}
                                   <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-1.5">
-                                        Checked In ✓
-                                      </span>
+                                      {r.status === "checked-in" ? (
+                                        <span className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                                          Checked In ✓
+                                        </span>
+                                      ) : r.status === "apology" ? (
+                                        <span className="text-xs text-amber-800 font-bold px-3 py-1.5 bg-amber-50 rounded-xl border border-amber-100 flex items-center gap-1.5">
+                                          Apology registered
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-slate-500 font-semibold px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+                                          Pending Check-In
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Action Buttons to update status */}
+                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                      {r.status !== "checked-in" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStatus(r.id, "checked-in")}
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm animate-in fade-in"
+                                        >
+                                          Check In
+                                        </button>
+                                      )}
+                                      {r.status !== "apology" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStatus(r.id, "apology")}
+                                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm animate-in fade-in"
+                                        >
+                                          Register Apology
+                                        </button>
+                                      )}
+                                      {r.status !== "pending" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStatus(r.id, "pending")}
+                                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all cursor-pointer animate-in fade-in"
+                                        >
+                                          Reset to Pending
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -1263,6 +1356,36 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 />
               )}
 
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "var(--font-sans)" }}>
+                  Attendance Status
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "checked-in", label: "Checked In (Present)" },
+                    { id: "apology", label: "Absent (With Apology)" },
+                  ].map((opt) => {
+                    const isSelected = statusVal === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setStatusVal(opt.id as any)}
+                        className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
+                          isSelected
+                            ? opt.id === "checked-in"
+                              ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                              : "border-amber-600 bg-amber-50 text-amber-800"
+                            : "border-border bg-card text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "var(--font-sans)" }}>
                   Comments / Notes (Optional)
@@ -1293,7 +1416,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                   disabled={submitting}
                   className="px-5 py-2 text-xs font-bold"
                 >
-                  {submitting ? "Registering..." : "Register & Check In"}
+                  {submitting ? "Registering..." : (statusVal === "apology" ? "Register Apology" : "Register & Check In")}
                 </GoldButton>
               </div>
             </form>

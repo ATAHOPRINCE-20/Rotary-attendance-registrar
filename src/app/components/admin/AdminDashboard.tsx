@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../../context/AuthContext";
-import { useAdminEvents } from "../../../hooks/useEvents";
-import { useOrgRegistrations } from "../../../hooks/useRegistrations";
+import { useAllOrgEvents } from "../../../hooks/useEvents";
+import { useOrgRegistrations, useEventRegistrations } from "../../../hooks/useRegistrations";
+import { useOrgMembers } from "../../../hooks/useMembers";
 import { useOrgDonations } from "../../../hooks/useDonations";
 import { supabase } from "../../../lib/supabase";
 import { toast } from "sonner";
@@ -30,9 +31,13 @@ export function AdminDashboard() {
   const { profile, organization, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
-  const { data: events,        isLoading: eventsLoading   } = useAdminEvents(organization?.id);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
+
+  const { data: events,        isLoading: eventsLoading   } = useAllOrgEvents(organization?.id);
   const { data: registrations, isLoading: regsLoading     } = useOrgRegistrations(organization?.id);
   const { data: donations,     isLoading: donationsLoading } = useOrgDonations(organization?.id);
+  const { data: eventRegs,     isLoading: eventRegsLoading } = useEventRegistrations(selectedEventId || undefined);
+  const { data: members,       isLoading: membersLoading   } = useOrgMembers(organization?.id);
 
   const loading = eventsLoading || regsLoading || donationsLoading;
 
@@ -166,7 +171,7 @@ export function AdminDashboard() {
   useEffect(() => {
     if (organization) {
       const list = organization.buddy_groups
-        ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+        ? Array.from(new Set<string>(organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)))
         : [];
       setBuddyGroupsList(list);
       setWelcomeTemplate(organization.whatsapp_welcome_template || "");
@@ -180,6 +185,22 @@ export function AdminDashboard() {
         .catch(console.error);
     }
   }, [organization]);
+
+  useEffect(() => {
+    if (events && events.length > 0 && !selectedEventId) {
+      const publishedEvents = events.filter(e => e.status === "published" && !e.is_archived);
+      if (publishedEvents.length > 0) {
+        setSelectedEventId(publishedEvents[publishedEvents.length - 1].id);
+      } else {
+        const activeEvents = events.filter(e => !e.is_archived);
+        if (activeEvents.length > 0) {
+          setSelectedEventId(activeEvents[activeEvents.length - 1].id);
+        } else {
+          setSelectedEventId(events[events.length - 1].id);
+        }
+      }
+    }
+  }, [events, selectedEventId]);
 
   async function handleAddGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -259,10 +280,39 @@ export function AdminDashboard() {
     }
   }
 
-  const activeEventsCount  = events?.filter(e => e.status === "published").length ?? 0;
+  const activeEventsCount  = events?.filter(e => e.status === "published" && !e.is_archived).length ?? 0;
   const totalRegistrations = registrations?.length ?? 0;
   const totalDonations     = donations?.filter(d => d.status === "completed").reduce((a, d) => a + Number(d.amount), 0) ?? 0;
   const checkedInCount     = registrations?.filter(r => r.status === "checked-in").length ?? 0;
+
+  // Get active selected event
+  const selectedEvent = events?.find(e => e.id === selectedEventId);
+
+  // Parse buddy groups for the selected event
+  const selectedEventBuddyGroups = Array.from(new Set<string>(
+    selectedEvent?.buddy_groups
+      ? selectedEvent.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : organization?.buddy_groups
+      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : []
+  ));
+
+  // Filter registrations for this event
+  const eventRegsList = eventRegs ?? [];
+
+  // Count present club members (those checked-in and belonging to a buddy group)
+  const presentClubMembers = eventRegsList.filter(r => r.status === "checked-in" && r.buddy_group && r.buddy_group.trim()).length;
+  const totalClubMembers = members?.length ?? 0;
+
+  // Buddy group counts for the selected event based on total club members in each group
+  const buddyGroupMetrics = selectedEventBuddyGroups.map(group => {
+    const totalInGroup = members?.filter(m => m.buddy_group?.trim().toLowerCase() === group.toLowerCase()).length ?? 0;
+    const present = eventRegsList.filter(r => r.buddy_group?.trim().toLowerCase() === group.toLowerCase() && r.status === "checked-in").length;
+    const percentage = totalInGroup > 0 ? Math.round((present / totalInGroup) * 100) : 0;
+    return { group, totalReg: totalInGroup, present, percentage };
+  });
+
+
 
   return (
     <AdminLayout
@@ -304,6 +354,7 @@ export function AdminDashboard() {
                     accent: GOLD,
                     bg:    `${GOLD}18`,
                     trend: "+1 this month",
+                    path:  "/admin/events",
                   },
                   {
                     label: "Total Attendees",
@@ -312,6 +363,7 @@ export function AdminDashboard() {
                     accent: "#0067C8",
                     bg:    "#0067C818",
                     trend: "Total registered present",
+                    path:  "/admin/reports",
                   },
                   {
                     label: "Total Donations",
@@ -320,11 +372,17 @@ export function AdminDashboard() {
                     accent: "#E53E3E",
                     bg:    "#E53E3E18",
                     trend: "Raised",
+                    path:  profile?.role !== "staff" ? "/admin/analytics" : undefined,
                   },
                 ].map((stat, i) => (
                   <div
                     key={i}
-                    className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex flex-col gap-3"
+                    onClick={stat.path ? () => { if (stat.path) navigate(stat.path); } : undefined}
+                    className={`bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
+                      stat.path
+                        ? "cursor-pointer hover:shadow-md hover:border-slate-300 hover:scale-[1.015] active:scale-[0.985]"
+                        : ""
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div
@@ -459,11 +517,96 @@ export function AdminDashboard() {
               )}
 
 
-              {/* ── RECENT TABLES ── */}
-              <div className="grid grid-cols-1 gap-5">
+              {/* ── RECENT TABLES & METRICS ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+                {/* Buddy Group Attendance */}
+                <div className="bg-white rounded-2xl border border-border/40 shadow-sm overflow-hidden flex flex-col justify-between min-h-[400px]">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 gap-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UserCheck size={16} className="text-indigo-600 shrink-0" />
+                      <h3 className="text-sm font-bold truncate" style={{ color: NAVY }}>Buddy Group Attendance</h3>
+                    </div>
+                    {events && events.length > 0 && (
+                      <select
+                        value={selectedEventId}
+                        onChange={(e) => setSelectedEventId(e.target.value)}
+                        className="text-[11px] font-semibold bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 cursor-pointer max-w-[160px] sm:max-w-[200px] truncate"
+                      >
+                        {events.map((ev) => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.title} {ev.is_archived ? " (Deleted)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="p-5 flex-1 flex flex-col justify-start">
+                    {eventsLoading ? (
+                      <div className="flex items-center justify-center py-12 m-auto">
+                        <div className="w-6 h-6 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                      </div>
+                    ) : !selectedEventId ? (
+                      <p className="text-xs text-muted-foreground py-10 text-center m-auto">
+                        No events available. Create an event to track attendance.
+                      </p>
+                    ) : (eventRegsLoading || membersLoading) ? (
+                      <div className="flex items-center justify-center py-12 m-auto">
+                        <div className="w-6 h-6 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="w-full flex flex-col gap-4">
+                        {/* Attendance Summary Banner */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Event Attendance</span>
+                            <p className="text-base font-black mt-0.5" style={{ color: NAVY }}>
+                              {presentClubMembers} / {totalClubMembers} Present
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Present %</span>
+                            <p className="text-base font-black mt-0.5 text-emerald-600">
+                              {totalClubMembers > 0 ? Math.round((presentClubMembers / totalClubMembers) * 100) : 0}%
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* List of Buddy Groups */}
+                        <div className="flex flex-col gap-3 max-h-[260px] overflow-y-auto pr-1">
+                          {selectedEventBuddyGroups.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-8">
+                              No buddy groups configured for this event.
+                            </p>
+                          ) : (
+                            <>
+                              {buddyGroupMetrics.map(({ group, totalReg, present, percentage }) => (
+                                <div key={group} className="flex flex-col gap-1 hover:bg-slate-50/50 p-1.5 rounded-lg transition-all">
+                                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                                    <span className="truncate">{group}</span>
+                                    <span className="shrink-0 font-extrabold text-slate-500">
+                                      {present} / {totalReg} present <span className="text-indigo-600 ml-1">({percentage}%)</span>
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Recent Donations */}
-                <div className="bg-white rounded-2xl border border-border/40 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl border border-border/40 shadow-sm overflow-hidden flex flex-col justify-between min-h-[400px]">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
                     <div className="flex items-center gap-2">
                       <Heart size={15} style={{ color: "#E53E3E" }} />
@@ -477,7 +620,7 @@ export function AdminDashboard() {
                       View all
                     </button>
                   </div>
-                  <div className="divide-y divide-border/30">
+                  <div className="divide-y divide-border/30 overflow-y-auto flex-1">
                     {!donations || donations.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-10 text-center">No donations yet.</p>
                     ) : (

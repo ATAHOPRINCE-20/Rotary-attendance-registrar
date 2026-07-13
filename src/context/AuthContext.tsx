@@ -16,6 +16,8 @@ interface AuthContextValue {
   signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) => Promise<{ error: string | null; session: Session | null }>;
   signOut:        () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  impersonatedOrgId: string | null;
+  impersonateOrganization: (orgId: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -31,8 +33,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // True only when a network/server error prevented the profile from loading
   const [profileError, setProfileError]     = useState(false);
 
+  const [impersonatedOrgId, setImpersonatedOrgId] = useState<string | null>(
+    typeof window !== "undefined" ? sessionStorage.getItem("impersonated_org_id") : null
+  );
+
   const loadingUserRef = useRef<string | null>(null);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
+
+  function impersonateOrganization(orgId: string | null) {
+    if (orgId) {
+      sessionStorage.setItem("impersonated_org_id", orgId);
+    } else {
+      sessionStorage.removeItem("impersonated_org_id");
+    }
+    setImpersonatedOrgId(orgId);
+  }
 
   async function loadProfile(userId: string, force = false): Promise<void> {
     if (!force && loadingUserRef.current === userId && loadPromiseRef.current) {
@@ -104,11 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (prof) {
           setProfileError(false);
           setProfile(prof);
-          if (prof.organization_id) {
+          const activeOrgId = impersonatedOrgId || prof.organization_id;
+          if (activeOrgId) {
             const { data: org } = await supabase
               .from("organizations")
               .select("*")
-              .eq("id", prof.organization_id)
+              .eq("id", activeOrgId)
               .single();
             if (org) {
               const orgData = { ...org };
@@ -168,6 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOrg(null);
           setProfileLoading(false);
           setLoading(false);
+          setImpersonatedOrgId(null);
+          sessionStorage.removeItem("impersonated_org_id");
           loadingUserRef.current = null;
           loadPromiseRef.current = null;
         }
@@ -179,6 +197,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    async function syncImpersonation() {
+      const activeOrgId = impersonatedOrgId || profile?.organization_id;
+      if (activeOrgId) {
+        const { data: org } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("id", activeOrgId)
+          .single();
+        if (org) {
+          const orgData = { ...org };
+          if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
+          setOrg(orgData);
+        } else {
+          setOrg(null);
+        }
+      } else {
+        setOrg(null);
+      }
+    }
+    if (profile) {
+      syncImpersonation();
+    }
+  }, [impersonatedOrgId, profile]);
 
   async function signIn(email: string, password: string) {
     setLoading(true);
@@ -235,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       session, user, profile, organization, loading, profileLoading, profileError,
       signIn, signUp, signOut, refreshProfile,
+      impersonatedOrgId, impersonateOrganization,
     }}>
       {children}
     </AuthContext.Provider>

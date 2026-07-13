@@ -59,7 +59,7 @@ export function useRegistrationByQR(qrRef: string | undefined) {
 export function useSubmitRegistration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: Omit<Registration, "id" | "qr_ref" | "created_at" | "status" | "checked_in_at">) => {
+    mutationFn: async (payload: Omit<Registration, "id" | "qr_ref" | "created_at" | "status" | "checked_in_at"> & { status?: "checked-in" | "apology" }) => {
       const sanitizedVisits = payload.visits
         ? payload.visits
             .map(v => ({
@@ -135,8 +135,8 @@ export function useSubmitRegistration() {
         .from("registrations")
         .insert({
           ...sanitizedPayload,
-          status: "checked-in",
-          checked_in_at: new Date().toISOString()
+          status: payload.status || "checked-in",
+          checked_in_at: (payload.status || "checked-in") === "checked-in" ? new Date().toISOString() : null
         })
         .select()
         .single();
@@ -294,14 +294,21 @@ export function useUpdateRegistration() {
   });
 }
 
-// ─── Check in an attendee (admin) ─────────────────────────────────────────────
+// ─── Check in or update attendee status (admin) ──────────────────────────────
 export function useCheckIn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
+    mutationFn: async ({ id, eventId, status = "checked-in" }: { id: string; eventId: string; status?: "checked-in" | "apology" | "pending" }) => {
+      const updates: any = { status };
+      if (status === "checked-in") {
+        updates.checked_in_at = new Date().toISOString();
+      } else {
+        updates.checked_in_at = null;
+      }
+
       const { data, error } = await supabase
         .from("registrations")
-        .update({ status: "checked-in", checked_in_at: new Date().toISOString() })
+        .update(updates)
         .eq("id", id)
         .select()
         .single();
@@ -310,6 +317,7 @@ export function useCheckIn() {
     },
     onSuccess: ({ eventId }) => {
       qc.invalidateQueries({ queryKey: ["registrations", eventId] });
+      qc.invalidateQueries({ queryKey: ["org-registrations"] });
     },
   });
 }

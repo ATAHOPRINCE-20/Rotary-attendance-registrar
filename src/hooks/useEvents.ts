@@ -21,6 +21,23 @@ export function useAdminEvents(organizationId: string | undefined) {
   });
 }
 
+// ─── Fetch all events for the admin's org including archived ones ────────────
+export function useAllOrgEvents(organizationId: string | undefined) {
+  return useQuery({
+    queryKey: ["all-org-events", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("organization_id", organizationId!)
+        .order("date", { ascending: true });
+      if (error) throw error;
+      return data as Event[];
+    },
+  });
+}
+
 // ─── Fetch published events for a specific org (attendee view) ────────────────
 export function usePublicEvents(organizationId: string | undefined) {
   return useQuery({
@@ -80,7 +97,10 @@ export function useCreateEvent() {
       if (error) throw error;
       return data as Event;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-events"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+      qc.invalidateQueries({ queryKey: ["all-org-events"] });
+    },
   });
 }
 
@@ -116,6 +136,7 @@ export function useUpdateEvent() {
     },
     onSuccess: (ev) => {
       qc.invalidateQueries({ queryKey: ["admin-events"] });
+      qc.invalidateQueries({ queryKey: ["all-org-events"] });
       qc.invalidateQueries({ queryKey: ["event", ev.id] });
     },
   });
@@ -134,6 +155,7 @@ export function useDeleteEvent() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-events"] });
+      qc.invalidateQueries({ queryKey: ["all-org-events"] });
       qc.invalidateQueries({ queryKey: ["public-events"] });
     },
   });

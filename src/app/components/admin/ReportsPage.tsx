@@ -73,44 +73,47 @@ export function ReportsPage() {
 
   // Group stats in memory
   const statsByEvent = useMemo(() => {
-    const map: Record<string, { total: number; checkedIn: number; leader: string | null; leaderCount: number }> = {};
+    const map: Record<
+      string,
+      {
+        total: number;
+        checkedIn: number;
+        apologies: number;
+        leader: string | null;
+        leaderCount: number;
+        buddyCounts: Record<string, number>;
+      }
+    > = {};
     if (!allRegs) return map;
 
     allRegs.forEach((r) => {
       const eId = r.event_id;
       if (!map[eId]) {
-        map[eId] = { total: 0, checkedIn: 0, leader: null, leaderCount: 0 };
+        map[eId] = { total: 0, checkedIn: 0, apologies: 0, leader: null, leaderCount: 0, buddyCounts: {} };
       }
       map[eId].total++;
       if (r.status === "checked-in") {
         map[eId].checkedIn++;
+        if (r.buddy_group && r.buddy_group.trim()) {
+          const bg = r.buddy_group.trim();
+          map[eId].buddyCounts[bg] = (map[eId].buddyCounts[bg] || 0) + 1;
+        }
+      } else if (r.status === "apology") {
+        map[eId].apologies++;
       }
     });
 
-    // Compute the buddy group leader per event
-    const buddyCounts: Record<string, Record<string, number>> = {};
-    allRegs.forEach((r) => {
-      if (r.status === "checked-in" && r.buddy_group && r.buddy_group.trim()) {
-        const eId = r.event_id;
-        const bg = r.buddy_group.trim();
-        if (!buddyCounts[eId]) buddyCounts[eId] = {};
-        buddyCounts[eId][bg] = (buddyCounts[eId][bg] || 0) + 1;
-      }
-    });
-
-    Object.entries(buddyCounts).forEach(([eId, counts]) => {
+    Object.entries(map).forEach(([eId, eventStats]) => {
       let maxGroup: string | null = null;
       let maxCount = 0;
-      Object.entries(counts).forEach(([group, count]) => {
+      Object.entries(eventStats.buddyCounts).forEach(([group, count]) => {
         if (count > maxCount) {
           maxCount = count;
           maxGroup = group;
         }
       });
-      if (map[eId]) {
-        map[eId].leader = maxGroup;
-        map[eId].leaderCount = maxCount;
-      }
+      eventStats.leader = maxGroup;
+      eventStats.leaderCount = maxCount;
     });
 
     return map;
@@ -153,7 +156,7 @@ export function ReportsPage() {
       if (eventRegs) {
         const counts: Record<string, number> = {};
         eventRegs.forEach((r) => {
-          if (r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name && r.club_name.trim()) {
+          if (r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name && r.club_name.trim()) {
             const cName = r.club_name.trim();
             counts[cName] = (counts[cName] || 0) + 1;
           }
@@ -175,11 +178,24 @@ export function ReportsPage() {
       }
       const totalRegs = eventRegs?.length ?? 0;
       const checkedInCount = eventRegs?.filter(r => r.status === "checked-in").length ?? 0;
+      const apologyCount = eventRegs?.filter(r => r.status === "apology").length ?? 0;
 
-      // Filter registrations into groups
-      const clubMembers = eventRegs?.filter(r => r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)) ?? [];
-      const visitingRotarians = eventRegs?.filter(r => r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name) ?? [];
-      const guests = eventRegs?.filter(r => !r.is_member) ?? [];
+      // Filter registrations into groups (excluding apologies from present tables)
+      const clubMembers = eventRegs?.filter(r => r.status !== "apology" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)) ?? [];
+      const visitingRotarians = eventRegs?.filter(r => r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name) ?? [];
+      const guests = eventRegs?.filter(r => r.status !== "apology" && !r.is_member) ?? [];
+      const apologies = eventRegs?.filter(r => r.status === "apology") ?? [];
+
+      const apologyRows = apologies.length > 0 ? apologies.map((r, i) => {
+        return `
+          <tr class="${i % 2 === 0 ? "even" : "odd"}">
+            <td class="no">${i + 1}</td>
+            <td class="name">${r.full_name}</td>
+            <td>${r.buddy_group || "—"}</td>
+            <td>${r.phone ?? "—"}</td>
+            <td>${r.email}</td>
+          </tr>`;
+      }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No apologies registered for this event.</td></tr>`;
 
       const checkedInClubCount = clubMembers.filter(r => r.status === "checked-in").length;
       const totalRoster = members?.length ?? 0;
@@ -192,9 +208,53 @@ export function ReportsPage() {
       const eventLeader = statsByEvent[event.id]?.leader;
       const eventLeaderCount = statsByEvent[event.id]?.leaderCount;
 
+      // 5. Calculate buddy group attendance breakdown
+      const configuredGroups = event?.buddy_groups
+        ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+        : organization?.buddy_groups
+        ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+        : [];
+
+      // Gather any additional buddy groups from registrations
+      const presentGroups = new Set<string>();
+      eventRegs?.forEach(r => {
+        if (r.status === "checked-in" && r.buddy_group && r.buddy_group.trim()) {
+          presentGroups.add(r.buddy_group.trim());
+        }
+      });
+
+      const allGroups = Array.from(new Set([...configuredGroups, ...presentGroups]));
+
+      const buddyGroupCounts = allGroups.map(groupName => {
+        const rosterCount = members?.filter(
+          m => m.buddy_group && m.buddy_group.trim().toLowerCase() === groupName.toLowerCase()
+        ).length ?? 0;
+        const presentCount = eventRegs?.filter(
+          r => r.status === "checked-in" && r.buddy_group && r.buddy_group.trim().toLowerCase() === groupName.toLowerCase()
+        ).length ?? 0;
+        const attendancePct = rosterCount > 0 ? (presentCount / rosterCount) * 100 : 0;
+        return { name: groupName, rosterCount, presentCount, attendancePct };
+      });
+
+      // Sort by present count descending, then roster count descending, then name alphabetically
+      buddyGroupCounts.sort((a, b) => {
+        if (b.presentCount !== a.presentCount) return b.presentCount - a.presentCount;
+        if (b.rosterCount !== a.rosterCount) return b.rosterCount - a.rosterCount;
+        return a.name.localeCompare(b.name);
+      });
+
+      const buddyGroupRows = buddyGroupCounts.length > 0 ? buddyGroupCounts.map((bg, i) => {
+        return `
+          <tr class="${i % 2 === 0 ? "even" : "odd"}">
+            <td class="name">${bg.name}</td>
+            <td class="center">${bg.rosterCount}</td>
+            <td class="center" style="font-weight: bold; color: ${bg.presentCount > 0 ? '#047857' : '#64748b'};">${bg.presentCount}</td>
+            <td class="center" style="font-weight: bold; color: ${bg.attendancePct >= 50 ? '#047857' : bg.attendancePct > 0 ? '#b45309' : '#64748b'};">${bg.attendancePct.toFixed(1)}%</td>
+          </tr>`;
+      }).join("") : `<tr><td colspan="4" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No buddy groups configured or present.</td></tr>`;
+
       // Generate HTML rows
       const clubMemberRows = clubMembers.length > 0 ? clubMembers.map((r, i) => {
-        const isCheckedIn = r.status === "checked-in";
         return `
           <tr class="${i % 2 === 0 ? "even" : "odd"}">
             <td class="no">${i + 1}</td>
@@ -210,7 +270,6 @@ export function ReportsPage() {
       }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
 
       const visitingRotarianRows = visitingRotarians.length > 0 ? visitingRotarians.map((r, i) => {
-        const isCheckedIn = r.status === "checked-in";
         return `
           <tr class="${i % 2 === 0 ? "even" : "odd"}">
             <td class="no">${i + 1}</td>
@@ -223,7 +282,6 @@ export function ReportsPage() {
       }).join("") : `<tr><td colspan="6" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
 
       const guestRows = guests.length > 0 ? guests.map((r, i) => {
-        const isCheckedIn = r.status === "checked-in";
         return `
           <tr class="${i % 2 === 0 ? "even" : "odd"}">
             <td class="no">${i + 1}</td>
@@ -318,7 +376,7 @@ export function ReportsPage() {
   <div class="summary">
     <div class="pill pill-blue">Total Registered: ${totalRegs}</div>
     <div class="pill pill-green">Checked In: ${checkedInCount}</div>
-    <div class="pill pill-gold">Absent: ${totalRegs - checkedInCount}</div>
+    <div class="pill pill-gold">Apologies: ${apologyCount}</div>
   </div>
 
   <div class="section-title">1. Club Members</div>
@@ -342,7 +400,23 @@ export function ReportsPage() {
     <tbody>${clubMemberRows}</tbody>
   </table>
 
-  <div class="section-title">2. Visiting Rotarians</div>
+  <div class="section-title">2. Buddy Group Attendance Summary</div>
+  <div class="section-meta">
+    <span>Breakdown of roster headcount, checked-in members, and attendance rate for each buddy group</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Buddy Group Name</th>
+        <th style="text-align: center; width: 20%;">Roster Count</th>
+        <th style="text-align: center; width: 20%;">Present Count</th>
+        <th style="text-align: center; width: 20%;">Attendance Rate (%)</th>
+      </tr>
+    </thead>
+    <tbody>${buddyGroupRows}</tbody>
+  </table>
+
+  <div class="section-title">3. Visiting Rotarians</div>
   <div class="section-meta">
     <span>Checked In: <b>${visitingRotarians.filter(r => r.status === "checked-in").length}</b> of <b>${visitingRotarians.length}</b> registered</span>
     <span>|</span>
@@ -362,7 +436,7 @@ export function ReportsPage() {
     <tbody>${visitingRotarianRows}</tbody>
   </table>
 
-  <div class="section-title">3. Guests & Non-Rotarians</div>
+  <div class="section-title">4. Guests & Non-Rotarians</div>
   <div class="section-meta">
     <span>Checked In: <b>${guests.filter(r => r.status === "checked-in").length}</b> of <b>${guests.length}</b> registered</span>
   </div>
@@ -377,6 +451,23 @@ export function ReportsPage() {
       </tr>
     </thead>
     <tbody>${guestRows}</tbody>
+  </table>
+
+  <div class="section-title">5. Apologies (Absent with Apology)</div>
+  <div class="section-meta">
+    <span>Total absent with apologies: <b>${apologies.length}</b></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Buddy Group</th>
+        <th>Phone</th>
+        <th>Email</th>
+      </tr>
+    </thead>
+    <tbody>${apologyRows}</tbody>
   </table>
 
   <div class="signature-block">
@@ -520,13 +611,32 @@ export function ReportsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {filteredEvents.map((ev) => {
-              const stats = statsByEvent[ev.id] || { total: 0, checkedIn: 0, leader: null, leaderCount: 0 };
+              const stats = statsByEvent[ev.id] || { total: 0, checkedIn: 0, leader: null, leaderCount: 0, buddyCounts: {} };
               const attendancePct = stats.total > 0 ? (stats.checkedIn / stats.total) * 100 : 0;
               const formattedDate = new Date(ev.date).toLocaleDateString("en-GB", {
                 day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
               });
               const isPrinting = printingEventId === ev.id;
               const isExpanded = expandedEventId === ev.id;
+
+              const eventBuddyGroups = ev.buddy_groups
+                ? ev.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+                : organization?.buddy_groups
+                ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+                : [];
+
+              const allEventGroups = Array.from(new Set([
+                ...eventBuddyGroups,
+                ...Object.keys(stats.buddyCounts)
+              ]));
+
+              // Sort by present count descending, then group name alphabetically
+              allEventGroups.sort((a, b) => {
+                const countA = stats.buddyCounts[a] || 0;
+                const countB = stats.buddyCounts[b] || 0;
+                if (countB !== countA) return countB - countA;
+                return a.localeCompare(b);
+              });
 
               return (
                 <div 
@@ -583,58 +693,100 @@ export function ReportsPage() {
 
                   {/* Expanded Content details */}
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-4 border-t border-dashed border-border/60 bg-slate-50/50 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                    <div className="px-5 pb-5 pt-4 border-t border-dashed border-border/60 bg-slate-50/50 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col gap-4">
                       
-                      {/* Detailed stats grids */}
-                      <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
-                        {/* Headcounts */}
-                        <div className="flex gap-6">
-                          <div>
-                            <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Total Attendees</p>
-                            <p className="text-base font-black mt-0.5" style={{ color: NAVY }}>{stats.total}</p>
+                      {/* Top Row: Stats summary & Actions */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                        {/* Detailed stats grids */}
+                        <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+                          {/* Headcounts */}
+                          <div className="flex gap-6">
+                            <div>
+                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Total Registered</p>
+                              <p className="text-base font-black mt-0.5" style={{ color: NAVY }}>{stats.total}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Present</p>
+                              <p className="text-base font-black mt-0.5 text-emerald-700">{stats.checkedIn}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Apologies</p>
+                              <p className="text-base font-black mt-0.5 text-amber-700">{stats.apologies || 0}</p>
+                            </div>
+                          </div>
+
+                          {/* Buddy Group Leader */}
+                          <div className="min-w-[140px]">
+                            <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Buddy Group Leader</p>
+                            {stats.leader ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 mt-1">
+                                🌟 {stats.leader} ({stats.leaderCount} Present)
+                              </span>
+                            ) : (
+                              <p className="text-xs text-muted-foreground mt-1 font-medium">—</p>
+                            )}
                           </div>
                         </div>
 
-                        {/* Buddy Group Leader */}
-                        <div className="min-w-[140px]">
-                          <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Buddy Group Leader</p>
-                          {stats.leader ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 mt-1">
-                              🌟 {stats.leader} ({stats.leaderCount} Present)
-                            </span>
-                          ) : (
-                            <p className="text-xs text-muted-foreground mt-1 font-medium">—</p>
-                          )}
+                        {/* Expanded Actions */}
+                        <div 
+                          className="flex items-center gap-2 pt-2 sm:pt-0"
+                          onClick={(e) => e.stopPropagation()} // protect click area
+                        >
+                          <OutlineButton
+                            onClick={() => handlePrintReport(ev)}
+                            disabled={isPrinting}
+                            className="py-2 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5"
+                          >
+                            {isPrinting ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                Loading...
+                              </>
+                            ) : (
+                              <>
+                                <Printer size={13} /> Print Register
+                              </>
+                            )}
+                          </OutlineButton>
+                          <button
+                            onClick={() => navigate(`/admin/checkin/${ev.id}`)}
+                            className="py-2 px-3.5 bg-[#17458F] hover:bg-[#17458F]/95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <Users size={13} /> View Attendees
+                          </button>
                         </div>
                       </div>
 
-                      {/* Expanded Actions */}
-                      <div 
-                        className="flex items-center gap-2 pt-2 sm:pt-0"
-                        onClick={(e) => e.stopPropagation()} // protect click area
-                      >
-                        <OutlineButton
-                          onClick={() => handlePrintReport(ev)}
-                          disabled={isPrinting}
-                          className="py-2 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5"
-                        >
-                          {isPrinting ? (
-                            <>
-                              <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-                              Loading...
-                            </>
-                          ) : (
-                            <>
-                              <Printer size={13} /> Print Register
-                            </>
-                          )}
-                        </OutlineButton>
-                        <button
-                          onClick={() => navigate(`/admin/checkin/${ev.id}`)}
-                          className="py-2 px-3.5 bg-[#17458F] hover:bg-[#17458F]/95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                        >
-                          <Users size={13} /> View Attendees
-                        </button>
+                      {/* Bottom Section: Buddy Group Breakdown */}
+                      <div className="pt-3 border-t border-slate-200/60">
+                        <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider mb-2">Buddy Group Breakdown (Present)</p>
+                        {allEventGroups.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No buddy groups configured.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {allEventGroups.map((group) => {
+                              const count = stats.buddyCounts[group] || 0;
+                              const isLeader = group === stats.leader && count > 0;
+                              return (
+                                <div
+                                  key={group}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                                    isLeader
+                                      ? "bg-amber-50 text-amber-800 border-amber-200 shadow-sm"
+                                      : count > 0
+                                      ? "bg-emerald-50/50 text-emerald-800 border-emerald-100"
+                                      : "bg-slate-50 text-slate-400 border-slate-100"
+                                  }`}
+                                >
+                                  {isLeader && <span>🌟</span>}
+                                  <span>{group}:</span>
+                                  <span className="font-extrabold">{count}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

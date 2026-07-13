@@ -53,7 +53,7 @@ export function CommsPage() {
   ];
   
   if (organization?.buddy_groups) {
-    const groups = organization.buddy_groups.split(",").map(g => g.trim()).filter(Boolean);
+    const groups = Array.from(new Set<string>(organization.buddy_groups.split(",").map(g => g.trim()).filter(Boolean)));
     groups.forEach(g => {
       audienceOptions.push({ value: `group:${g}`, label: `Group: ${g}` });
     });

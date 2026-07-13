@@ -328,11 +328,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     sessionStorage.setItem(storageKey, JSON.stringify(data));
   }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, isManualClubInput, storageKey]);
 
-  const buddyGroupsList = event?.buddy_groups
-    ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : organization?.buddy_groups
-    ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-    : ["Group A", "Group B", "Group C", "Group D"];
+  const buddyGroupsList = Array.from(new Set<string>(
+    event?.buddy_groups
+      ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : organization?.buddy_groups
+      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      : ["Group A", "Group B", "Group C", "Group D"]
+  ));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
