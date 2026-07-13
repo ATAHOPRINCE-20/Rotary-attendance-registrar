@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Heart,
   Building,
+  CreditCard,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -74,6 +75,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
       { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
       { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
       { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
+      { label: "Subscription",   to: "/admin/billing",        icon: CreditCard      },
     ] : []),
   ];
 

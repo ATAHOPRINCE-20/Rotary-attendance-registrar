@@ -82,6 +82,7 @@ const DirectoryPage = lazyWithRetry(() => import("./components/admin/DirectoryPa
 const TeamPage = lazyWithRetry(() => import("./components/admin/TeamPage"), "TeamPage");
 const DonationCampaignsPage = lazyWithRetry(() => import("./components/admin/DonationCampaignsPage"), "DonationCampaignsPage");
 const TenantsPage = lazyWithRetry(() => import("./components/admin/TenantsPage"), "TenantsPage");
+const BillingPage = lazyWithRetry(() => import("./components/admin/BillingPage"), "BillingPage");
 
 
 const queryClient = new QueryClient({
@@ -181,6 +182,7 @@ function AppRoutes() {
           <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
           <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
           <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
+          <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -214,6 +216,7 @@ function AppRoutes() {
       <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
       <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
       <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
+      <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
 
       {/* Tenant (public attendee) routes — subpath fallback scoped to :slug */}
       <Route

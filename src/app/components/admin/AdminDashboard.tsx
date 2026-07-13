@@ -23,9 +23,11 @@ import {
   BookOpen,
   MessageSquare,
   Mail,
+  CreditCard,
 } from "lucide-react";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { getLicenseStatus } from "../../../lib/licensing";
 
 export function AdminDashboard() {
   const { profile, organization, signOut, refreshProfile } = useAuth();
@@ -475,7 +477,7 @@ export function AdminDashboard() {
                     <div className="flex flex-col gap-3">
                       <form onSubmit={handleSaveWhatsAppSettings} className="flex flex-col gap-3 border-b border-border/40 pb-4">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Welcome Template Message</label>
+                           <label className="text-[10px] font-bold text-muted-foreground uppercase">Welcome Template Message</label>
                           <textarea
                             placeholder="Template (use tags: {full_name}, {event_title}, {qr_ref}, {org_name})"
                             value={welcomeTemplate}
@@ -815,6 +817,8 @@ export function AdminDashboard() {
             </div>
           </div>
         )}
+
+
       </AdminLayout>
   );
 }
