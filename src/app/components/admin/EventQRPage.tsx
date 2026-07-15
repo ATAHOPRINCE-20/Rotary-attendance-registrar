@@ -9,6 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { getTenantUrl } from "../../../lib/subdomain";
 import { ChevronLeft, Download, Printer, Share2, Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { downloadQR } from "../../../lib/qr";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 
@@ -87,7 +88,9 @@ export function EventQRPage() {
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-border flex flex-col items-center gap-4">
-            <QRCodeSVG value={publicUrl} size={240} level="H" includeMargin={true} />
+            <div id="event-qr-svg-container">
+              <QRCodeSVG id="event-qr-svg" value={publicUrl} size={240} level="H" includeMargin={true} />
+            </div>
             <div className="text-center">
               <h2 className="text-lg font-bold" style={{ color: NAVY }}>{event.title}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -113,12 +116,15 @@ export function EventQRPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-2">
+            <div className="grid grid-cols-3 gap-3 mt-2">
+              <OutlineButton onClick={() => downloadQR("event-qr-svg", `event-${event.id}-qr`)} className="w-full justify-center flex items-center gap-1.5">
+                <Download size={15} /> Download
+              </OutlineButton>
               <OutlineButton onClick={printQR} className="w-full justify-center flex items-center gap-1.5">
-                <Printer size={15} /> Print Poster
+                <Printer size={15} /> Print
               </OutlineButton>
               <GoldButton onClick={copyLink} className="w-full justify-center flex items-center gap-1.5">
-                <Share2 size={15} /> Share Link
+                <Share2 size={15} /> Share
               </GoldButton>
             </div>
           </div>

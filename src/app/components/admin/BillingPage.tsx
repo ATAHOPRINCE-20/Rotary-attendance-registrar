@@ -17,6 +17,19 @@ import {
   Phone,
 } from "lucide-react";
 
+const FeatureRow = ({ active, label }: { active: boolean, label: string }) => (
+  <div className="flex items-center gap-2.5">
+    {active ? (
+      <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+    ) : (
+      <X size={14} className="text-rose-400 shrink-0" />
+    )}
+    <span className={`text-xs ${active ? "text-slate-700 font-medium" : "text-slate-400 line-through"}`}>
+      {label}
+    </span>
+  </div>
+);
+
 export function BillingPage() {
   const { organization, refreshProfile } = useAuth();
   
@@ -152,123 +165,140 @@ export function BillingPage() {
         </div>
 
         {/* ── Dashboard Content ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
           
-          {/* Left panel: Current Subscription Details */}
-          <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm md:col-span-2 flex flex-col gap-6">
+          {/* 1. Free Plan Card */}
+          <div className={`bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between ${!isTrial && !isStandard ? 'border-slate-400 ring-2 ring-slate-50/50' : 'border-border/40'}`}>
             <div>
-              <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                Plan Overview
-              </h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Current active plan settings and features checklist.
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-bold text-slate-800">Free Plan</h3>
+                {!isTrial && !isStandard && <span className="bg-slate-200 text-slate-800 text-[10px] font-black uppercase px-3 py-1 rounded-full">Active</span>}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4 h-8">Basic capabilities for small clubs or tight budgets.</p>
+
+              <div className="bg-slate-50 text-slate-600 text-xs font-bold p-3 rounded-xl text-center mb-6 border border-slate-100">
+                0 UGX / forever
+              </div>
+
+              <div className="space-y-3 mt-4">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">Capabilities</h4>
+                <FeatureRow active={true} label="Automatic Check-in Tracking" />
+                <FeatureRow active={true} label="Up to 50 members" />
+                <FeatureRow active={true} label="Up to 2 events" />
+                <FeatureRow active={false} label="PDF Reports & Registers" />
+                <FeatureRow active={false} label="WhatsApp Comms" />
+                <FeatureRow active={false} label="Donation Campaigns" />
+                <FeatureRow active={false} label="In-depth Analytics" />
+              </div>
             </div>
-
-            {/* Plan Info Card */}
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Current Plan</span>
-                  <span className="text-lg font-black mt-0.5 block capitalize" style={{ color: NAVY }}>
-                    {license.tier} Plan
-                  </span>
-                </div>
-                <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${
-                  isStandard 
-                    ? "bg-purple-100 text-purple-800" 
-                    : isTrial 
-                    ? "bg-indigo-100 text-indigo-800" 
-                    : "bg-slate-100 text-slate-800"
-                }`}>
-                  {license.tier}
-                </span>
+            
+            {/* If they are on trial, show that they will downgrade to this */}
+            {isTrial && (
+              <div className="mt-6 pt-4 border-t border-slate-100 text-[10px] text-center text-slate-500 italic">
+                You will automatically downgrade to this plan when your trial expires.
               </div>
+            )}
+          </div>
 
-              <div className="flex items-center justify-between border-t border-slate-200/60 pt-4">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                    {license.isExpired ? "Subscription Status" : "Renewal / Expiration Date"}
-                  </span>
-                  <span className={`text-sm font-extrabold mt-0.5 block ${license.isExpired ? "text-rose-600" : "text-slate-700"}`}>
-                    {license.isExpired 
-                      ? "Expired" 
-                      : isStandard 
-                      ? expiresDateStr 
-                      : isTrial 
-                      ? `${license.daysRemaining} days remaining in trial` 
-                      : "Indefinite Free Plan"}
-                  </span>
-                </div>
+          {/* 2. Trial Plan Card */}
+          <div className={`bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between ${isTrial ? 'border-indigo-400 ring-2 ring-indigo-50/50' : 'border-border/40 opacity-80'}`}>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-bold text-slate-800">30-Day Trial</h3>
+                {isTrial && <span className="bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase px-3 py-1 rounded-full">Active</span>}
               </div>
-
-              {license.isExpired && (
-                <div className="bg-rose-50 border border-rose-100 rounded-xl p-3.5 flex items-start gap-2.5">
-                  <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-rose-800 font-bold leading-normal">
-                    Your subscription has expired. Upgraded features (PDF exports, WhatsApp notifications, unlimited directories) are currently locked until subscription renewal.
-                  </p>
+              <p className="text-xs text-muted-foreground mb-4 h-8">Full access to test drive the platform when you first join.</p>
+              
+              {isTrial ? (
+                <div className="bg-indigo-50 text-indigo-800 text-xs font-bold p-3 rounded-xl text-center mb-6 border border-indigo-100">
+                  {license.daysRemaining} days remaining
+                </div>
+              ) : (
+                <div className="bg-slate-50 text-slate-500 text-xs font-bold p-3 rounded-xl text-center mb-6 border border-slate-100">
+                  {organization?.subscription_tier === 'free' ? 'Expired' : 'Not Active'}
                 </div>
               )}
-            </div>
 
-            {/* Feature Access Checklist */}
-            <div className="border-t border-slate-100 pt-5">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Included Plan Capabilities</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {[
-                  { label: "Automatic Check-in Tracking", active: true },
-                  { label: "Roster / Member Directory", active: true, info: license.limits.maxMembers === Infinity ? "Unlimited" : `Up to ${license.limits.maxMembers} members` },
-                  { label: "Vercel Calendar Scheduling", active: true, info: license.limits.maxEvents === Infinity ? "Unlimited" : `Up to ${license.limits.maxEvents} events` },
-                  { label: "PDF Reports & printed registers", active: license.features.pdfExport },
-                  { label: "WhatsApp Welcome Notifications", active: license.features.whatsappComms },
-                  { label: "Financial Donation Campaigns", active: license.features.donations },
-                  { label: "In-depth Analytics & reporting", active: license.features.analytics },
-                  { label: "Buddy Group Metrics", active: license.features.buddyGroups },
-                ].map((feat, idx) => (
-                  <div key={idx} className="flex items-center gap-2.5">
-                    <CheckCircle2 size={16} className={feat.active ? "text-emerald-500 shrink-0" : "text-slate-300 shrink-0"} />
-                    <span className={`text-xs ${feat.active ? "text-slate-700 font-semibold" : "text-slate-400 line-through"}`}>
-                      {feat.label} {feat.info && <span className="text-[10px] text-muted-foreground ml-1">({feat.info})</span>}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-3 mt-4">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">Capabilities</h4>
+                <FeatureRow active={true} label="Automatic Check-in Tracking" />
+                <FeatureRow active={true} label="Unlimited Members" />
+                <FeatureRow active={true} label="Unlimited Events" />
+                <FeatureRow active={true} label="PDF Reports & Registers" />
+                <FeatureRow active={true} label="WhatsApp Comms" />
+                <FeatureRow active={true} label="Donation Campaigns" />
+                <FeatureRow active={true} label="In-depth Analytics" />
               </div>
             </div>
           </div>
 
-          {/* Right panel: Payment Prompt Option */}
-          <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-6 justify-between min-h-[250px]">
+          {/* 3. Standard Plan Card */}
+          <div className={`bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between relative ${isStandard ? 'border-[#17458F] ring-2 ring-[#17458F]/10' : 'border-border/40'}`}>
+            {/* Optional badge */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#17458F] text-white text-[10px] font-black uppercase px-4 py-1 rounded-full shadow-sm">
+              Recommended
+            </div>
+
             <div>
-              <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                Licensing Actions
-              </h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Upgrade or extend your plan using Mobile Money instantly.
-              </p>
+              <div className="flex items-center justify-between mb-2 mt-2">
+                <h3 className="text-base font-bold" style={{ color: NAVY }}>Standard Plan</h3>
+                {isStandard && <span className="bg-purple-100 text-purple-800 text-[10px] font-black uppercase px-3 py-1 rounded-full">Active</span>}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4 h-8">Unrestricted access to all tools for growing clubs.</p>
 
-              <div className="mt-4 flex flex-col gap-1.5 text-left text-xs bg-slate-50 border border-slate-100 rounded-xl p-4">
-                <p className="font-bold text-slate-800">Standard Plan Pricing:</p>
-                <p className="text-muted-foreground mt-1 flex items-center justify-between">
-                  <span>Monthly Plan:</span> <strong style={{ color: NAVY }}>100,000 UGX</strong>
-                </p>
-                <p className="text-muted-foreground flex items-center justify-between">
-                  <span>Annual Plan:</span> <strong style={{ color: NAVY }}>1,000,000 UGX</strong>
-                </p>
+              <div className="bg-slate-50 text-slate-800 text-xs font-bold p-3 rounded-xl text-center mb-6 border border-slate-100 flex flex-col gap-1">
+                <span>100,000 UGX / month</span>
+                <span className="text-[10px] font-normal text-slate-500">or 1,000,000 UGX / year</span>
+              </div>
+
+              <div className="space-y-3 mt-4">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">Capabilities</h4>
+                <FeatureRow active={true} label="Automatic Check-in Tracking" />
+                <FeatureRow active={true} label="Unlimited Members" />
+                <FeatureRow active={true} label="Unlimited Events" />
+                <FeatureRow active={true} label="PDF Reports & Registers" />
+                <FeatureRow active={true} label="WhatsApp Comms" />
+                <FeatureRow active={true} label="Donation Campaigns" />
+                <FeatureRow active={true} label="In-depth Analytics" />
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowBillingModal(true)}
-              className="w-full py-3 rounded-xl text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] active:scale-[0.99]"
-              style={{ background: GOLD }}
-            >
-              <CreditCard size={14} />
-              Upgrade / Renew Now
-            </button>
+            <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-3">
+              {isStandard ? (
+                <>
+                  <div className="text-center text-[10px] font-bold text-slate-500 uppercase">
+                    Renews / Expires on: <span className={license.isExpired ? "text-rose-600" : "text-slate-800"}>{expiresDateStr || "Unknown"}</span>
+                  </div>
+                  {license.isExpired && (
+                    <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 flex items-start gap-2 mb-2">
+                      <AlertTriangle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-rose-800 font-bold leading-tight">
+                        Your subscription has expired. Upgraded features are locked.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowBillingModal(true)}
+                    className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]"
+                    style={{ background: NAVY }}
+                  >
+                    Renew Subscription
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowBillingModal(true)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] active:scale-[0.99]"
+                  style={{ background: GOLD }}
+                >
+                  <CreditCard size={14} />
+                  Upgrade Now
+                </button>
+              )}
+            </div>
           </div>
-
         </div>
 
         {/* ── Subscription Billing Modal ── */}

@@ -1,10 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit } from './utils/rate-limit';
 import { Redis } from '@upstash/redis';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+let supabase: ReturnType<typeof createClient> | null = null;
+try {
+  if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+} catch (e) {
+  console.warn("Supabase client init failed:", e);
+}
 
 // Only initialize Redis if credentials are provided in env
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL || '';
@@ -32,6 +41,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Rate Limiting (30 requests per minute per IP)
+  const rateLimitResult = await rateLimit(req, 'clubs', 30, 60);
+  if (!rateLimitResult.success) {
+    return res.status(429).json({ error: rateLimitResult.error });
+  }
+
   try {
     // 1. Check Redis cache if enabled
     if (redis) {
@@ -43,6 +58,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Fetch from Supabase
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase configuration is missing or invalid' });
+    }
+
     const { data: clubs, error } = await supabase
       .from('rotary_clubs')
       .select('*')

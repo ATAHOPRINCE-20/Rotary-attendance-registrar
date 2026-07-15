@@ -34,26 +34,16 @@ export function getLicenseStatus(org: Organization | null): LicenseStatus {
   const expiresAt = org.subscription_expires_at;
   const isExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
 
-  // Let's define a 14-day trial for new clubs from their registration date (created_at)
-  const createdDate = new Date(org.created_at).getTime();
-  const trialDuration = 14 * 24 * 60 * 60 * 1000;
-  const trialExpiryDate = createdDate + trialDuration;
-  const isTrialActive = Date.now() < trialExpiryDate && tier === "free";
-
   let daysRemaining = 0;
-  if (tier === "standard" || tier === "premium") {
-    if (expiresAt) {
-      daysRemaining = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-    }
-  } else if (isTrialActive) {
-    daysRemaining = Math.max(0, Math.ceil((trialExpiryDate - Date.now()) / (1000 * 60 * 60 * 24)));
+  if (expiresAt && (tier === "trial" || tier === "standard" || tier === "premium")) {
+    daysRemaining = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   }
 
   // Trial, Standard and Premium get all features
-  const hasFullAccess = !isExpired && (tier === "standard" || tier === "premium" || isTrialActive);
+  const hasFullAccess = !isExpired && (tier === "standard" || tier === "premium" || tier === "trial");
 
   return {
-    tier: isTrialActive ? "trial" : (tier as any),
+    tier: tier as "free" | "standard" | "premium" | "trial",
     isExpired,
     daysRemaining,
     features: {

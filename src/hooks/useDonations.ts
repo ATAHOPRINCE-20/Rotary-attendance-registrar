@@ -12,6 +12,7 @@ export function useOrgDonations(organizationId: string | undefined) {
         .from("donations")
         .select("*, events(title)")
         .eq("organization_id", organizationId!)
+        .neq("category", "subscription")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as (Donation & { events: { title: string } | null })[];

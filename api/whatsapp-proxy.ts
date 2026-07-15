@@ -1,9 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit } from './utils/rate-limit';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+let supabase: ReturnType<typeof createClient> | null = null;
+try {
+  if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+} catch (e) {
+  console.warn("Supabase client init failed:", e);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,6 +26,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // We support both GET (for polling status) and POST (for starting session)
   const isPost = req.method === 'POST';
   
+  // Rate Limiting (60 requests per minute per IP)
+  const rateLimitResult = await rateLimit(req, 'whatsapp-proxy', 60, 60);
+  if (!rateLimitResult.success) {
+    return res.status(429).json({ error: rateLimitResult.error });
+  }
+
   // Extract parameters from body (POST) or query (GET)
   const params = isPost ? req.body : req.query;
   
@@ -32,6 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
   }
   const token = authHeader.split(' ')[1];
+
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase configuration is missing or invalid' });
+  }
 
   // Verify the token by calling getUser
   const { data: { user }, error: authError } = await (supabase.auth as any).getUser(token);

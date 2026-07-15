@@ -136,6 +136,9 @@ export function OrgSetupPage() {
       }
 
       // 1. Create the organization
+      const trialEndDate = new Date();
+      trialEndDate.setDate(trialEndDate.getDate() + 30);
+
       const { data: org, error: orgErr } = await supabase
         .from("organizations")
         .insert({
@@ -145,6 +148,8 @@ export function OrgSetupPage() {
           district: district.trim() ? sanitizeInput(district) : null,
           country: country.trim() ? sanitizeInput(country) : null,
           website: website.trim() ? sanitizeInput(website) : null,
+          subscription_tier: "trial",
+          subscription_expires_at: trialEndDate.toISOString(),
         })
         .select()
         .single();

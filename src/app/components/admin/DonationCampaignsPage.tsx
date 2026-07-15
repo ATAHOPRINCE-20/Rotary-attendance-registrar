@@ -27,15 +27,18 @@ import {
   Calendar,
   QrCode,
   Share2,
+  Share2,
   Printer,
   Copy,
-  Check
+  Check,
+  Download
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { QRCodeSVG } from "qrcode.react";
 import { getTenantUrl } from "../../../lib/subdomain";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
+import { downloadQR } from "../../../lib/qr";
 
 export function DonationCampaignsPage() {
   const { organization } = useAuth();
@@ -878,12 +881,15 @@ export function DonationCampaignsPage() {
                 </button>
               </div>
 
-              <div className="w-full grid grid-cols-2 gap-4 mt-2">
-                <OutlineButton onClick={() => printQR(qrCampaign)} className="w-full justify-center flex items-center gap-1.5 py-2.5">
-                  <Printer size={15} /> Print Poster
+              <div className="w-full grid grid-cols-3 gap-2 mt-2">
+                <OutlineButton onClick={() => downloadQR("campaign-qr-svg", `campaign-${qrCampaign.id}-qr`)} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Download size={14} /> Download
                 </OutlineButton>
-                <GoldButton onClick={() => copyCampaignLink(qrCampaign)} className="w-full justify-center flex items-center gap-1.5 py-2.5">
-                  <Share2 size={15} /> Share Link
+                <OutlineButton onClick={() => printQR(qrCampaign)} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Printer size={14} /> Print
+                </OutlineButton>
+                <GoldButton onClick={() => copyCampaignLink(qrCampaign)} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Share2 size={14} /> Share
                 </GoldButton>
               </div>
             </div>
@@ -952,12 +958,15 @@ export function DonationCampaignsPage() {
                 </button>
               </div>
 
-              <div className="w-full grid grid-cols-2 gap-4 mt-2">
-                <OutlineButton onClick={printGeneralQR} className="w-full justify-center flex items-center gap-1.5 py-2.5">
-                  <Printer size={15} /> Print Poster
+              <div className="w-full grid grid-cols-3 gap-2 mt-2">
+                <OutlineButton onClick={() => downloadQR("general-donation-qr-svg", "general-donation-qr")} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Download size={14} /> Download
                 </OutlineButton>
-                <GoldButton onClick={copyGeneralLink} className="w-full justify-center flex items-center gap-1.5 py-2.5">
-                  <Share2 size={15} /> Share Link
+                <OutlineButton onClick={printGeneralQR} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Printer size={14} /> Print
+                </OutlineButton>
+                <GoldButton onClick={copyGeneralLink} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                  <Share2 size={14} /> Share
                 </GoldButton>
               </div>
             </div>

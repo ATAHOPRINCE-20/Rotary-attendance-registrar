@@ -14,6 +14,7 @@ import { NAVY, GOLD, EVENT_TYPES, parseOrgWebsite, serializeOrgWebsite } from ".
 import { supabase } from "../../../lib/supabase";
 import { QRCodeSVG } from "qrcode.react";
 import { getTenantUrl } from "../../../lib/subdomain";
+import { downloadQR } from "../../../lib/qr";
 import {
   Calendar,
   Plus,
@@ -30,6 +31,7 @@ import {
   Copy,
   Check,
   Share2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -608,18 +610,21 @@ export function EventsPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-1">
-                  <OutlineButton onClick={handlePrintAllInOne} className="w-full justify-center flex items-center gap-1.5 py-2.5">
-                    <Printer size={14} /> Print Poster
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  <OutlineButton onClick={() => downloadQR("general-qr-svg", "all-in-one-qr")} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                    <Download size={14} /> Download
+                  </OutlineButton>
+                  <OutlineButton onClick={handlePrintAllInOne} className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs">
+                    <Printer size={14} /> Print
                   </OutlineButton>
                   <GoldButton 
                     onClick={() => {
                       navigator.clipboard.writeText(generalRegUrl);
                       toast.success("Link shared to clipboard!");
                     }} 
-                    className="w-full justify-center flex items-center gap-1.5 py-2.5"
+                    className="w-full justify-center flex items-center gap-1.5 py-2.5 px-2 text-xs"
                   >
-                    <Share2 size={14} /> Share Link
+                    <Share2 size={14} /> Share
                   </GoldButton>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit } from './utils/rate-limit';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
@@ -76,6 +77,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate Limiting (10 requests per minute per IP)
+  const rateLimitResult = await rateLimit(req, 'initiate-donation', 10, 60);
+  if (!rateLimitResult.success) {
+    return res.status(429).json({ error: rateLimitResult.error });
   }
 
   const {

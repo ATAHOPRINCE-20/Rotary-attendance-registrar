@@ -13,6 +13,7 @@ interface AuthContextValue {
   profileLoading: boolean;
   profileError:   boolean;
   signIn:         (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: (orgId?: string | null, role?: string | null) => Promise<{ error: string | null }>;
   signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) => Promise<{ error: string | null; session: Session | null }>;
   signOut:        () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -68,13 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (profErr) {
           console.warn("[AuthContext] loadProfile error:", profErr.code, profErr.message);
-          // PGRST116 = row not found → genuinely new user, no profile yet
           if (profErr.code === "PGRST116") {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
-            const inviteOrgId = currentUser?.user_metadata?.organization_id;
-            const inviteRole = currentUser?.user_metadata?.role || "staff";
+            const inviteOrgId = currentUser?.user_metadata?.organization_id || localStorage.getItem("pending_org_id");
+            const inviteRole = currentUser?.user_metadata?.role || localStorage.getItem("pending_role") || "staff";
             
             if (inviteOrgId) {
+              localStorage.removeItem("pending_org_id");
+              localStorage.removeItem("pending_role");
               const { data: newProf, error: insertErr } = await supabase
                 .from("profiles")
                 .insert({
@@ -239,6 +241,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
+  async function signInWithGoogle(orgId?: string | null, role?: string | null) {
+    setLoading(true);
+    if (orgId) {
+      localStorage.setItem("pending_org_id", orgId);
+      localStorage.setItem("pending_role", role || "staff");
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/admin/dashboard`,
+      }
+    });
+
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
+    return { error: null };
+  }
+
   async function signUp(email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) {
     setLoading(true);
     const sanitizedName = sanitizeRequiredInput(fullName);
@@ -277,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, organization, loading, profileLoading, profileError,
-      signIn, signUp, signOut, refreshProfile,
+      signIn, signInWithGoogle, signUp, signOut, refreshProfile,
       impersonatedOrgId, impersonateOrganization,
     }}>
       {children}

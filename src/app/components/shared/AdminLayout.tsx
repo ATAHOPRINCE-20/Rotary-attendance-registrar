@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router";
 import { ReactNode, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import { getLicenseStatus } from "../../../lib/licensing";
 import { RotaryLogo } from "./RotaryLogo";
 import { NAVY, GOLD } from "../../../lib/constants";
 import {
@@ -22,6 +23,7 @@ import {
   Heart,
   Building,
   CreditCard,
+  Lock,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -59,6 +61,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
   const navigate  = useNavigate();
   const location  = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const license = getLicenseStatus(organization);
 
   const menuItems = [
     { label: "Dashboard",       to: "/admin/dashboard",      icon: LayoutDashboard },
@@ -66,14 +69,14 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
       { label: "Tenants Directory", to: "/admin/tenants",        icon: Building        },
     ] : []),
     { label: "Events",          to: "/admin/events",         icon: Calendar        },
-    { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive   },
+    { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive, restricted: !license.features.pdfExport },
     { label: "Members",         to: "/admin/members",        icon: Users           },
     { label: "Directory",       to: "/admin/directory",      icon: BookOpen        },
     ...(profile?.role !== "staff" ? [
-      { label: "Donation Campaigns", to: "/admin/donation-campaigns", icon: Heart        },
-      { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet          },
-      { label: "Communications", to: "/admin/communications", icon: MessageSquare   },
-      { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3       },
+      { label: "Donation Campaigns", to: "/admin/donation-campaigns", icon: Heart, restricted: !license.features.donations },
+      { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet, restricted: !license.features.donations },
+      { label: "Communications", to: "/admin/communications", icon: MessageSquare, restricted: !license.features.whatsappComms },
+      { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3, restricted: !license.features.analytics },
       { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
       { label: "Subscription",   to: "/admin/billing",        icon: CreditCard      },
     ] : []),
@@ -108,20 +111,23 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
           <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">
             Menu
           </p>
-          {menuItems.map(({ label, to, icon: Icon }) => {
+          {menuItems.map(({ label, to, icon: Icon, restricted }) => {
             const active = location.pathname === to;
             return (
               <button
                 key={to}
-                onClick={() => navigate(to)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
-                  active
-                    ? "bg-muted text-primary shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => navigate(restricted ? "/admin/billing" : to)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 ease-out relative ${
+                  active && !restricted
+                    ? "font-extrabold text-[#001D4A]"
+                    : restricted
+                    ? "font-semibold text-slate-400 opacity-80 hover:bg-slate-50 cursor-pointer"
+                    : "font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md cursor-pointer"
                 }`}
               >
                 <Icon size={16} />
-                {label}
+                <span className="flex-1 text-left">{label}</span>
+                {restricted && <Lock size={12} className="text-slate-400 absolute right-3" />}
               </button>
             );
           })}
@@ -132,7 +138,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
             </p>
             <button
               onClick={() => window.open(`/org/${organization?.slug}`, "_blank")}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out"
             >
               <Globe size={16} />
               Public Portal
@@ -141,14 +147,14 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               href="https://wa.me/256757136062"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out"
             >
               <SupportIcon size={16} />
               System Support
             </a>
             <button
               onClick={signOut}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-all"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out"
             >
               <LogOut size={16} />
               Logout
@@ -287,23 +293,26 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               <p className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase px-3 mb-2">
                 Menu
               </p>
-              {menuItems.map(({ label, to, icon: Icon }) => {
+              {menuItems.map(({ label, to, icon: Icon, restricted }) => {
                 const active = location.pathname === to;
                 return (
                   <button
                     key={to}
                     onClick={() => {
-                      navigate(to);
+                      navigate(restricted ? "/admin/billing" : to);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
-                      active
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 relative ${
+                      active && !restricted
                         ? "bg-muted text-primary shadow-sm"
+                        : restricted
+                        ? "text-slate-400 opacity-80"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     <Icon size={16} />
-                    {label}
+                    <span className="flex-1 text-left">{label}</span>
+                    {restricted && <Lock size={12} className="text-slate-400 absolute right-3" />}
                   </button>
                 );
               })}

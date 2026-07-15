@@ -77,7 +77,7 @@ export interface Organization {
   buddy_groups?: string | null;
   whatsapp_webhook_url?: string | null;
   whatsapp_welcome_template?: string | null;
-  subscription_tier?: "free" | "standard" | "premium" | null;
+  subscription_tier?: "trial" | "free" | "standard" | "premium" | null;
   subscription_expires_at?: string | null;
   is_suspended?: boolean | null;
   momo_phone?: string | null;
