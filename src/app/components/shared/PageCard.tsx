@@ -50,11 +50,11 @@ export function FieldGroup({ label, required, children }: { label: string; requi
 }
 
 export function TextInput({
-  label, type = "text", placeholder, value, onChange, required, name,
+  label, type = "text", placeholder, value, onChange, required, name, list,
 }: {
   label: string; type?: string; placeholder?: string;
   value?: string; onChange?: (v: string) => void;
-  required?: boolean; name?: string;
+  required?: boolean; name?: string; list?: string;
 }) {
   return (
     <FieldGroup label={label} required={required}>
@@ -65,6 +65,7 @@ export function TextInput({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         required={required}
+        list={list}
         className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 transition-all"
       />
     </FieldGroup>

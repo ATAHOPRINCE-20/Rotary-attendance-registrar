@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from "react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useTenant } from "../../../context/TenantContext";
 import { useEvent } from "../../../hooks/useEvents";
 import { useSubmitRegistration, useUpdateRegistration, useRegistrationByQR } from "../../../hooks/useRegistrations";
@@ -166,6 +166,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const clubDropdownRef = useRef<HTMLDivElement>(null);
+  const submitIntentRef = useRef(false);
 
   // Fallback to manual if members table query fails
   useEffect(() => {
@@ -248,6 +249,57 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const [makeups, setMakeups] = useState<ClubActivity[]>(savedData.makeups || []);
   const [existingMakeupsCount, setExistingMakeupsCount] = useState(0);
 
+  // Multi-step form state
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
+
+  const handleNext = () => {
+    setError(null);
+    if (currentStep === 1) {
+      if (!regType) {
+        setError("Please select a registration type.");
+        return;
+      }
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      if (regType === "club_member") {
+        if (!isManualInput && !selectedMemberId) {
+          setError("Please select your name from the list or choose manual entry.");
+          return;
+        }
+        if (isManualInput) {
+          if (!fullName.trim() || !email.trim() || !phone.trim()) {
+            setError("Please fill out all required fields (Name, Email, and Phone).");
+            return;
+          }
+        }
+      } else {
+        if (!fullName.trim() || !email.trim() || !phone.trim()) {
+          setError("Please fill out all required fields (Name, Email, and Phone Number).");
+          return;
+        }
+      }
+      if (regType === "guest" || (regType === "club_member" && buddyGroupsList.length === 0)) {
+        setCurrentStep(4);
+      } else {
+        setCurrentStep(3);
+      }
+    } else if (currentStep === 3) {
+      if (regType === "club_member") {
+        if (buddyGroupsList.length > 0 && !buddyGroup.trim()) {
+          setError("Please select your Buddy Group.");
+          return;
+        }
+      } else if (regType === "rotarian" || regType === "rotaractor") {
+        if (!clubName.trim() || !district.trim()) {
+          setError("Please enter your Club Name and District.");
+          return;
+        }
+      }
+      setCurrentStep(4);
+    }
+  };
+
   // Fetch existing make-ups count for the calendar month of the event
   useEffect(() => {
     if (regType !== "club_member") {
@@ -328,6 +380,17 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     sessionStorage.setItem(storageKey, JSON.stringify(data));
   }, [fullName, email, phone, regType, clubName, district, buddyGroup, occupation, comments, isManualClubInput, storageKey]);
 
+  const clubOptions = useMemo(() => {
+    if (!dbClubs) return [];
+    const isRotaractMode = regType === "rotaractor";
+    return dbClubs
+      .filter(c => {
+        const isRotaractClub = c.name.toLowerCase().includes("rotaract");
+        return isRotaractMode ? isRotaractClub : !isRotaractClub;
+      })
+      .map(c => ({ value: c.name, label: `${c.name}${c.area ? ` (${c.area})` : ''}` }));
+  }, [dbClubs, regType]);
+
   const buddyGroupsList = Array.from(new Set<string>(
     event?.buddy_groups
       ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
@@ -338,6 +401,17 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    if (currentStep < totalSteps) {
+      handleNext();
+      return;
+    }
+
+    if (!submitIntentRef.current) {
+      return;
+    }
+    submitIntentRef.current = false;
+
     setError(null);
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
@@ -515,9 +589,37 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
             </button>
           </div>
 
+          {/* Progress Bar */}
+          <div className="mb-6 flex flex-col gap-2">
+            <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+              <span>Step {currentStep} of {totalSteps}</span>
+              {currentStep === 1 && <span>Category Selection</span>}
+              {currentStep === 2 && <span>Personal Details</span>}
+              {currentStep === 3 && <span>Organization</span>}
+              {currentStep === 4 && <span>Additional Information</span>}
+            </div>
+            <div className="flex gap-2 h-2">
+              {[1, 2, 3, 4].map(step => (
+                <div key={step} className={`flex-1 rounded-full ${currentStep >= step ? 'bg-[#17458F]' : 'bg-muted'}`} />
+              ))}
+            </div>
+          </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {!regType ? (
+
+
+          <form 
+            onSubmit={handleSubmit} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                e.preventDefault();
+                if (currentStep < totalSteps) {
+                  handleNext();
+                }
+              }
+            }}
+            className="mt-8 flex flex-col gap-5"
+          >
+            {currentStep === 1 && (
               <div className="flex flex-col gap-3">
                 <label className="text-sm font-bold text-foreground font-sans" style={{ fontFamily: "var(--font-sans)" }}>
                   Select Registration Type:
@@ -534,7 +636,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                       <button
                         key={type.id}
                         type="button"
-                        onClick={() => setRegType(type.id as any)}
+                        onClick={() => {
+                          setRegType(type.id as any);
+                          setTimeout(() => setCurrentStep(2), 150);
+                        }}
                         className={`flex flex-col text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
                           isSelected
                             ? "border-[#17458F] bg-[#17458F]/5 shadow-sm"
@@ -552,36 +657,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   })}
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center justify-between p-4 rounded-xl border border-[#17458F]/15 bg-[#17458F]/5 animate-in fade-in duration-300">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] uppercase tracking-wider text-[#17458F] font-bold">Registration Category</span>
-                  <span className="text-sm font-bold text-foreground">
-                    {regType === "guest" && "Guest (Visitor)"}
-                    {regType === "rotarian" && "Visiting Rotarian"}
-                    {regType === "rotaractor" && "Visiting Rotaractor"}
-                    {regType === "club_member" && "Club Member"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRegType(null);
-                    setClubName("");
-                    setDistrict("");
-                    setBuddyGroup("");
-                    setSelectedMemberId(null);
-                    setFullName("");
-                  }}
-                  className="text-xs font-bold text-[#F7A81B] hover:underline cursor-pointer"
-                >
-                  Change Category
-                </button>
-              </div>
             )}
 
-            {regType && (
-              <div className="flex flex-col gap-5 mt-2 animate-in fade-in duration-300">
+            {currentStep === 2 && (
+              <div className="flex flex-col gap-5 mt-2 animate-in fade-in slide-in-from-right-2 duration-300">
                 {regType === "club_member" && !isManualInput ? (
                   <div className="relative flex flex-col gap-1.5" ref={dropdownRef}>
                     <label className="text-sm font-semibold text-foreground flex justify-between items-center" style={{ fontFamily: "var(--font-sans)" }}>
@@ -644,6 +723,11 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                                   if (m.email) setEmail(m.email);
                                   if (m.phone) setPhone(m.phone);
                                   setShowMemberDropdown(false);
+                                  if (regType === "guest" || (regType === "club_member" && buddyGroupsList.length === 0)) {
+                                    setCurrentStep(4);
+                                  } else {
+                                    setCurrentStep(3);
+                                  }
                                 }}
                                 className="w-full text-left px-4 py-3 text-xs text-foreground hover:bg-muted/30 transition-all font-semibold flex justify-between items-center cursor-pointer"
                               >
@@ -740,121 +824,35 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   </>
                 )}
 
+              </div>
+            )}
+            
+            {currentStep === 3 && (
+              <div className="flex flex-col gap-5 mt-2 animate-in fade-in slide-in-from-right-2 duration-300">
                 {(regType === "rotarian" || regType === "rotaractor") && (
                   <div className="flex flex-col gap-5 mt-2 animate-in fade-in slide-in-from-top-1">
-                    {!isManualClubInput ? (
-                      <div className="relative flex flex-col gap-1.5" ref={clubDropdownRef}>
-                        <label className="text-sm font-semibold text-foreground flex justify-between items-center" style={{ fontFamily: "var(--font-sans)" }}>
-                          <span>Select Your {regType === "rotaractor" ? "Rotaract" : "Rotary"} Club <span style={{ color: "#F7A81B" }}>*</span></span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsManualClubInput(true);
-                              setClubName("");
-                              setDistrict("");
-                            }}
-                            className="text-xs font-bold text-[#F7A81B] hover:underline cursor-pointer animate-in fade-in duration-200"
-                          >
-                            Club not in list? Type manually
-                          </button>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Type to search your club..."
-                            value={clubName}
-                            onChange={(e) => {
-                              setClubName(e.target.value);
-                              setShowClubDropdown(true);
-                            }}
-                            onFocus={() => setShowClubDropdown(true)}
-                            className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 transition-all font-semibold"
-                            required
-                          />
-                          {showClubDropdown && (
-                            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto z-20 divide-y divide-border/40 animate-in fade-in duration-200">
-                              {(() => {
-                                const query = clubName.toLowerCase();
-                                const isRotaractMode = regType === "rotaractor";
-                                const filtered = dbClubs?.filter(c => {
-                                  const nameLower = c.name.toLowerCase();
-                                  const matchesQuery = nameLower.includes(query) || (c.area && c.area.toLowerCase().includes(query));
-                                  const isRotaractClub = nameLower.includes("rotaract");
-                                  return matchesQuery && (isRotaractMode ? isRotaractClub : !isRotaractClub);
-                                }) || [];
-
-                                if (filtered.length === 0) {
-                                  return (
-                                    <div className="px-4 py-3 text-xs text-muted-foreground flex flex-col gap-1">
-                                      <span>No clubs match "{clubName}"</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsManualClubInput(true);
-                                          setShowClubDropdown(false);
-                                        }}
-                                        className="font-bold text-[#17458F] hover:underline text-left cursor-pointer"
-                                      >
-                                        Type this club name manually
-                                      </button>
-                                    </div>
-                                  );
-                                }
-
-                                return filtered.map((c) => (
-                                  <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setClubName(c.name);
-                                      setDistrict(c.district);
-                                      setShowClubDropdown(false);
-                                    }}
-                                    className="w-full text-left px-4 py-3 text-xs text-foreground hover:bg-muted/30 transition-all font-semibold flex justify-between items-center cursor-pointer"
-                                  >
-                                    <div className="flex flex-col gap-0.5">
-                                      <span>{c.name}</span>
-                                      {c.area && (
-                                        <span className="text-[10px] text-muted-foreground font-normal">
-                                          {c.area}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] bg-[#17458F]/5 text-[#17458F] px-1.5 py-0.5 rounded font-bold shrink-0">
-                                      D{c.district}
-                                    </span>
-                                  </button>
-                                ));
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        <TextInput
-                          label="Club Name"
-                          placeholder="e.g. Rotary Club of Accra"
-                          value={clubName}
-                          onChange={setClubName}
-                          required
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsManualClubInput(false);
-                              setClubName("");
-                              setDistrict("");
-                              setShowClubDropdown(false);
-                            }}
-                            className="text-[10px] font-bold text-[#17458F] hover:underline cursor-pointer"
-                          >
-                            ← Search from Ugandan clubs directory
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-1.5">
+                      <TextInput
+                        label="Club Name"
+                        list="clubs-list"
+                        placeholder="Search or type your club name..."
+                        value={clubName}
+                        onChange={(val) => {
+                          setClubName(val);
+                          const selected = dbClubs?.find(c => c.name === val);
+                          if (selected && selected.district) {
+                            setDistrict(selected.district);
+                          }
+                          if (val && selected) setTimeout(() => setCurrentStep(4), 150);
+                        }}
+                        required
+                      />
+                      <datalist id="clubs-list">
+                        {dbClubs?.map(c => (
+                          <option key={c.id} value={c.name} />
+                        ))}
+                      </datalist>
+                    </div>
 
                     <TextInput
                       label="District"
@@ -867,15 +865,24 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                 )}
 
                 {regType === "club_member" && (
-                  <div className="animate-in fade-in slide-in-from-top-1 flex flex-col gap-5">
+                  <div className="flex flex-col gap-5">
                     {buddyGroupsList.length > 0 ? (
                       <div>
-                        <SelectInput
+                        <TextInput
                           label="Buddy Group"
-                          options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
+                          list="buddy-groups"
+                          placeholder="Select or type your Buddy Group"
                           value={buddyGroup}
-                          onChange={setBuddyGroup}
+                          onChange={(val) => {
+                            setBuddyGroup(val);
+                            if (val && buddyGroupsList.includes(val)) setTimeout(() => setCurrentStep(4), 150);
+                          }}
                         />
+                        <datalist id="buddy-groups">
+                          {buddyGroupsList.map((g: string) => (
+                            <option key={g} value={g} />
+                          ))}
+                        </datalist>
                         <p className="text-xs text-muted-foreground mt-1.5">
                           Please select the Buddy Group you belong to.
                         </p>
@@ -894,10 +901,18 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-6 p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] dark:bg-[#18181B] dark:border-[#27272A] animate-in fade-in slide-in-from-top-2">
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "var(--font-sans)" }}>
-                          Recent Club Activities
+                    </div>
+                )}
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="flex flex-col gap-5 mt-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                {regType === "club_member" && (
+                  <div className="flex flex-col gap-6 p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] dark:bg-[#18181B] dark:border-[#27272A]">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "var(--font-sans)" }}>
+                        Recent Club Activities
                         </h3>
                         <p className="text-[11px] text-muted-foreground mt-1">
                           Report any other club visits or make-ups you completed this month.
@@ -1032,8 +1047,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {regType !== "club_member" && (
                   <div className="grid grid-cols-1 gap-4">
@@ -1065,16 +1079,35 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   </div>
                 )}
 
-                <div className="flex gap-4 mt-2">
-                  <OutlineButton type="button" onClick={() => navigate(-1)} className="flex-1 justify-center">
-                    Cancel
-                  </OutlineButton>
-                  <GoldButton type="submit" disabled={mutation.isPending} className="flex-1 justify-center">
-                    {mutation.isPending ? "Submitting..." : "Register Attendance"}
-                  </GoldButton>
-                </div>
               </div>
             )}
+
+            <div className="flex gap-4 mt-6 pt-4 border-t border-border">
+              {currentStep > 1 ? (
+                <OutlineButton type="button" onClick={() => setCurrentStep(prev => prev - 1)} className="flex-1 justify-center">
+                  Back
+                </OutlineButton>
+              ) : (
+                <OutlineButton type="button" onClick={() => navigate(-1)} className="flex-1 justify-center">
+                  Cancel
+                </OutlineButton>
+              )}
+
+              {currentStep < totalSteps ? (
+                <GoldButton type="button" onClick={handleNext} className="flex-1 justify-center">
+                  Next Step
+                </GoldButton>
+              ) : (
+                <GoldButton 
+                  type="submit" 
+                  onClick={() => { submitIntentRef.current = true; }}
+                  disabled={mutation.isPending} 
+                  className="flex-1 justify-center"
+                >
+                  {mutation.isPending ? "Submitting..." : "Complete Registration"}
+                </GoldButton>
+              )}
+            </div>
           </form>
         </PageCard>
       </div>

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit';
+import { rateLimit } from './utils/rate-limit.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 

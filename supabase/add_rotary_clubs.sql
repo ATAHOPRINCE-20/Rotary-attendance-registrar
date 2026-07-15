@@ -173,3 +173,4 @@ INSERT INTO rotary_clubs (name, district, area) VALUES
 ON CONFLICT (name) DO UPDATE SET
   district = EXCLUDED.district,
   area = EXCLUDED.area;
+  ('Rotary Club of Ntare', '9214', 'Western Uganda Region'),
