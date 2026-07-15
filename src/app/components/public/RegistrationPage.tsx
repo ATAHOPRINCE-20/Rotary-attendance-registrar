@@ -333,7 +333,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
       : organization?.buddy_groups
       ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-      : ["Group A", "Group B", "Group C", "Group D"]
+      : []
   ));
 
   async function handleSubmit(e: React.FormEvent) {
@@ -361,12 +361,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     }
 
     if (regType === "club_member") {
-      if (!sanitizedFullName || !sanitizedBuddyGroup) {
-        setError("Please enter your Full Name and select your Buddy Group.");
+      const isBuddyGroupRequired = buddyGroupsList.length > 0;
+      if (!sanitizedFullName || (isBuddyGroupRequired && !sanitizedBuddyGroup)) {
+        setError(isBuddyGroupRequired ? "Please enter your Full Name and select your Buddy Group." : "Please enter your Full Name.");
         return;
       }
       if (isManualInput && (!sanitizedEmail || !sanitizedPhone)) {
-        setError("Please fill out all required fields (Name, Email, Phone, and Buddy Group).");
+        setError(isBuddyGroupRequired ? "Please fill out all required fields (Name, Email, Phone, and Buddy Group)." : "Please fill out all required fields (Name, Email, and Phone).");
         return;
       }
     } else {
@@ -867,17 +868,31 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
                 {regType === "club_member" && (
                   <div className="animate-in fade-in slide-in-from-top-1 flex flex-col gap-5">
-                    <div>
-                      <SelectInput
-                        label="Buddy Group"
-                        options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
-                        value={buddyGroup}
-                        onChange={setBuddyGroup}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        Please select the Buddy Group you belong to.
-                      </p>
-                    </div>
+                    {buddyGroupsList.length > 0 ? (
+                      <div>
+                        <SelectInput
+                          label="Buddy Group"
+                          options={buddyGroupsList.map((g: string) => ({ value: g, label: g }))}
+                          value={buddyGroup}
+                          onChange={setBuddyGroup}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Please select the Buddy Group you belong to.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <TextInput
+                          label="Buddy Group (Optional)"
+                          placeholder="e.g. Group A"
+                          value={buddyGroup}
+                          onChange={setBuddyGroup}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Your club has not configured buddy groups. You can enter one manually or leave this blank.
+                        </p>
+                      </div>
+                    )}
 
                     <div className="flex flex-col gap-6 p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] dark:bg-[#18181B] dark:border-[#27272A] animate-in fade-in slide-in-from-top-2">
                       <div>
