@@ -138,16 +138,27 @@ export function DonatePage() {
         slug: slug
       };
 
+      console.log("Sending request to /api/initiate-donation...", payload);
       const response = await fetch("/api/initiate-donation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      console.log("Received response with status:", response.status);
 
-      const res = await response.json();
+      let res: any;
+      try {
+        res = await response.json();
+        console.log("Parsed response json:", res);
+      } catch (parseError) {
+        console.error("Failed to parse JSON response. Status:", response.status);
+        throw new Error(`Server returned invalid response (Status ${response.status})`);
+      }
 
       if (!response.ok || !res.success) {
-        throw new Error(res.error || "Failed to initiate payment");
+        const errorMsg = typeof res.error === 'string' ? res.error : 
+                         (res.error?.message || "Failed to initiate payment");
+        throw new Error(errorMsg);
       }
 
       if (paymentMethod === "card") {
@@ -229,7 +240,7 @@ export function DonatePage() {
       <div className="max-w-6xl w-full px-4 flex flex-col md:grid md:grid-cols-12 md:bg-white md:border md:border-border/80 md:shadow-2xl md:rounded-2xl md:overflow-hidden gap-6 md:gap-0 items-stretch">
         
         {/* Left Section: Details */}
-        <div className="flex flex-col gap-5 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-5 md:bg-slate-50/40 md:border-0 md:border-r md:border-slate-100/80 md:rounded-none md:shadow-none md:p-8">
+        <div className="min-w-0 flex flex-col gap-5 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-5 md:bg-slate-50/40 md:border-0 md:border-r md:border-slate-100/80 md:rounded-none md:shadow-none md:p-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 border border-amber-100 shrink-0">
               <Heart className="w-5 h-5 fill-amber-500" />
@@ -256,7 +267,7 @@ export function DonatePage() {
                   {selectedCampaign.title}
                 </h1>
                 <div className="w-12 h-1 bg-[#F7A81B] rounded-full my-4" />
-                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm text-slate-600 leading-relaxed break-all overflow-hidden">
                   {selectedCampaign.description || "Help support this targeted fundraising drive and make a difference."}
                 </p>
               </>
@@ -266,7 +277,7 @@ export function DonatePage() {
                   Support Our Mission
                 </h1>
                 <div className="w-12 h-1 bg-[#F7A81B] rounded-full my-4" />
-                <p className="text-sm text-slate-600 leading-relaxed">
+                <p className="text-sm text-slate-600 leading-relaxed break-all overflow-hidden">
                   Your contributions directly fund our community service projects, event sponsorships, and club operations. Thank you for investing in our service to others.
                 </p>
               </>
@@ -284,7 +295,7 @@ export function DonatePage() {
         </div>
 
         {/* Right Section: Payment Form */}
-        <div className="flex flex-col gap-6 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-7 md:border-0 md:rounded-none md:shadow-none md:p-8">
+        <div className="min-w-0 flex flex-col gap-6 p-6 bg-white border border-border/80 shadow-md rounded-2xl md:col-span-7 md:border-0 md:rounded-none md:shadow-none md:p-8">
           <div className="border-b border-slate-100 pb-3">
             <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: NAVY }}>
               Contribution Details

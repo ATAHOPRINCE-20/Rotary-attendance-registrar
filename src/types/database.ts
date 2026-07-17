@@ -81,6 +81,9 @@ export interface Organization {
   subscription_expires_at?: string | null;
   is_suspended?: boolean | null;
   momo_phone?: string | null;
+  brevo_api_key?: string | null;
+  brevo_sender_email?: string | null;
+  brevo_sender_name?: string | null;
 }
 
 export interface Profile {

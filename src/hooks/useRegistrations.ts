@@ -167,16 +167,11 @@ export function useSubmitRegistration() {
 
         // 2. HTTP POST dispatch (always proxied via backend to bypass CORS/mixed-content blocks)
         if (reg.phone) {
-          const GATEWAY_BASE_URL = "http://ugpay.tech:3000";
-          const webhookUrl = `${GATEWAY_BASE_URL}/send-whatsapp/${reg.organization_id}`;
-          
-          fetch("/api/send-whatsapp", {
+          fetch("/api/send-welcome-whatsapp", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              webhookUrl: webhookUrl,
-              phone: reg.phone,
-              message: welcomeMessage
+              registrationId: reg.id
             })
           }).catch((err) => {
             console.error("Failed to proxy whatsapp welcome message:", err);

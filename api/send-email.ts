@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { orgId, toEmail, toName, subject, htmlContent } = req.body;
+  const { orgId, toEmail, toName, subject, htmlContent, attachment } = req.body;
 
   if (!orgId || !toEmail || !subject || !htmlContent) {
     return res.status(400).json({ error: 'Missing required parameters (orgId, toEmail, subject, htmlContent)' });
@@ -67,10 +67,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
   }
 
-  // 2. Verify organization
+  // 2. Verify organization and fetch custom Brevo settings
   const { data: org, error: orgError } = await supabase
     .from('organizations')
-    .select('id, name')
+    .select('id, name, brevo_api_key, brevo_sender_email, brevo_sender_name')
     .eq('id', orgId)
     .maybeSingle();
 
@@ -78,23 +78,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: 'Organization not found or unregistered' });
   }
 
-  // 2. Send request to Brevo API
-  if (!BREVO_API_KEY) {
+  // 3. Determine which Brevo credentials to use
+  const apiKeyToUse = org.brevo_api_key || BREVO_API_KEY;
+  const senderEmailToUse = org.brevo_sender_email || BREVO_SENDER_EMAIL;
+  const senderNameToUse = org.brevo_sender_name || BREVO_SENDER_NAME;
+
+  if (!apiKeyToUse) {
     return res.status(500).json({ error: 'Brevo API key is not configured' });
   }
 
   try {
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    // Route traffic through the ugpay.tech static IP proxy
+    const response = await fetch('http://ugpay.tech:3001/proxy-brevo', {
       method: 'POST',
       headers: {
-        'accept': 'application/json',
-        'api-key': BREVO_API_KEY,
+        'api-key': apiKeyToUse,
         'content-type': 'application/json'
       },
       body: JSON.stringify({
         sender: {
-          name: BREVO_SENDER_NAME,
-          email: BREVO_SENDER_EMAIL
+          name: senderNameToUse,
+          email: senderEmailToUse
         },
         to: [
           {
@@ -103,14 +107,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         ],
         subject: subject,
-        htmlContent: htmlContent
+        htmlContent: htmlContent,
+        ...(attachment ? { attachment } : {})
       })
     });
 
     const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(result.message || 'Failed to send email via Brevo');
+      throw new Error(result.message || result.error || `Brevo Error: ${JSON.stringify(result)}`);
     }
 
     return res.status(200).json({ success: true, messageId: result.messageId });

@@ -24,6 +24,7 @@ import {
   Building,
   CreditCard,
   Lock,
+  Settings,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -79,6 +80,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
       { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3, restricted: !license.features.analytics },
       { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
       { label: "Subscription",   to: "/admin/billing",        icon: CreditCard      },
+      { label: "Settings",       to: "/admin/settings",       icon: Settings        },
     ] : []),
   ];
 

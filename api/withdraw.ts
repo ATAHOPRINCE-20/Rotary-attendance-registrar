@@ -220,6 +220,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const msisdn = formatMsisdn(phone);
       const description = `Withdrawal to ${recipientName || 'Mobile'} - ${org.name}`;
 
+      const requestBody = {
+        account_no: accountNo,
+        reference: reference,
+        msisdn: msisdn,
+        currency: 'UGX',
+        amount: payoutAmount,
+        description: description
+      };
+
+      console.log('Sending Relworx Payout Request:', requestBody);
+
       const response = await fetchRelworx('https://payments.relworx.com/api/mobile-money/send-payment', {
         method: 'POST',
         headers: {
@@ -227,17 +238,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          account_no: accountNo,
-          reference: reference,
-          msisdn: msisdn,
-          currency: 'UGX',
-          amount: payoutAmount,
-          description: description
-        })
+        body: requestBody
       });
 
       const result: any = await response.json().catch(() => ({}));
+      console.log('Relworx Payout Response:', response.status, result);
 
       if (!response.ok) {
         // Mark as failed in database
@@ -246,7 +251,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .update({ status: 'failed' })
           .eq('id', withdrawal.id);
 
-        throw new Error(result.message || result.error || 'Relworx Send Payment API failed.');
+        return res.status(response.status).json({ 
+          error: result.message || result.error || 'Relworx Send Payment API failed.',
+          relworxError: result 
+        });
       }
 
       // Check request status from response (payouts can return 'completed' or 'pending')
