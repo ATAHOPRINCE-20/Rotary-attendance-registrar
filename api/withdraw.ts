@@ -245,10 +245,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('Relworx Payout Response:', response.status, result);
 
       if (!response.ok) {
-        // Mark as failed in database
+        // Mark as failed in database and save error to reference for debugging
         await supabase
           .from('withdrawals')
-          .update({ status: 'failed' })
+          .update({ 
+            status: 'failed',
+            reference: ('ERR: ' + JSON.stringify(result)).substring(0, 255)
+          })
           .eq('id', withdrawal.id);
 
         return res.status(response.status).json({ 
