@@ -30,7 +30,7 @@ export function AnalyticsPage() {
   const checkedInCount = registrations?.filter(r => r.status === "checked-in").length ?? 0;
 
   // 2. Process donations stats
-  const totalDonationAmount = donations?.reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
+  const totalDonationAmount = donations?.filter(d => d.status === "completed").reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
 
   // 3. Prepare data for: Attendees per Event (Bar Chart)
   const eventAttendanceData = events?.map(ev => {
@@ -43,7 +43,7 @@ export function AnalyticsPage() {
 
   // 4. Prepare data for: Donation category breakdown (Bar Chart)
   const donationCategoriesData = DONATION_CATEGORIES.map(cat => {
-    const sum = donations?.filter(d => d.category === cat.id).reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
+    const sum = donations?.filter(d => d.category === cat.id && d.status === "completed").reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0;
     return {
       category: cat.label.length > 20 ? `${cat.label.slice(0, 20)}...` : cat.label,
       Amount: sum,
