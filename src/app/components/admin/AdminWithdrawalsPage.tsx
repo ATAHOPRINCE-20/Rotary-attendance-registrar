@@ -99,8 +99,8 @@ export function AdminWithdrawalsPage() {
     }
 
     const payoutAmount = Number(amount);
-    if (isNaN(payoutAmount) || payoutAmount <= 0) {
-      setFormError("Please enter a valid amount greater than zero.");
+    if (isNaN(payoutAmount) || payoutAmount < 5000) {
+      setFormError("Minimum withdrawal amount is UGX 5,000.");
       return;
     }
 

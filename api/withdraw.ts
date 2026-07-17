@@ -129,8 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const payoutAmount = Number(amount);
-  if (isNaN(payoutAmount) || payoutAmount <= 0) {
-    return res.status(400).json({ error: 'Invalid payout amount.' });
+  if (isNaN(payoutAmount) || payoutAmount < 5000) {
+    return res.status(400).json({ error: 'Minimum withdrawal amount is UGX 5,000.' });
   }
 
   try {
