@@ -19,6 +19,12 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
       agent: agent as any,
     };
 
+    if (options.body) {
+      const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+      reqOptions.headers!['Content-Length'] = Buffer.byteLength(bodyStr);
+      options._bodyStr = bodyStr; // store for later
+    }
+
     const req = https.request(urlStr, reqOptions, (res) => {
       let data = '';
       res.on('data', (chunk) => {
@@ -43,8 +49,8 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
       reject(err);
     });
 
-    if (options.body) {
-      req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+    if (options._bodyStr) {
+      req.write(options._bodyStr);
     }
     req.end();
   });

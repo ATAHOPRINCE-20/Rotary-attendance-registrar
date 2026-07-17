@@ -10,6 +10,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
+    // 8 second strict timeout to beat Vercel's 10 second limit
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Proxy connection timed out. The proxy server is not responding correctly.'));
+    }, 8000);
+
     const proxyUrl = process.env.HTTPS_PROXY || process.env.FIXIE_URL || '';
     const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
@@ -19,12 +24,19 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
       agent: agent as any,
     };
 
+    if (options.body) {
+      const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+      reqOptions.headers!['Content-Length'] = Buffer.byteLength(bodyStr);
+      options._bodyStr = bodyStr; // store for later
+    }
+
     const req = https.request(urlStr, reqOptions, (res) => {
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;
       });
       res.on('end', () => {
+        clearTimeout(timeoutId);
         resolve({
           ok: (res.statusCode || 200) >= 200 && (res.statusCode || 200) < 300,
           status: res.statusCode || 200,
@@ -40,11 +52,12 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
     });
 
     req.on('error', (err) => {
+      clearTimeout(timeoutId);
       reject(err);
     });
 
-    if (options.body) {
-      req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+    if (options._bodyStr) {
+      req.write(options._bodyStr);
     }
     req.end();
   });
