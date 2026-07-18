@@ -21,35 +21,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).send("Internal Server Error");
   }
 
-  // 2. Parse the URL to determine what entity we are viewing
+  // 2. Determine context from query parameters injected by Vercel rewrites
   const urlPath = req.url || '';
+  const type = req.query.type as string;
+  const eventId = req.query.eventId as string;
+  const campaignId = req.query.campaignId as string;
+  const orgSlug = req.query.orgSlug as string;
   
   let ogTitle = "Agoroll";
   let ogDescription = "Streamline Rotary event registration and donations with agoroll — a professional platform that connects leaders, supports community projects, and enhances engagement.";
   let ogImage = `${baseUrl}/assets/rotary_gold_logo.png`;
 
   try {
-    // Determine context based on the URL path
-    if (urlPath.includes('/event/')) {
-      // Matches /event/:id or /org/:slug/event/:id
-      const match = urlPath.match(/\/event\/([^\/?]+)/);
-      if (match && match[1]) {
-        const eventId = match[1];
-        const { data: event } = await supabase.from('events').select('title, description, cover_image_url').eq('id', eventId).single();
-        if (event) {
-          ogTitle = event.title || ogTitle;
-          // Strip HTML tags for the description
-          const plainTextDesc = event.description ? event.description.replace(/<[^>]+>/g, '').substring(0, 160) : ogDescription;
-          ogDescription = plainTextDesc;
-          if (event.cover_image_url) {
-            ogImage = event.cover_image_url;
-          }
+    if (type === 'event' && eventId) {
+      const { data: event } = await supabase.from('events').select('title, description, cover_image_url').eq('id', eventId).single();
+      if (event) {
+        ogTitle = event.title || ogTitle;
+        // Strip HTML tags for the description
+        const plainTextDesc = event.description ? event.description.replace(/<[^>]+>/g, '').substring(0, 160) : ogDescription;
+        ogDescription = plainTextDesc;
+        if (event.cover_image_url) {
+          ogImage = event.cover_image_url;
         }
       }
-    } else if (urlPath.includes('/donate')) {
-      // Matches /donate?campaignId=xxx or /org/:slug/donate?campaignId=xxx
-      const urlObj = new URL(urlPath, baseUrl);
-      const campaignId = urlObj.searchParams.get('campaignId');
+    } else if (type === 'donate') {
       if (campaignId) {
         const { data: campaign } = await supabase.from('donation_campaigns').select('title, description, cover_image_url').eq('id', campaignId).single();
         if (campaign) {
@@ -60,16 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ogImage = campaign.cover_image_url;
           }
         }
-      } else {
-        // General donation page, let's see if we can get the org name
-        const match = urlPath.match(/\/org\/([^\/?]+)\/donate/);
-        if (match && match[1]) {
-          const slug = match[1];
-          const { data: org } = await supabase.from('organizations').select('name').eq('slug', slug).single();
-          if (org) {
-            ogTitle = `Donate to ${org.name}`;
-            ogDescription = "Support our club projects and community initiatives by making a direct contribution today.";
-          }
+      } else if (orgSlug) {
+        const { data: org } = await supabase.from('organizations').select('name').eq('slug', orgSlug).single();
+        if (org) {
+          ogTitle = `Donate to ${org.name}`;
+          ogDescription = "Support our club projects and community initiatives by making a direct contribution today.";
         }
       }
     }

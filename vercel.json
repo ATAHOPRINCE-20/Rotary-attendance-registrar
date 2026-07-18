@@ -1,10 +1,10 @@
 {
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/event/:id", "destination": "/api/serve-html" },
-    { "source": "/donate", "destination": "/api/serve-html" },
-    { "source": "/org/:slug/event/:id", "destination": "/api/serve-html" },
-    { "source": "/org/:slug/donate", "destination": "/api/serve-html" },
+    { "source": "/event/:id", "destination": "/api/serve-html?type=event&eventId=$id" },
+    { "source": "/donate", "destination": "/api/serve-html?type=donate" },
+    { "source": "/org/:slug/event/:id", "destination": "/api/serve-html?type=event&eventId=$id&orgSlug=$slug" },
+    { "source": "/org/:slug/donate", "destination": "/api/serve-html?type=donate&orgSlug=$slug" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
