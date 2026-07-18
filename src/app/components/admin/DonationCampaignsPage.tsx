@@ -310,13 +310,13 @@ export function DonationCampaignsPage() {
         </head>
         <body>
           <div class="container">
-            <div class="logo">AGOROLL</div>
-            <h1 class="title">\${c.title}</h1>
+            <div class="logo">${organization?.name || "AGOROLL"}</div>
+            <h1 class="title">${c.title}</h1>
             <p class="desc">Scan the QR code below to contribute directly to this campaign online.</p>
             <div class="qr-card">
               <div id="qrcode-svg"></div>
             </div>
-            <p class="url">\${campaignUrl}</p>
+            <p class="url">${campaignUrl}</p>
           </div>
           <script>
             window.onload = function() {
@@ -421,13 +421,13 @@ export function DonationCampaignsPage() {
         </head>
         <body>
           <div class="container">
-            <div class="logo">AGOROLL</div>
+            <div class="logo">${organization?.name || "AGOROLL"}</div>
             <h1 class="title">Donation Drive</h1>
             <p class="desc">Scan the QR code below to contribute and support our club projects and community initiatives.</p>
             <div class="qr-card">
               <div id="qrcode-svg"></div>
             </div>
-            <p class="url">\${generalUrl}</p>
+            <p class="url">${generalUrl}</p>
           </div>
           <script>
             window.onload = function() {
