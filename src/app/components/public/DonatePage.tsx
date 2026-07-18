@@ -110,8 +110,8 @@ export function DonatePage() {
   async function handleDonate(e: React.FormEvent) {
     e.preventDefault();
 
-    if (selectedAmount <= 0) {
-      toast.error("Please enter a valid donation amount.");
+    if (selectedAmount < 500) {
+      toast.error("Minimum donation amount is UGX 500.");
       return;
     }
 

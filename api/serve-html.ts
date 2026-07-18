@@ -56,10 +56,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
       } else if (orgSlug) {
-        const { data: org } = await supabase.from('organizations').select('name').eq('slug', orgSlug).single();
+        const { data: org } = await supabase.from('organizations').select('name, logo_url').eq('slug', orgSlug).single();
         if (org) {
           ogTitle = `Donate to ${org.name}`;
           ogDescription = "Support our club projects and community initiatives by making a direct contribution today.";
+          if (org.logo_url) {
+            ogImage = org.logo_url;
+          }
         }
       }
     }

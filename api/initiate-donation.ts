@@ -117,6 +117,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing required parameters: organizationId, amount, fullName, paymentMethod' });
   }
 
+  if (Number(amount) < 500) {
+    return res.status(400).json({ error: 'Minimum donation amount is UGX 500' });
+  }
+
   if (paymentMethod === 'mobile' && !phone) {
     return res.status(400).json({ error: 'Phone number is required for Mobile Money payments' });
   }
