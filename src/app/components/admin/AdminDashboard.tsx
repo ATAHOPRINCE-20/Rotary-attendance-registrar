@@ -429,10 +429,10 @@ export function AdminDashboard() {
                     </button>
                   </div>
                   <div className="divide-y divide-border/30 overflow-y-auto flex-1">
-                    {!donations || donations.length === 0 ? (
+                    {!donations || donations.filter(d => d.status === "completed").length === 0 ? (
                       <p className="text-sm text-muted-foreground py-10 text-center">No donations yet.</p>
                     ) : (
-                      donations.slice(0, 6).map((d) => (
+                      donations.filter(d => d.status === "completed").slice(0, 6).map((d) => (
                         <div key={d.id} className="flex items-center justify-between px-5 py-3">
                           <div className="flex items-center gap-3">
                             <div
