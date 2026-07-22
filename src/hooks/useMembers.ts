@@ -20,6 +20,22 @@ export function useOrgMembers(organizationId: string | undefined) {
   });
 }
 
+// Fetch members using the public RPC (excludes email/phone for IDOR protection)
+export function usePublicOrgMembers(organizationId: string | undefined) {
+  return useQuery({
+    queryKey: ["public-members", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "get_public_org_members",
+        { p_org_id: organizationId }
+      );
+      if (error) throw error;
+      return data as Partial<Member>[];
+    },
+  });
+}
+
 // Create a single member profile
 export function useCreateMember() {
   const qc = useQueryClient();

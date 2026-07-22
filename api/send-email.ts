@@ -1,10 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit.js';
+import { rateLimit } from '../src/lib/rate-limit.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.resend || '';
+const RESEND_SENDER_EMAIL = process.env.RESEND_SENDER_EMAIL || 'onboarding@resend.dev';
+const RESEND_SENDER_NAME = process.env.RESEND_SENDER_NAME || 'agoroll';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'support@agoroll.com';
@@ -78,17 +82,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: 'Organization not found or unregistered' });
   }
 
-  // 3. Determine which Brevo credentials to use
+  // 3. Check for Resend API key first, or fallback to Brevo
+  if (RESEND_API_KEY) {
+    try {
+      const resendSender = `${RESEND_SENDER_NAME} <${RESEND_SENDER_EMAIL}>`;
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: resendSender,
+          to: [toEmail],
+          subject: subject,
+          html: htmlContent,
+        }),
+      });
+
+      const resendData = await resendRes.json().catch(() => ({}));
+      if (!resendRes.ok) {
+        throw new Error(resendData.message || resendData.error || `Resend Error: ${JSON.stringify(resendData)}`);
+      }
+
+      return res.status(200).json({ success: true, messageId: resendData.id, provider: 'resend' });
+    } catch (resendErr: any) {
+      console.error('Resend API dispatch error:', resendErr);
+      if (!BREVO_API_KEY && !org.brevo_api_key) {
+        return res.status(500).json({ error: resendErr.message || 'Failed to send email via Resend' });
+      }
+    }
+  }
+
+  // 4. Fallback to Brevo
   const apiKeyToUse = org.brevo_api_key || BREVO_API_KEY;
   const senderEmailToUse = org.brevo_sender_email || BREVO_SENDER_EMAIL;
   const senderNameToUse = org.brevo_sender_name || BREVO_SENDER_NAME;
 
   if (!apiKeyToUse) {
-    return res.status(500).json({ error: 'Brevo API key is not configured' });
+    return res.status(500).json({ error: 'Email service API key is not configured' });
   }
 
   try {
-    // Route traffic through the ugpay.tech static IP proxy
     const response = await fetch('http://ugpay.tech:3001/proxy-brevo', {
       method: 'POST',
       headers: {
@@ -118,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(result.message || result.error || `Brevo Error: ${JSON.stringify(result)}`);
     }
 
-    return res.status(200).json({ success: true, messageId: result.messageId });
+    return res.status(200).json({ success: true, messageId: result.messageId, provider: 'brevo' });
   } catch (error: any) {
     console.error('Brevo SMTP sending error:', error);
     return res.status(500).json({ error: error.message || 'Failed to send email' });

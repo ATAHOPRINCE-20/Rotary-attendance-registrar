@@ -64,25 +64,35 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const license = getLicenseStatus(organization);
 
-  const menuItems = [
-    { label: "Dashboard",       to: "/admin/dashboard",      icon: LayoutDashboard },
-    ...(profile?.role === "super_admin" ? [
-      { label: "Tenants Directory", to: "/admin/tenants",        icon: Building        },
-    ] : []),
-    { label: "Events",          to: "/admin/events",         icon: Calendar        },
-    { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive, restricted: !license.features.pdfExport },
-    { label: "Members",         to: "/admin/members",        icon: Users           },
-    { label: "Directory",       to: "/admin/directory",      icon: BookOpen        },
-    ...(profile?.role !== "staff" ? [
-      { label: "Donation Campaigns", to: "/admin/donation-campaigns", icon: Heart, restricted: !license.features.donations },
-      { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet, restricted: !license.features.donations },
-      { label: "Communications", to: "/admin/communications", icon: MessageSquare, restricted: !license.features.whatsappComms },
-      { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3, restricted: !license.features.analytics },
-      { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
-      { label: "Subscription",   to: "/admin/billing",        icon: CreditCard      },
-      { label: "Settings",       to: "/admin/settings",       icon: Settings        },
-    ] : []),
-  ];
+  const menuItems = (() => {
+    const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
+    const isTreasurer = profile?.role === "treasurer";
+    const dashboardPath = isTreasurer ? "/treasurer/dashboard" : "/admin/dashboard";
+
+    return [
+      { label: "Dashboard",       to: dashboardPath,           icon: LayoutDashboard },
+      ...(profile?.role === "super_admin" ? [
+        { label: "Tenants Directory", to: "/admin/tenants",    icon: Building        },
+      ] : []),
+      ...(isAdmin ? [
+        { label: "Events",          to: "/admin/events",       icon: Calendar        },
+      ] : []),
+      { label: "Reports Archive", to: "/admin/reports",        icon: FolderArchive, restricted: !license.features.pdfExport },
+      { label: "Members",         to: "/admin/members",        icon: Users           },
+      { label: "Directory",       to: "/admin/directory",      icon: BookOpen        },
+      ...(isAdmin || isTreasurer ? [
+        { label: "Donation Campaigns", to: "/admin/donation-campaigns", icon: Heart, restricted: !license.features.donations },
+        { label: "Withdrawals",    to: "/admin/withdrawals",    icon: Wallet, restricted: !license.features.donations },
+        { label: "Analytics",      to: "/admin/analytics",      icon: BarChart3, restricted: !license.features.analytics },
+      ] : []),
+      ...(isAdmin ? [
+        { label: "Communications", to: "/admin/communications", icon: MessageSquare, restricted: !license.features.whatsappComms },
+        { label: "Team",           to: "/admin/team",           icon: ShieldCheck     },
+        { label: "Subscription",   to: "/admin/billing",        icon: CreditCard      },
+        { label: "Settings",       to: "/admin/settings",       icon: Settings        },
+      ] : []),
+    ];
+  })();
 
   const initials = profile?.full_name
     ?.split(" ")
@@ -234,7 +244,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
         {/* Mobile Bottom Navigation */}
         <nav className="lg:hidden bg-white/95 backdrop-blur-md border-t border-border/50 shrink-0 px-2 py-2 flex items-center justify-around pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.05)]">
           {[
-            { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
+            { label: "Dashboard", to: profile?.role === "treasurer" ? "/treasurer/dashboard" : "/admin/dashboard", icon: LayoutDashboard },
             { label: "Events",    to: "/admin/events",    icon: Calendar        },
             { label: "Members",   to: "/admin/members",   icon: Users           },
             { label: "Directory", to: "/admin/directory", icon: BookOpen        },

@@ -58,13 +58,25 @@ export function getFriendlyErrorMessage(err: any): string {
     return "The verification link is invalid or expired.";
   }
   if (msgLower.includes("password should be at least")) {
-    return "Password must be at least 6 characters.";
+    return "Password must be at least 8 characters.";
   }
   if (msgLower.includes("invalid email") || msgLower.includes("must be a valid email")) {
     return "Please enter a valid email address.";
   }
+  if (msgLower.includes("redirect_to") || msgLower.includes("redirect url") || msgLower.includes("not allowed")) {
+    return "Redirect URL not allowed. Please add your domain to Supabase Auth Redirect URLs.";
+  }
+  if (msgLower.includes("signup is disabled") || msgLower.includes("signups are disabled")) {
+    return "New account registration is currently disabled in Supabase.";
+  }
 
   // 4. Network and Connection Failures
+  if (msgLower.includes("500") || msgLower.includes("internal server error")) {
+    return "Server authentication error (500). Please check your Supabase Custom SMTP settings.";
+  }
+  if (msgLower.includes("504") || msgLower.includes("gateway timeout") || msgLower.includes("gateway")) {
+    return "Email server timeout (504). Please verify your SMTP host/port in Supabase or try again.";
+  }
   if (msgLower.includes("failed to fetch") || msgLower.includes("network") || msgLower.includes("timeout")) {
     return "Network error. Please check your connection.";
   }

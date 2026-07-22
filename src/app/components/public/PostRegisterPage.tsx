@@ -17,7 +17,8 @@ export function PostRegisterPage() {
   const base = getTenantBase(slug);
 
   const { organization, loading: tenantLoading } = useTenant();
-  const { data: registration, isLoading: regLoading, error } = useRegistrationByQR(qrRef || undefined);
+  const { data: registrationData, isLoading: regLoading, error } = useRegistrationByQR(qrRef || undefined);
+  const registration = registrationData as any;
 
   const loading = tenantLoading || regLoading;
 

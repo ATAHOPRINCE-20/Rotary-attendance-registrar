@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit.js';
+import { rateLimit } from '../src/lib/rate-limit.js';
 import { Redis } from '@upstash/redis';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';

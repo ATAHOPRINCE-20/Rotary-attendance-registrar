@@ -90,7 +90,8 @@ export interface Profile {
   id:              string;       // = auth.users.id
   organization_id: string;
   full_name:       string | null;
-  role:            "super_admin" | "admin" | "staff";
+  email?:          string | null;
+  role:            "super_admin" | "admin" | "treasurer" | "staff" | "member";
   avatar_url:      string | null;
   created_at:      string;
 }
@@ -210,6 +211,31 @@ export interface Member {
   buddy_group:     string | null;
   created_at:      string;
   updated_at:      string;
+  user_id?:        string | null;
+}
+
+export interface DuesCategory {
+  id:              string;
+  organization_id: string;
+  name:            string;
+  description:     string | null;
+  billing_frequency: "one-off" | "monthly" | "quarterly" | "annually";
+  default_amount:  number;
+  currency:        string;
+  created_at:      string;
+}
+
+export interface MemberDuesBalance {
+  id:               string;
+  member_id:        string;
+  dues_category_id: string;
+  amount_due:       number;
+  amount_paid:      number;
+  due_date:         string | null;
+  status:           "unpaid" | "partially_paid" | "paid";
+  created_at:       string;
+  updated_at:       string;
+  dues_category?:   DuesCategory;
 }
 
 export interface RotaryClub {

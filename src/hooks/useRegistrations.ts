@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type { Registration } from "../types/database";
-import { sanitizeInput, sanitizeRequiredInput } from "../lib/constants";
+import { sanitizeInput, sanitizeRequiredInput, isSyntheticEmail } from "../lib/constants";
 
 // ─── All registrations for an event (admin) ───────────────────────────────────
 export function useEventRegistrations(eventId: string | undefined) {
@@ -44,11 +44,10 @@ export function useRegistrationByQR(qrRef: string | undefined) {
     queryKey: ["registration-qr", qrRef],
     enabled: !!qrRef,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("registrations")
-        .select("*, events(title, date, location, cover_image_url)")
-        .eq("qr_ref", qrRef!)
-        .single();
+      const { data, error } = await supabase.rpc(
+        'get_registration_by_qr',
+        { p_qr_ref: qrRef }
+      ).select("*, events(title, date, location, cover_image_url)").single();
       if (error) throw error;
       return data;
     },
@@ -81,7 +80,7 @@ export function useSubmitRegistration() {
       const sanitizedPayload = {
         ...payload,
         full_name: sanitizeRequiredInput(payload.full_name),
-        email: sanitizeRequiredInput(payload.email),
+        email: payload.email && !isSyntheticEmail(payload.email) ? sanitizeInput(payload.email) : null,
         phone: payload.phone ? sanitizeInput(payload.phone) : null,
         club_name: payload.club_name ? sanitizeInput(payload.club_name) : null,
         district: payload.district ? sanitizeInput(payload.district) : null,
@@ -93,40 +92,52 @@ export function useSubmitRegistration() {
         makeups: sanitizedMakeups,
       };
 
+      // Auto-fetch real email and phone from member profile if member_id is provided
+      if (sanitizedPayload.member_id) {
+        const { data: mProf } = await supabase
+          .from("members")
+          .select("email, phone")
+          .eq("id", sanitizedPayload.member_id)
+          .maybeSingle();
+
+        if (mProf?.email) {
+          sanitizedPayload.email = mProf.email;
+        }
+        if (mProf?.phone && !sanitizedPayload.phone) {
+          sanitizedPayload.phone = mProf.phone;
+        }
+      }
+
       // ── Strict email duplicate guard ────────────────────────────────────────
       // Only skip the check for synthetic fallback emails (member-{uuid}@...) used
       // when a club member has no email on file. Real emails are always checked.
-      const isRealEmail = !sanitizedPayload.email.match(/^member-[a-f0-9\-]+@/);
+      const isRealEmail = Boolean(sanitizedPayload.email && !sanitizedPayload.email.match(/^member-[a-f0-9\-]+@/));
       if (isRealEmail) {
-        const { data: emailDupeCheck, error: emailCheckErr } = await supabase
-          .from("registrations")
-          .select("id")
-          .eq("event_id", payload.event_id)
-          .ilike("email", sanitizedPayload.email)
-          .limit(1);
+        const { data: isDuplicate, error: checkErr } = await supabase.rpc(
+          'check_duplicate_registration',
+          { p_event_id: payload.event_id, p_email: sanitizedPayload.email }
+        );
 
-        if (emailCheckErr) throw emailCheckErr;
+        if (checkErr) throw checkErr;
 
-        if (emailDupeCheck && emailDupeCheck.length > 0) {
+        if (isDuplicate) {
           throw new Error(
-            "This email address is already registered for this event. Each person may only register once."
+            "This email address is already checked in for this event."
           );
         }
       }
 
       // ── member_id duplicate guard (for club members) ─────────────────────────
       if (sanitizedPayload.member_id) {
-        const { data: memberDupeCheck, error: memberCheckErr } = await supabase
-          .from("registrations")
-          .select("id")
-          .eq("event_id", payload.event_id)
-          .eq("member_id", sanitizedPayload.member_id)
-          .limit(1);
+        const { data: isDuplicate, error: checkErr } = await supabase.rpc(
+          'check_duplicate_registration',
+          { p_event_id: payload.event_id, p_member_id: sanitizedPayload.member_id }
+        );
 
-        if (memberCheckErr) throw memberCheckErr;
+        if (checkErr) throw checkErr;
 
-        if (memberDupeCheck && memberDupeCheck.length > 0) {
-          throw new Error("This member is already registered for this event.");
+        if (isDuplicate) {
+          throw new Error("This member is already checked in for this event.");
         }
       }
 
@@ -167,7 +178,7 @@ export function useSubmitRegistration() {
 
         // 2. HTTP POST dispatch (always proxied via backend to bypass CORS/mixed-content blocks)
         if (reg.phone) {
-          fetch("/api/send-welcome-whatsapp", {
+          fetch("/api/send-whatsapp", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -231,23 +242,36 @@ export function useUpdateRegistration() {
       
       delete sanitizedPayload.qr_ref;
 
+      // Auto-fetch real email and phone from member profile if member_id is provided
+      if (sanitizedPayload.member_id) {
+        const { data: mProf } = await supabase
+          .from("members")
+          .select("email, phone")
+          .eq("id", sanitizedPayload.member_id)
+          .maybeSingle();
+
+        if (mProf?.email) {
+          sanitizedPayload.email = mProf.email;
+        }
+        if (mProf?.phone && !sanitizedPayload.phone) {
+          sanitizedPayload.phone = mProf.phone;
+        }
+      }
+
       // ── Strict email duplicate guard ────────────────────────────────────────
       if (sanitizedPayload.email) {
         const isRealEmail = !sanitizedPayload.email.match(/^member-[a-f0-9\-]+@/);
         if (isRealEmail) {
-          const { data: emailDupeCheck, error: emailCheckErr } = await supabase
-            .from("registrations")
-            .select("qr_ref")
-            .eq("event_id", payload.event_id)
-            .ilike("email", sanitizedPayload.email)
-            .neq("qr_ref", payload.qr_ref)
-            .limit(1);
+          const { data: isDuplicate, error: checkErr } = await supabase.rpc(
+            'check_duplicate_registration',
+            { p_event_id: payload.event_id, p_email: sanitizedPayload.email, p_exclude_qr_ref: payload.qr_ref }
+          );
 
-          if (emailCheckErr) throw emailCheckErr;
+          if (checkErr) throw checkErr;
 
-          if (emailDupeCheck && emailDupeCheck.length > 0) {
+          if (isDuplicate) {
             throw new Error(
-              "This email address is already registered for this event. Each person may only register once."
+              "This email address is already checked in for this event."
             );
           }
         }
@@ -255,18 +279,15 @@ export function useUpdateRegistration() {
 
       // ── member_id duplicate guard (for club members) ─────────────────────────
       if (sanitizedPayload.member_id) {
-        const { data: memberDupeCheck, error: memberCheckErr } = await supabase
-          .from("registrations")
-          .select("qr_ref")
-          .eq("event_id", payload.event_id)
-          .eq("member_id", sanitizedPayload.member_id)
-          .neq("qr_ref", payload.qr_ref)
-          .limit(1);
+        const { data: isDuplicate, error: checkErr } = await supabase.rpc(
+          'check_duplicate_registration',
+          { p_event_id: payload.event_id, p_member_id: sanitizedPayload.member_id, p_exclude_qr_ref: payload.qr_ref }
+        );
 
-        if (memberCheckErr) throw memberCheckErr;
+        if (checkErr) throw checkErr;
 
-        if (memberDupeCheck && memberDupeCheck.length > 0) {
-          throw new Error("This member is already registered for this event.");
+        if (isDuplicate) {
+          throw new Error("This member is already checked in for this event.");
         }
       }
 

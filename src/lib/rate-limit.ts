@@ -14,16 +14,12 @@ export async function rateLimit(
   maxRequests: number,
   windowSeconds: number
 ): Promise<{ success: boolean; error?: string }> {
-  // If Redis is not configured, bypass rate limiting
   if (!redis) {
     return { success: true };
   }
 
-  // Use IP address as the identifier
   let ip = req.headers['x-forwarded-for'] || '127.0.0.1';
   if (Array.isArray(ip)) ip = ip[0];
-  
-  // Clean up IP string (sometimes comes as a comma separated list)
   ip = ip.split(',')[0].trim();
 
   const key = `rate-limit:${action}:${ip}`;
@@ -41,7 +37,6 @@ export async function rateLimit(
     return { success: true };
   } catch (err) {
     console.error('Rate limit check failed (bypassing):', err);
-    // Fail open so we don't break the app if Redis is down
     return { success: true };
   }
 }

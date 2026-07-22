@@ -119,3 +119,12 @@ export function formatUgandanPhone(phoneStr: string | null | undefined): string 
   return digitsOnly;
 }
 
+export function isSyntheticEmail(email?: string | null): boolean {
+  if (!email) return true;
+  const cleaned = email.trim().toLowerCase();
+  if (cleaned.startsWith("member-") || cleaned.startsWith("attendee-")) return true;
+  if (cleaned.includes("member-") && (cleaned.endsWith(".org") || cleaned.endsWith(".com"))) return true;
+  if (cleaned.match(/^(member|attendee)-/i)) return true;
+  return false;
+}
+

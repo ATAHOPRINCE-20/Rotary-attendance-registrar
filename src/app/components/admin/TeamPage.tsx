@@ -9,15 +9,13 @@ import { NAVY, GOLD } from "../../../lib/constants";
 import {
   Users,
   Plus,
-  Trash2,
   Copy,
   Check,
-  ShieldAlert,
   ShieldCheck,
-  Mail,
   UserX,
   X,
   UserCheck,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -27,7 +25,7 @@ export function TeamPage() {
   const { profile: currentProfile, organization } = useAuth();
   const queryClient = useQueryClient();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
+  const [inviteRole, setInviteRole] = useState<"admin" | "treasurer" | "staff" | "member">("staff");
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
 
   // Query: Fetch all team members (profiles) in the organization
@@ -47,7 +45,7 @@ export function TeamPage() {
 
   // Mutation: Update a user's role
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "staff" }) => {
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "treasurer" | "staff" | "member" }) => {
       const { error } = await supabase
         .from("profiles")
         .update({ role: newRole })
@@ -87,6 +85,7 @@ export function TeamPage() {
 
   const totalMembers = team?.length ?? 0;
   const adminCount = team?.filter((t) => t.role === "admin" || t.role === "super_admin").length ?? 0;
+  const treasurerCount = team?.filter((t) => t.role === "treasurer").length ?? 0;
   const staffCount = team?.filter((t) => t.role === "staff").length ?? 0;
 
   function handleCopyInviteLink() {
@@ -101,7 +100,14 @@ export function TeamPage() {
       toast.error("You cannot change your own role.");
       return;
     }
-    const newRole = currentRole === "admin" ? "staff" : "admin";
+    // Cycle: staff → member → treasurer → admin → staff
+    const cycle: Record<string, "admin" | "treasurer" | "staff" | "member"> = {
+      staff: "member",
+      member: "treasurer",
+      treasurer: "admin",
+      admin: "staff",
+    };
+    const newRole = cycle[currentRole] ?? "staff";
     updateRoleMutation.mutate({ userId, newRole });
   }
 
@@ -147,10 +153,10 @@ export function TeamPage() {
       </div>
 
       {/* ── METRICS ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex items-center gap-4">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
             style={{ background: `${NAVY}18`, color: NAVY }}
           >
             <Users size={20} />
@@ -165,7 +171,7 @@ export function TeamPage() {
 
         <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex items-center gap-4">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-600"
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
             style={{ background: "#E6F4EA", color: "#137333" }}
           >
             <ShieldCheck size={20} />
@@ -180,7 +186,22 @@ export function TeamPage() {
 
         <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex items-center gap-4">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-amber-600"
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: "#E0F2FE", color: "#0369A1" }}
+          >
+            <Wallet size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Treasurers</p>
+            <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>
+              {treasurerCount}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-border/40 shadow-sm flex items-center gap-4">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
             style={{ background: "#FEF7E0", color: "#B06000" }}
           >
             <UserCheck size={20} />
@@ -259,17 +280,17 @@ export function TeamPage() {
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
                               m.role === "admin" || m.role === "super_admin"
                                 ? "bg-emerald-100 text-emerald-800"
+                                : m.role === "treasurer"
+                                ? "bg-sky-100 text-sky-800"
                                 : "bg-slate-100 text-slate-800"
                             }`}
                           >
                             {m.role === "admin" || m.role === "super_admin" ? (
-                              <>
-                                <ShieldCheck size={11} /> Admin
-                              </>
+                              <><ShieldCheck size={11} /> Admin</>
+                            ) : m.role === "treasurer" ? (
+                              <><Wallet size={11} /> Treasurer</>
                             ) : (
-                              <>
-                                <UserCheck size={11} /> Staff
-                              </>
+                              <><UserCheck size={11} /> Staff</>
                             )}
                           </span>
                         </td>
@@ -344,17 +365,17 @@ export function TeamPage() {
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider shrink-0 ${
                           m.role === "admin" || m.role === "super_admin"
                             ? "bg-emerald-100 text-emerald-800"
+                            : m.role === "treasurer"
+                            ? "bg-sky-100 text-sky-800"
                             : "bg-slate-100 text-slate-800"
                         }`}
                       >
                         {m.role === "admin" || m.role === "super_admin" ? (
-                          <>
-                            <ShieldCheck size={9} /> Admin
-                          </>
+                          <><ShieldCheck size={9} /> Admin</>
+                        ) : m.role === "treasurer" ? (
+                          <><Wallet size={9} /> Treasurer</>
                         ) : (
-                          <>
-                            <UserCheck size={9} /> Staff
-                          </>
+                          <><UserCheck size={9} /> Staff</>
                         )}
                       </span>
                     </div>
@@ -414,11 +435,12 @@ export function TeamPage() {
               <SelectInput
                 label="Assign Role"
                 options={[
-                  { value: "staff", label: "Staff (Read-Only access to dashboard records)" },
-                  { value: "admin", label: "Admin (Full control to edit, configure, and manage)" },
+                  { value: "staff", label: "Staff — Read-only access to dashboard records" },
+                  { value: "treasurer", label: "Treasurer — Financial management: dues, payments & analytics" },
+                  { value: "admin", label: "Admin — Full control to edit, configure, and manage" },
                 ]}
                 value={inviteRole}
-                onChange={(val) => setInviteRole(val as "admin" | "staff")}
+                onChange={(val) => setInviteRole(val as "admin" | "treasurer" | "staff")}
               />
 
               <div className="flex flex-col gap-1.5 mt-2">

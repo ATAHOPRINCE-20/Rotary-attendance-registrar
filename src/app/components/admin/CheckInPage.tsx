@@ -2,11 +2,11 @@ import { useParams, useNavigate } from "react-router";
 import { useState, useEffect, Fragment, MouseEvent } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useEvent } from "../../../hooks/useEvents";
-import { useEventRegistrations, useCheckIn, useSubmitRegistration } from "../../../hooks/useRegistrations";
+import { useEventRegistrations, useCheckIn, useSubmitRegistration, useUpdateRegistration } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone, isSyntheticEmail } from "../../../lib/constants";
 import {
   ChevronLeft,
   Users,
@@ -75,9 +75,40 @@ interface CheckInContentProps {
 
 function CheckInContent({ event, registrations, organization, eventId }: CheckInContentProps) {
   const navigate = useNavigate();
-  const checkInMutation = useCheckIn();
-  const registerMutation = useSubmitRegistration();
   const { data: members } = useOrgMembers(organization?.id);
+  const updateRegistrationMutation = useUpdateRegistration();
+  const checkInMutation = useCheckIn();
+
+  const handleConvertToHomeMember = async (r: any) => {
+    try {
+      let matchedMember = members?.find(
+        (m) => m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim()
+      );
+      if (!matchedMember && r.member_id) {
+        matchedMember = members?.find((m) => m.id === r.member_id);
+      }
+
+      const realEmail = matchedMember?.email || (r.email && !r.email.startsWith("member-") && !r.email.startsWith("attendee-") ? r.email : null);
+      const realPhone = matchedMember?.phone || r.phone;
+
+      await updateRegistrationMutation.mutateAsync({
+        qr_ref: r.qr_ref,
+        event_id: r.event_id,
+        full_name: r.full_name,
+        email: realEmail,
+        phone: realPhone,
+        is_member: true,
+        club_name: null,
+        district: null,
+        member_id: matchedMember?.id || r.member_id || null,
+        buddy_group: matchedMember?.buddy_group || r.buddy_group || null,
+      });
+      toast.success(`Converted ${r.full_name} to Home Club Member.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update attendee category.");
+    }
+  };
+  const registerMutation = useSubmitRegistration();
 
 
   // Filter/Search states
@@ -242,6 +273,12 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
       ? visitingClubsList.map(item => `${item.club} (${item.count} ${item.count === 1 ? 'person' : 'people'})`).join(", ")
       : "None";
 
+    // Build a lookup: member_id → phone from the members directory
+    const memberPhoneMap: { [id: string]: string } = {};
+    members?.forEach(m => {
+      if (m.id && m.phone) memberPhoneMap[m.id] = m.phone;
+    });
+
     // Generate table rows for Club Members
     const clubMemberRows = clubMembers.length > 0 ? clubMembers.map((r, i) => {
       return `
@@ -253,7 +290,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
             ${r.makeups && r.makeups.length > 0 ? `<div style="font-size: 8px; color: #B45309; font-weight: normal; margin-top: 1px;"><b>Make-ups:</b> ${r.makeups.map((m: ClubActivity) => `${m.club_name} (${m.date})`).join(", ")}</div>` : ''}
           </td>
           <td>${r.buddy_group || "—"}</td>
-          <td>${r.phone ?? "—"}</td>
+          <td>${(r.phone || (r.member_id && memberPhoneMap[r.member_id])) || "—"}</td>
           <td>${r.email}</td>
         </tr>`;
     }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
@@ -570,8 +607,10 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     e.preventDefault();
 
     const sanitizedFullName = sanitizeRequiredInput(fullName);
-    const sanitizedEmail = sanitizeRequiredInput(email);
-    const sanitizedPhone = formatUgandanPhone(phone);
+    const sanitizedEmail = email.trim() 
+      ? sanitizeRequiredInput(email) 
+      : `attendee-${Date.now()}@${organization?.slug || "agoroll"}.org`;
+    const sanitizedPhone = phone.trim() ? formatUgandanPhone(phone) : null;
     const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -579,13 +618,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     const sanitizedComments = sanitizeInput(comments);
 
     if (regType === "club_member") {
-      if (!sanitizedFullName || !sanitizedBuddyGroup || !sanitizedEmail || !sanitizedPhone) {
-        toast.error("Please fill out all required fields (Name, Email, Phone, and Buddy Group).");
+      if (!sanitizedFullName || (buddyGroupsList.length > 0 && !sanitizedBuddyGroup)) {
+        toast.error(buddyGroupsList.length > 0 ? "Please fill out required fields (Name and Buddy Group)." : "Please enter Full Name.");
         return;
       }
     } else {
-      if (!sanitizedFullName || !sanitizedEmail || !sanitizedPhone) {
-        toast.error("Please fill out all required fields (Name, Email, and Phone).");
+      if (!sanitizedFullName) {
+        toast.error("Please enter Full Name.");
         return;
       }
     }
@@ -871,19 +910,26 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                               })()}
                             </td>
                             <td className="hidden md:table-cell py-4 px-3 font-medium text-foreground">
-                              <a
-                                href={`mailto:${r.email}`}
-                                className="text-primary hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {r.email}
-                              </a>
+                              {(() => {
+                                const matched = members?.find((m) => m.id === r.member_id || m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim());
+                                const realEmail = matched?.email && !isSyntheticEmail(matched.email) ? matched.email : (!isSyntheticEmail(r.email) ? r.email : null);
+                                if (!realEmail) return <span className="text-muted-foreground">—</span>;
+                                return (
+                                  <a
+                                    href={`mailto:${realEmail}`}
+                                    className="text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {realEmail}
+                                  </a>
+                                );
+                              })()}
                             </td>
                             <td className="hidden sm:table-cell py-4 px-3">
                               {(() => {
                                 const role = !r.is_member
                                   ? "guest"
-                                  : r.buddy_group && r.buddy_group.trim() !== ""
+                                  : !r.club_name
                                   ? "club member"
                                   : "rotarian";
                                 const badgeClass =
@@ -902,7 +948,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                               })()}
                             </td>
                             <td className="hidden md:table-cell py-4 px-3 text-muted-foreground">
-                              {r.is_member ? (r.club_name || "—") : "Guest"}
+                              {r.is_member ? (r.club_name || "Home Club") : "Guest"}
                             </td>
                             <td className="py-4 px-3 text-xs font-bold">
                               {r.status === "apology" ? (
@@ -917,24 +963,30 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                               </div>
                             </td>
                           </tr>
+
+                          {/* Expandable Details Drawer */}
                           {isExpanded && (
-                            <tr className="bg-muted/10 border-b border-border/50">
-                              <td colSpan={5} className="py-4 px-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                            <tr className="bg-muted/20">
+                              <td colSpan={7} className="p-4">
+                                <div className="bg-background rounded-2xl p-4 border border-border/60 shadow-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                                   <div>
                                     <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider mb-1">
                                       Contact Details
                                     </p>
-                                    <p className="text-foreground">
-                                      <span className="text-muted-foreground font-semibold">Email:</span>{" "}
-                                      <a href={`mailto:${r.email}`} className="text-primary hover:underline font-medium">
-                                        {r.email}
-                                      </a>
-                                    </p>
+                                    <p className="text-foreground font-medium">{r.full_name}</p>
+                                     {(() => {
+                                       const matched = members?.find((m) => m.id === r.member_id || m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim());
+                                       const realEmail = matched?.email && !isSyntheticEmail(matched.email) ? matched.email : (!isSyntheticEmail(r.email) ? r.email : null);
+                                       return realEmail ? (
+                                         <p className="text-muted-foreground mt-0.5">{realEmail}</p>
+                                       ) : null;
+                                     })()}
                                     {r.phone && (
-                                      <p className="text-foreground mt-0.5">
-                                        <span className="text-muted-foreground font-semibold">Phone:</span>{" "}
-                                        <a href={`tel:${r.phone}`} className="text-primary hover:underline font-medium">
+                                      <p className="text-muted-foreground mt-0.5">
+                                        <a
+                                          href={`tel:${r.phone}`}
+                                          className="hover:underline text-[#17458F] font-medium"
+                                        >
                                           {r.phone}
                                         </a>
                                       </p>
@@ -946,22 +998,24 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                       Rotary Affiliation
                                     </p>
                                     {r.is_member ? (
-                                      r.buddy_group && r.buddy_group.trim() !== "" ? (
+                                      !r.club_name ? (
                                         <div>
-                                          <p className="text-foreground">
-                                            <span className="text-muted-foreground font-semibold">Role:</span>{" "}
-                                            Club Member
+                                          <p className="text-foreground font-semibold">
+                                            <span className="text-muted-foreground font-normal">Role:</span>{" "}
+                                            Home Club Member
                                           </p>
-                                          <p className="text-foreground mt-0.5">
-                                            <span className="text-muted-foreground font-semibold">Buddy Group:</span>{" "}
-                                            {r.buddy_group}
-                                          </p>
+                                          {r.buddy_group && (
+                                            <p className="text-foreground mt-0.5">
+                                              <span className="text-muted-foreground font-semibold">Buddy Group:</span>{" "}
+                                              {r.buddy_group}
+                                            </p>
+                                          )}
                                         </div>
                                       ) : (
                                         <div>
                                           <p className="text-foreground">
                                             <span className="text-muted-foreground font-semibold">Club:</span>{" "}
-                                            {r.club_name || "—"}
+                                            {r.club_name}
                                           </p>
                                           {r.district && (
                                             <p className="text-foreground mt-0.5">
@@ -973,6 +1027,19 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                       )
                                     ) : (
                                       <p className="text-muted-foreground italic mt-0.5">Guest (Non-Rotarian)</p>
+                                    )}
+
+                                    {r.club_name && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleConvertToHomeMember(r);
+                                        }}
+                                        className="mt-2 text-[10px] font-bold text-[#17458F] bg-[#17458F]/5 hover:bg-[#17458F]/15 px-2.5 py-1 rounded-lg border border-[#17458F]/20 cursor-pointer transition-all flex items-center gap-1"
+                                      >
+                                        ⇄ Change to Home Club Member
+                                      </button>
                                     )}
                                   </div>
 
@@ -1038,7 +1105,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                     </div>
                                   )}
 
-                                  {/* Status controls */}
+                                  {/* Status display */}
                                   <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                       {r.status === "checked-in" ? (
@@ -1051,39 +1118,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                         </span>
                                       ) : (
                                         <span className="text-xs text-slate-500 font-semibold px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
-                                          Pending Check-In
+                                          Registered
                                         </span>
-                                      )}
-                                    </div>
-
-                                    {/* Action Buttons to update status */}
-                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                      {r.status !== "checked-in" && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUpdateStatus(r.id, "checked-in")}
-                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm animate-in fade-in"
-                                        >
-                                          Check In
-                                        </button>
-                                      )}
-                                      {r.status !== "apology" && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUpdateStatus(r.id, "apology")}
-                                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm animate-in fade-in"
-                                        >
-                                          Register Apology
-                                        </button>
-                                      )}
-                                      {r.status !== "pending" && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleUpdateStatus(r.id, "pending")}
-                                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all cursor-pointer animate-in fade-in"
-                                        >
-                                          Reset to Pending
-                                        </button>
                                       )}
                                     </div>
                                   </div>
@@ -1139,7 +1175,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 placeholder="e.g. name@domain.com"
                 value={email}
                 onChange={setEmail}
-                required
               />
 
               <TextInput
@@ -1148,7 +1183,6 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 placeholder="e.g. +256 700 000000"
                 value={phone}
                 onChange={setPhone}
-                required
               />
 
               <div className="flex flex-col gap-1.5">
@@ -1157,9 +1191,9 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: "guest", label: "Guest" },
-                    { id: "rotarian", label: "Rotarian" },
-                    { id: "club_member", label: "Club Member" },
+                    { id: "club_member", label: "Home Club Member" },
+                    { id: "rotarian", label: "Visiting Rotarian" },
+                    { id: "guest", label: "Guest / Visitor" },
                   ].map((type) => {
                     const isSelected = regType === type.id;
                     return (

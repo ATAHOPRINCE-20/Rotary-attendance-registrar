@@ -67,6 +67,10 @@ CREATE POLICY "Admins update org members"
   ON members FOR UPDATE
   USING (organization_id = my_org_id() AND is_admin());
 
+CREATE POLICY "Members update own member record"
+  ON members FOR UPDATE
+  USING (user_id = auth.uid() OR (email IS NOT NULL AND LOWER(email) = LOWER(auth.jwt()->>'email')));
+
 CREATE POLICY "Admins delete org members"
   ON members FOR DELETE
   USING (organization_id = my_org_id() AND is_admin());

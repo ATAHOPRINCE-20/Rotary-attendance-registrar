@@ -27,7 +27,6 @@ import {
   Calendar,
   QrCode,
   Share2,
-  Share2,
   Printer,
   Copy,
   Check,

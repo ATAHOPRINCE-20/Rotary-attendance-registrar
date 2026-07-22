@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Loader2, AlertCircle, LogIn } from "lucide-react";
+import { Loader2, AlertCircle, LogIn, CheckCircle2, X, Eye, EyeOff } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../context/AuthContext";
 import { RotaryLogo } from "../shared/RotaryLogo";
 import { GoldButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
 import { NAVY, GOLD } from "../../../lib/constants";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
-
+import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 
 export function AdminLoginPage() {
@@ -15,14 +16,27 @@ export function AdminLoginPage() {
   const navigate = useNavigate();
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [loading, setLoading]   = useState(false);
+
+  // Forgot password modal state
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Already logged in → redirect safely using useEffect
   useEffect(() => {
     if (!authLoading && !profileLoading && user) {
       if (profile) {
-        navigate("/admin/dashboard", { replace: true });
+        const dest = profile.role === "member"
+          ? "/member/dashboard"
+          : profile.role === "treasurer"
+          ? "/treasurer/dashboard"
+          : "/admin/dashboard";
+        navigate(dest, { replace: true });
       } else {
         navigate("/org-setup", { replace: true });
       }
@@ -41,7 +55,42 @@ export function AdminLoginPage() {
     const { error: err } = await signIn(email, password);
     setLoading(false);
     if (err) { setError(getFriendlyErrorMessage(err)); return; }
-    navigate("/admin/dashboard");
+    if (profile?.role === "member") {
+      navigate("/member/dashboard");
+    } else if (profile?.role === "treasurer") {
+      navigate("/treasurer/dashboard");
+    } else {
+      navigate("/admin/dashboard");
+    }
+  }
+
+  async function handleSendResetEmail(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const cleanEmail = resetEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setResetError("Please enter your email address.");
+      return;
+    }
+    setResetError(null);
+    setResetLoading(true);
+
+    try {
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (resetErr) {
+        throw new Error(resetErr.message);
+      }
+
+      setResetSuccess(true);
+      toast.success("Password reset instructions sent!");
+    } catch (err: any) {
+      console.error(err);
+      setResetError(getFriendlyErrorMessage(err.message || err));
+    } finally {
+      setResetLoading(false);
+    }
   }
 
   return (
@@ -51,10 +100,10 @@ export function AdminLoginPage() {
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
           <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-            Admin Portal
+            Agoroll Portal
           </h1>
           <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
-            Sign in to manage your Rotary events
+            Sign in to access your Agoroll account
           </p>
         </div>
 
@@ -72,15 +121,40 @@ export function AdminLoginPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Password</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetEmail(email);
+                    setResetSuccess(false);
+                    setResetError(null);
+                    setResetModalOpen(true);
+                  }}
+                  className="text-xs font-semibold hover:underline cursor-pointer"
+                  style={{ color: NAVY }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  className="w-full px-4 py-3 pr-11 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -103,7 +177,7 @@ export function AdminLoginPage() {
             <button
               onClick={() => signInWithGoogle()}
               disabled={loading}
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border bg-input-background hover:bg-muted transition-all text-sm font-semibold"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border bg-input-background hover:bg-muted transition-all text-sm font-semibold cursor-pointer"
               style={{ color: NAVY, fontFamily: "var(--font-sans)" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -118,13 +192,91 @@ export function AdminLoginPage() {
             <p className="text-center text-xs text-muted-foreground mt-2" style={{ fontFamily: "Inter, sans-serif" }}>
               No account?{" "}
               <button onClick={() => navigate("/signup")}
-                className="font-semibold hover:underline" style={{ color: NAVY }}>
+                className="font-semibold hover:underline cursor-pointer" style={{ color: NAVY }}>
                 Create one
               </button>
             </p>
           </div>
         </PageCard>
       </div>
+
+      {/* Forgot Password Modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border border-border rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            <button
+              onClick={() => setResetModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-black mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+              Reset Your Password
+            </h3>
+            <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+
+            {resetSuccess ? (
+              <div className="flex flex-col items-center text-center py-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3">
+                  <CheckCircle2 size={28} />
+                </div>
+                <h4 className="font-bold text-sm mb-1" style={{ color: NAVY }}>Check Your Email</h4>
+                <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+                  We've sent password reset instructions to <strong>{resetEmail}</strong>.
+                </p>
+                <GoldButton
+                  onClick={() => setResetModalOpen(false)}
+                  className="w-full justify-center text-xs py-2"
+                >
+                  Done
+                </GoldButton>
+              </div>
+            ) : (
+              <form onSubmit={handleSendResetEmail} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ fontFamily: "var(--font-sans)" }}>
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="you@rotaryclub.org"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="px-4 py-2.5 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
+                  />
+                </div>
+
+                {resetError && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs bg-red-100 text-red-700">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetModalOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <GoldButton
+                    type="submit"
+                    className="flex-1 justify-center py-2.5 text-xs"
+                    disabled={resetLoading}
+                  >
+                    {resetLoading ? <Loader2 size={15} className="animate-spin" /> : "Send Reset Link"}
+                  </GoldButton>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

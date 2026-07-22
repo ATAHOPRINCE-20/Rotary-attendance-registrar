@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { NAVY, sanitizeInput } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
 import { QRCodeSVG } from "qrcode.react";
-import { X, Settings } from "lucide-react";
+import { X, Settings, Eye, EyeOff } from "lucide-react";
 
 export default function SettingsPage() {
   const { organization, refreshProfile } = useAuth();
@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [savingSettings, setSavingSettings] = useState(false);
   
   const [brevoApiKey, setBrevoApiKey] = useState("");
+  const [showBrevoApiKey, setShowBrevoApiKey] = useState(false);
   const [brevoSenderEmail, setBrevoSenderEmail] = useState("");
   const [brevoSenderName, setBrevoSenderName] = useState("");
   const [savingBrevo, setSavingBrevo] = useState(false);
@@ -349,13 +350,23 @@ export default function SettingsPage() {
             <form onSubmit={handleSaveBrevoSettings} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Brevo API Key</label>
-                <input
-                  type="password"
-                  placeholder="xkeysib-..."
-                  value={brevoApiKey}
-                  onChange={(e) => setBrevoApiKey(e.target.value)}
-                  className="w-full px-4 py-2.5 text-xs rounded-xl border border-border bg-input-background focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showBrevoApiKey ? "text" : "password"}
+                    placeholder="xkeysib-..."
+                    value={brevoApiKey}
+                    onChange={(e) => setBrevoApiKey(e.target.value)}
+                    className="w-full px-4 py-2.5 pr-10 text-xs rounded-xl border border-border bg-input-background focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowBrevoApiKey(!showBrevoApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title={showBrevoApiKey ? "Hide API Key" : "Show API Key"}
+                  >
+                    {showBrevoApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Sender Name</label>

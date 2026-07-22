@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit.js';
+import { rateLimit } from '../src/lib/rate-limit.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
@@ -21,30 +21,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { webhookUrl, phone, message } = req.body;
+  const { registrationId, webhookUrl, phone, message } = req.body;
 
-  if (!webhookUrl || !phone || !message) {
-    return res.status(400).json({ error: 'Missing webhookUrl, phone, or message parameters' });
+  // 1. Welcome WhatsApp Registration Flow
+  if (registrationId) {
+    const rateLimitResult = await rateLimit(req, 'send-welcome-whatsapp', 30, 60);
+    if (!rateLimitResult.success) {
+      return res.status(429).json({ error: rateLimitResult.error });
+    }
+
+    try {
+      const { data: reg, error: regError } = await supabase
+        .from('registrations')
+        .select('*, events(title), organizations(name, whatsapp_welcome_template)')
+        .eq('id', registrationId)
+        .single();
+
+      if (regError || !reg) {
+        return res.status(404).json({ error: 'Registration not found' });
+      }
+
+      if (!reg.phone) {
+        return res.status(400).json({ error: 'No phone number provided for this registration' });
+      }
+
+      const eventTitle = reg.events?.title || "Event";
+      const orgName = reg.organizations?.name || "Rotary Club";
+      const customTemplate = reg.organizations?.whatsapp_welcome_template;
+
+      let welcomeMessage = "";
+      if (customTemplate && customTemplate.trim()) {
+        welcomeMessage = customTemplate
+          .replace(/{full_name}/g, reg.full_name)
+          .replace(/{event_title}/g, eventTitle)
+          .replace(/{qr_ref}/g, reg.qr_ref)
+          .replace(/{org_name}/g, orgName);
+      } else {
+        welcomeMessage = `Welcome to *${orgName}*!\n\nDear *${reg.full_name}*, thank you for registering for *${eventTitle}*.\n\nYour Registration Code is: *${reg.qr_ref}*.\n\nWe look forward to hosting you!`;
+      }
+
+      const GATEWAY_BASE_URL = "http://ugpay.tech:3000";
+      const destUrl = `${GATEWAY_BASE_URL}/send-whatsapp/${reg.organization_id}`;
+
+      const response = await fetch(destUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: reg.phone, message: welcomeMessage })
+      });
+
+      const result: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to forward welcome message via server-side gateway');
+      }
+
+      return res.status(200).json({ success: true, gatewayResponse: result });
+    } catch (error: any) {
+      console.error('Welcome WhatsApp error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to send welcome WhatsApp' });
+    }
   }
 
-  // 0. Rate Limiting (20 requests per minute per IP)
+  // 2. Direct Admin WhatsApp Message Flow
+  if (!webhookUrl || !phone || !message) {
+    return res.status(400).json({ error: 'Missing parameters: registrationId or (webhookUrl, phone, message)' });
+  }
+
   const rateLimitResult = await rateLimit(req, 'send-whatsapp', 20, 60);
   if (!rateLimitResult.success) {
     return res.status(429).json({ error: rateLimitResult.error });
   }
 
-  // 1. Secure proxy destination: only allow our known gateway domain
   if (!webhookUrl.startsWith('http://ugpay.tech:3000/send-whatsapp/')) {
     return res.status(400).json({ error: 'Unauthorized webhookUrl destination' });
   }
 
-  // 2. Extract and verify organization ID from URL
   const orgId = webhookUrl.split('/').pop();
   if (!orgId) {
     return res.status(400).json({ error: 'Invalid webhookUrl organization parameters' });
   }
 
-  // 3. Validate authentication & permissions
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
@@ -62,47 +117,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .eq('id', user.id)
     .single();
 
-  if (profileErr || !profile) {
-    return res.status(403).json({ error: 'Forbidden: Profile not found' });
-  }
-
-  if (profile.organization_id !== orgId) {
-    return res.status(403).json({ error: 'Forbidden: You do not belong to this organization' });
-  }
-
-  if (!['admin', 'super_admin'].includes(profile.role)) {
+  if (profileErr || !profile || profile.organization_id !== orgId || !['admin', 'super_admin'].includes(profile.role)) {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
   }
 
-  // 4. Verify organization exists
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('id', orgId)
-    .maybeSingle();
-
-  if (orgError || !org) {
-    return res.status(404).json({ error: 'Organization not found or unregistered' });
-  }
-
   try {
-    // Forward the request from Vercel (server-side HTTPS) to the user's custom gateway (HTTP)
-    // Server-to-server requests bypass all browser CORS and Mixed-Content blocks
     const response = await fetch(webhookUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phone: phone,
-        message: message
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, message })
     });
 
     const result: any = await response.json().catch(() => ({}));
-    
     if (!response.ok) {
-      throw new Error(result.error || 'Failed to forward message via server-side gateway');
+      throw new Error(result.error || 'Failed to forward message');
     }
 
     return res.status(200).json({ success: true, gatewayResponse: result });

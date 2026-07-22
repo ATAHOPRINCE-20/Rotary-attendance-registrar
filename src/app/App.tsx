@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { MemberAuthProvider } from "../context/MemberAuthContext";
 import { TenantProvider } from "../context/TenantContext";
 import { getSubdomain } from "../lib/subdomain";
 import { LoadingScreen } from "./components/shared/LoadingScreen";
@@ -85,6 +86,18 @@ const TenantsPage = lazyWithRetry(() => import("./components/admin/TenantsPage")
 const BillingPage = lazyWithRetry(() => import("./components/admin/BillingPage"), "BillingPage");
 const SettingsPage = lazyWithRetry(() => import("./components/admin/SettingsPage"), "default");
 
+// Member screens
+const MemberLoginPage = lazyWithRetry(() => import("./components/public/MemberLoginPage"), "MemberLoginPage");
+const MemberSetupPasswordPage = lazyWithRetry(() => import("./components/public/MemberSetupPasswordPage"), "MemberSetupPasswordPage");
+const MemberDuesDashboard = lazyWithRetry(() => import("./components/public/MemberDuesDashboard"), "MemberDuesDashboard");
+
+// Treasurer screen
+const TreasurerDashboard = lazyWithRetry(() => import("./components/admin/TreasurerDashboard"), "TreasurerDashboard");
+
+// Auth recovery screen
+const ResetPasswordPage = lazyWithRetry(() => import("./components/auth/ResetPasswordPage"), "ResetPasswordPage");
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -143,7 +156,12 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   if (!profile) return <Navigate to="/org-setup" replace />;
 
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/admin/dashboard" replace />;
+    const fallback = profile.role === "member"
+      ? "/member/dashboard"
+      : profile.role === "treasurer"
+      ? "/treasurer/dashboard"
+      : "/admin/dashboard";
+    return <Navigate to={fallback} replace />;
   }
 
   return <>{children}</>;
@@ -170,21 +188,30 @@ function AppRoutes() {
           <Route path="/admin"     element={<AdminLoginPage />} />
           <Route path="/signup"    element={<AdminSignupPage />} />
           <Route path="/org-setup" element={<OrgSetupPage />} />
-          <Route path="/admin/dashboard"          element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-          <Route path="/admin/events"             element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
-          <Route path="/admin/events/:id/qr"      element={<ProtectedRoute><EventQRPage /></ProtectedRoute>} />
-          <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute><CheckInPage /></ProtectedRoute>} />
+          <Route path="/admin/dashboard"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/events"             element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><EventsPage /></ProtectedRoute>} />
+          <Route path="/admin/events/:id/qr"      element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><EventQRPage /></ProtectedRoute>} />
+          <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CheckInPage /></ProtectedRoute>} />
           <Route path="/admin/communications"     element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CommsPage /></ProtectedRoute>} />
-          <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AnalyticsPage /></ProtectedRoute>} />
-          <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
-          <Route path="/admin/directory"          element={<ProtectedRoute><DirectoryPage /></ProtectedRoute>} />
-          <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-          <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
+          <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><AnalyticsPage /></ProtectedRoute>} />
+          <Route path="/admin/members"            element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><MembersPage /></ProtectedRoute>} />
+          <Route path="/admin/directory"          element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DirectoryPage /></ProtectedRoute>} />
+          <Route path="/admin/reports"            element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><ReportsPage /></ProtectedRoute>} />
+          <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
           <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
-          <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
+          <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DonationCampaignsPage /></ProtectedRoute>} />
           <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
           <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
           <Route path="/admin/settings"           element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><SettingsPage /></ProtectedRoute>} />
+          <Route path="/treasurer/dashboard"      element={<ProtectedRoute allowedRoles={["treasurer", "admin", "super_admin"]}><TreasurerDashboard /></ProtectedRoute>} />
+
+          {/* Auth recovery */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* Member routes */}
+          <Route path="/member/login"          element={<MemberLoginPage />} />
+          <Route path="/member/setup-password" element={<MemberSetupPasswordPage />} />
+          <Route path="/member/dashboard"      element={<MemberAuthProvider><MemberDuesDashboard /></MemberAuthProvider>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -205,21 +232,30 @@ function AppRoutes() {
       <Route path="/org-setup" element={<OrgSetupPage />} />
 
       {/* Protected admin panel */}
-      <Route path="/admin/dashboard"          element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/events"             element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
-      <Route path="/admin/events/:id/qr"      element={<ProtectedRoute><EventQRPage /></ProtectedRoute>} />
-      <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute><CheckInPage /></ProtectedRoute>} />
+      <Route path="/admin/dashboard"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/events"             element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><EventsPage /></ProtectedRoute>} />
+      <Route path="/admin/events/:id/qr"      element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><EventQRPage /></ProtectedRoute>} />
+      <Route path="/admin/checkin/:eventId"   element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CheckInPage /></ProtectedRoute>} />
       <Route path="/admin/communications"     element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><CommsPage /></ProtectedRoute>} />
-      <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AnalyticsPage /></ProtectedRoute>} />
-      <Route path="/admin/members"            element={<ProtectedRoute><MembersPage /></ProtectedRoute>} />
-      <Route path="/admin/directory"          element={<ProtectedRoute><DirectoryPage /></ProtectedRoute>} />
-      <Route path="/admin/reports"            element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-      <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
+      <Route path="/admin/analytics"          element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><AnalyticsPage /></ProtectedRoute>} />
+      <Route path="/admin/members"            element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><MembersPage /></ProtectedRoute>} />
+      <Route path="/admin/directory"          element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DirectoryPage /></ProtectedRoute>} />
+      <Route path="/admin/reports"            element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><ReportsPage /></ProtectedRoute>} />
+      <Route path="/admin/withdrawals"        element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><AdminWithdrawalsPage /></ProtectedRoute>} />
       <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
-      <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><DonationCampaignsPage /></ProtectedRoute>} />
+      <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DonationCampaignsPage /></ProtectedRoute>} />
       <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
       <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
       <Route path="/admin/settings"           element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><SettingsPage /></ProtectedRoute>} />
+      <Route path="/treasurer/dashboard"      element={<ProtectedRoute allowedRoles={["treasurer", "admin", "super_admin"]}><TreasurerDashboard /></ProtectedRoute>} />
+
+      {/* Auth recovery */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      {/* Member routes */}
+      <Route path="/member/login"          element={<MemberLoginPage />} />
+      <Route path="/member/setup-password" element={<MemberSetupPasswordPage />} />
+      <Route path="/member/dashboard"      element={<MemberAuthProvider><MemberDuesDashboard /></MemberAuthProvider>} />
 
       {/* Tenant (public attendee) routes — subpath fallback scoped to :slug */}
       <Route

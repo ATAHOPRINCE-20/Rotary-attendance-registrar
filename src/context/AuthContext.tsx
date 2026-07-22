@@ -15,6 +15,8 @@ interface AuthContextValue {
   signIn:         (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithGoogle: (orgId?: string | null, role?: string | null) => Promise<{ error: string | null }>;
   signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) => Promise<{ error: string | null; session: Session | null }>;
+  resendVerificationEmail: (email: string) => Promise<void>;
+  sendMemberInvite: (email: string) => Promise<{ error: string | null }>;
   signOut:        () => Promise<void>;
   refreshProfile: () => Promise<void>;
   impersonatedOrgId: string | null;
@@ -65,56 +67,103 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from("profiles")
           .select("*")
           .eq("id", userId)
-          .single();
+          .maybeSingle();
 
         if (profErr) {
           console.warn("[AuthContext] loadProfile error:", profErr.code, profErr.message);
-          if (profErr.code === "PGRST116") {
-            const { data: { user: currentUser } } = await supabase.auth.getUser();
-            const inviteOrgId = currentUser?.user_metadata?.organization_id || localStorage.getItem("pending_org_id");
-            const inviteRole = currentUser?.user_metadata?.role || localStorage.getItem("pending_role") || "staff";
-            
-            if (inviteOrgId) {
-              localStorage.removeItem("pending_org_id");
-              localStorage.removeItem("pending_role");
-              const { data: newProf, error: insertErr } = await supabase
-                .from("profiles")
-                .insert({
-                  id: userId,
-                  organization_id: inviteOrgId,
-                  full_name: currentUser?.user_metadata?.full_name || "New Staff",
-                  role: inviteRole,
-                })
-                .select()
-                .single();
-              
-              if (!insertErr && newProf) {
-                setProfileError(false);
-                setProfile(newProf);
-                const { data: org } = await supabase
-                  .from("organizations")
-                  .select("*")
-                  .eq("id", inviteOrgId)
-                  .single();
-                if (org) {
-                  const orgData = { ...org };
-                  if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
-                  setOrg(orgData);
-                } else {
-                  setOrg(null);
-                }
-                return;
-              } else {
-                console.error("[AuthContext] Auto-insert profile error:", insertErr);
+        }
+
+        if (!prof) {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+          // 1. Check if user is a registered Club Member in the members table
+          if (currentUser?.email) {
+            const { data: memberRecord } = await supabase
+              .from("members")
+              .select("*")
+              .or(`user_id.eq.${userId},email.ilike.${currentUser.email}`)
+              .maybeSingle();
+
+            if (memberRecord) {
+              // Auto-link user_id to members table for seamless RLS & future logins
+              if (!memberRecord.user_id) {
+                await supabase
+                  .from("members")
+                  .update({ user_id: userId })
+                  .eq("id", memberRecord.id);
               }
+
+              const memberProfile: Profile = {
+                id: userId,
+                organization_id: memberRecord.organization_id,
+                full_name: memberRecord.full_name,
+                role: "member",
+                avatar_url: null,
+                created_at: memberRecord.created_at,
+              };
+
+              setProfileError(false);
+              setProfile(memberProfile);
+
+              const { data: org } = await supabase
+                .from("organizations")
+                .select("*")
+                .eq("id", memberRecord.organization_id)
+                .maybeSingle();
+
+              if (org) {
+                const orgData = { ...org };
+                if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
+                setOrg(orgData);
+              } else {
+                setOrg(null);
+              }
+              return;
             }
-            setProfile(null);
-            setOrg(null);
-          } else {
-            // Network/RLS/timeout error — do NOT clear profile. Flag error so
-            // ProtectedRoute shows a retry prompt instead of going to /org-setup.
-            setProfileError(true);
           }
+
+          // 2. Check for pending organization invite
+          const inviteOrgId = currentUser?.user_metadata?.organization_id || localStorage.getItem("pending_org_id");
+          const inviteRole = currentUser?.user_metadata?.role || localStorage.getItem("pending_role") || "staff";
+          
+          const isMember = currentUser?.user_metadata?.is_member === true;
+          if (inviteOrgId && !isMember) {
+            localStorage.removeItem("pending_org_id");
+            localStorage.removeItem("pending_role");
+            const { data: newProf, error: insertErr } = await supabase
+              .from("profiles")
+              .insert({
+                id: userId,
+                organization_id: inviteOrgId,
+                full_name: currentUser?.user_metadata?.full_name || "New Staff",
+                role: inviteRole,
+              })
+              .select()
+              .maybeSingle();
+            
+            if (!insertErr && newProf) {
+              setProfileError(false);
+              setProfile(newProf);
+              const { data: org } = await supabase
+                .from("organizations")
+                .select("*")
+                .eq("id", inviteOrgId)
+                .maybeSingle();
+              if (org) {
+                const orgData = { ...org };
+                if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
+                setOrg(orgData);
+              } else {
+                setOrg(null);
+              }
+              return;
+            } else {
+              console.error("[AuthContext] Auto-insert profile error:", insertErr);
+            }
+          }
+          setProfile(null);
+          setOrg(null);
+          setProfileError(false);
           return;
         }
 
@@ -127,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .from("organizations")
               .select("*")
               .eq("id", activeOrgId)
-              .single();
+              .maybeSingle();
             if (org) {
               const orgData = { ...org };
               if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
@@ -136,10 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setOrg(null);
             }
           }
-        } else {
-          setProfile(null);
-          setOrg(null);
         }
+      } catch (e) {
+        console.error("[AuthContext] loadProfile exception:", e);
       } finally {
         if (loadingUserRef.current === userId) {
           setProfileLoading(false);
@@ -208,7 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from("organizations")
           .select("*")
           .eq("id", activeOrgId)
-          .single();
+          .maybeSingle();
         if (org) {
           const orgData = { ...org };
           if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
@@ -269,14 +317,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       metadata.organization_id = orgId;
       metadata.role = role || "staff";
     }
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: metadata },
-    });
+    let data: any = null;
+    let error: any = null;
+
+    try {
+      const res = await supabase.auth.signUp({
+        email,
+        password,
+        options: { 
+          data: metadata,
+          emailRedirectTo: `${window.location.origin}/admin`
+        },
+      });
+      data = res.data;
+      error = res.error;
+    } catch (e: any) {
+      console.error("[AuthContext] signUp exception:", e);
+      error = e;
+    }
+
+    if (error && (error.status === 422 || error.message?.toLowerCase().includes("redirect"))) {
+      try {
+        console.warn("[AuthContext] Redirect URL not whitelisted, retrying default signup...");
+        const retry = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: metadata },
+        });
+        data = retry.data;
+        error = retry.error;
+      } catch (retryErr: any) {
+        error = retryErr;
+      }
+    }
+
     if (error) {
       setLoading(false);
-      return { error: error.message, session: null };
+      const userMessage = error.status === 500 || error.message?.includes("500") || String(error).includes("500")
+        ? "Supabase Email Server Error (500). Please disable Custom SMTP in Supabase Dashboard -> Authentication -> Providers -> Email to test signup."
+        : error.message || "Signup failed.";
+      return { error: userMessage, session: null };
     }
     if (data.session?.user) {
       setSession(data.session);
@@ -285,6 +365,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
     return { error: null, session: data.session };
+  }
+
+  async function resendVerificationEmail(email: string) {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/admin`
+      }
+    });
+    if (error) throw error;
+  }
+
+  async function sendMemberInvite(email: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return { error: "Email address is required." };
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/member/setup-password`,
+    });
+    if (error) return { error: error.message };
+    return { error: null };
   }
 
   async function signOut() {
@@ -299,7 +400,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, organization, loading, profileLoading, profileError,
-      signIn, signInWithGoogle, signUp, signOut, refreshProfile,
+      signIn, signInWithGoogle, signUp, resendVerificationEmail, sendMemberInvite, signOut, refreshProfile,
       impersonatedOrgId, impersonateOrganization,
     }}>
       {children}

@@ -10,7 +10,7 @@ import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput, form
 import { AlertCircle, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
-import { useOrgMembers, useCreateMember } from "../../../hooks/useMembers";
+import { usePublicOrgMembers, useCreateMember } from "../../../hooks/useMembers";
 import { useRotaryClubs } from "../../../hooks/useRotaryClubs";
 import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
@@ -160,7 +160,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const navigate = useNavigate();
   const storageKey = `rotary-reg-${event.id}`;
 
-  const { data: members, error: membersError } = useOrgMembers(organization?.id);
+  const { data: members, error: membersError } = usePublicOrgMembers(organization?.id);
   const createMemberMutation = useCreateMember();
   const { data: dbClubs } = useRotaryClubs();
 
@@ -268,14 +268,14 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
           return;
         }
         if (isManualInput) {
-          if (!fullName.trim() || !email.trim() || !phone.trim()) {
-            setError("Please fill out all required fields (Name, Email, and Phone).");
+          if (!fullName.trim() || !email.trim()) {
+            setError("Please fill out required fields (Name and Email).");
             return;
           }
         }
       } else {
-        if (!fullName.trim() || !email.trim() || !phone.trim()) {
-          setError("Please fill out all required fields (Name, Email, and Phone Number).");
+        if (!fullName.trim() || !email.trim()) {
+          setError("Please fill out required fields (Name and Email Address).");
           return;
         }
       }
@@ -360,7 +360,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   }, [selectedMemberId, fullName, isManualInput, regType, event.date, organization?.id]);
 
   const filteredMembers = members?.filter(m =>
-    m.full_name.toLowerCase().includes((fullName || searchMemberQuery).toLowerCase())
+    (m.full_name || "").toLowerCase().includes((fullName || searchMemberQuery).toLowerCase())
   ) || [];
 
   // Auto-persist inputs on changes
@@ -418,11 +418,9 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     const sanitizedEmail = regType === "club_member"
       ? (isManualInput
           ? sanitizeRequiredInput(email)
-          : (email.trim() ? sanitizeRequiredInput(email) : `member-${selectedMemberId ?? "x"}@${organization?.slug || "rotary"}.org`))
+          : (email.trim() && !email.startsWith("member-") ? sanitizeRequiredInput(email) : null))
       : sanitizeRequiredInput(email);
-    const sanitizedPhone = regType === "club_member"
-      ? (isManualInput ? formatUgandanPhone(phone) : null)
-      : formatUgandanPhone(phone);
+    const sanitizedPhone = phone.trim() ? formatUgandanPhone(phone) : null;
     const sanitizedClubName = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(clubName) : null;
     const sanitizedDistrict = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
@@ -440,13 +438,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
         setError(isBuddyGroupRequired ? "Please enter your Full Name and select your Buddy Group." : "Please enter your Full Name.");
         return;
       }
-      if (isManualInput && (!sanitizedEmail || !sanitizedPhone)) {
-        setError(isBuddyGroupRequired ? "Please fill out all required fields (Name, Email, Phone, and Buddy Group)." : "Please fill out all required fields (Name, Email, and Phone).");
+      if (isManualInput && !sanitizedEmail) {
+        setError(isBuddyGroupRequired ? "Please fill out required fields (Name, Email, and Buddy Group)." : "Please fill out required fields (Name and Email).");
         return;
       }
     } else {
-      if (!sanitizedFullName || !sanitizedEmail || !sanitizedPhone) {
-        setError("Please fill out all required fields (Name, Email, and Phone Number).");
+      if (!sanitizedFullName || !sanitizedEmail) {
+        setError("Please fill out required fields (Name and Email Address).");
         return;
       }
     }
@@ -483,14 +481,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       if (regType === "club_member" && (!finalMemberId || isManualInput)) {
         try {
           const { data: existing } = await supabase
-            .from("members")
+            .rpc("get_public_org_members", { p_org_id: organization?.id || "" })
             .select("id")
-            .eq("organization_id", organization?.id || "")
             .ilike("full_name", sanitizedFullName)
-            .limit(1);
+            .maybeSingle();
 
-          if (existing && existing.length > 0) {
-            finalMemberId = existing[0].id;
+          if (existing && existing.id) {
+            finalMemberId = existing.id;
           } else {
             const newMember = await createMemberMutation.mutateAsync({
               organization_id: organization?.id || "",
@@ -626,10 +623,10 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
-                    { id: "club_member", label: "Club Member", desc: "Member of this Rotary Club" },
-                    { id: "rotarian", label: "Rotarian", desc: "Member of another Rotary Club" },
-                    { id: "rotaractor", label: "Rotaractor", desc: "Member of a Rotaract Club" },
-                    { id: "guest", label: "Guest", desc: "Visitor / Non-member" },
+                    { id: "club_member", label: "Home Club Member", desc: `Member of ${organization?.name || "this club"}` },
+                    { id: "rotarian", label: "Visiting Rotarian", desc: "Visiting member from another Rotary Club" },
+                    { id: "rotaractor", label: "Visiting Rotaractor", desc: "Visiting member from a Rotaract Club" },
+                    { id: "guest", label: "Guest / Visitor", desc: "Non-Rotarian guest or visitor" },
                   ].map((type) => {
                     const isSelected = regType === type.id;
                     return (
@@ -716,14 +713,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                                 key={m.id}
                                 type="button"
                                 onClick={() => {
-                                  setFullName(m.full_name);
-                                  setSelectedMemberId(m.id);
-                                  if (m.buddy_group) setBuddyGroup(m.buddy_group);
-                                  // Auto-fill email and phone from members table
+                                  setFullName(m.full_name || "");
+                                  setSelectedMemberId(m.id ?? null);
                                   if (m.email) setEmail(m.email);
                                   if (m.phone) setPhone(m.phone);
+                                  if (m.buddy_group) setBuddyGroup(m.buddy_group);
                                   setShowMemberDropdown(false);
-                                  if (regType === "guest" || (regType === "club_member" && buddyGroupsList.length === 0)) {
+                                  if (buddyGroupsList.length === 0) {
                                     setCurrentStep(4);
                                   } else {
                                     setCurrentStep(3);
@@ -778,30 +774,6 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   </div>
                 )}
 
-                {/* Show captured email/phone from DB for roster-selected club members */}
-                {regType === "club_member" && !isManualInput && selectedMemberId && (
-                  <div className="flex flex-col gap-2 p-3 rounded-xl bg-[#17458F]/5 border border-[#17458F]/15 animate-in fade-in duration-200">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#17458F]">Contact On File</p>
-                    {email ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-muted-foreground w-10 shrink-0">Email</span>
-                          <span className="text-xs font-semibold text-foreground bg-white border border-border/40 px-3 py-1.5 rounded-lg flex-1 truncate">{email}</span>
-                        </div>
-                        {phone && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-muted-foreground w-10 shrink-0">Phone</span>
-                            <span className="text-xs font-semibold text-foreground bg-white border border-border/40 px-3 py-1.5 rounded-lg flex-1">{phone}</span>
-                          </div>
-                        )}
-                        <p className="text-[10px] text-muted-foreground mt-0.5">These contact details are from your member record and will be used for your registration.</p>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground">No email on file for this member. Your registration will proceed without email contact details.</p>
-                    )}
-                  </div>
-                )}
-
                 {(regType !== "club_member" || isManualInput) && (
                   <>
                     <TextInput
@@ -810,7 +782,6 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                       placeholder="e.g. you@example.com"
                       value={email}
                       onChange={setEmail}
-                      required={regType !== "club_member" || isManualInput}
                     />
 
                     <TextInput
@@ -819,7 +790,6 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                       placeholder="e.g. +256 700 000000"
                       value={phone}
                       onChange={setPhone}
-                      required={regType !== "club_member" || isManualInput}
                     />
                   </>
                 )}

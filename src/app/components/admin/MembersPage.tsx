@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import { supabase } from "../../../lib/supabase";
 import {
   useOrgMembers,
   useCreateMember,
@@ -145,6 +146,44 @@ export function MembersPage() {
     } catch (err: any) {
       console.error(err);
       toast.error(getFriendlyErrorMessage(err));
+    }
+  }
+
+  // Invite Member to Portal
+  async function handleInviteMember(memberId: string) {
+    try {
+      const sessionData = await supabase.auth.getSession();
+      const token = sessionData.data.session?.access_token;
+      if (!token) {
+        toast.error("Authentication session expired. Please sign in again.");
+        return;
+      }
+
+      toast.promise(
+        (async () => {
+          const response = await fetch("/api/member/invite-member", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ memberId })
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "Failed to invite member");
+          }
+          return result;
+        })(),
+        {
+          loading: "Sending invitation email...",
+          success: "Invitation email sent successfully!",
+          error: (err) => err.message
+        }
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to trigger invitation.");
     }
   }
 
@@ -451,6 +490,19 @@ export function MembersPage() {
                       {profile?.role !== "staff" && (
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
+                            {m.email && (
+                              <button
+                                onClick={() => handleInviteMember(m.id)}
+                                className={`p-2 rounded-xl transition-all cursor-pointer ${
+                                  m.user_id
+                                    ? "text-emerald-600 hover:bg-emerald-50/50"
+                                    : "text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F]"
+                                }`}
+                                title={m.user_id ? "Resend Portal Invitation" : "Invite member to portal"}
+                              >
+                                <Mail size={13} />
+                              </button>
+                            )}
                             <button
                               onClick={() => openEditModal(m)}
                               className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
@@ -494,6 +546,19 @@ export function MembersPage() {
                       
                       {profile?.role !== "staff" && (
                         <div className="flex items-center gap-0.5">
+                          {m.email && (
+                            <button
+                              onClick={() => handleInviteMember(m.id)}
+                              className={`p-2 rounded-xl transition-all cursor-pointer ${
+                                m.user_id
+                                  ? "text-emerald-600 hover:bg-emerald-50/50"
+                                  : "text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F]"
+                              }`}
+                              title={m.user_id ? "Resend Portal Invitation" : "Invite member to portal"}
+                            >
+                              <Mail size={13} />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEditModal(m)}
                             className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"

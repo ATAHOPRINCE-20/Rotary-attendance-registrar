@@ -7,7 +7,7 @@ import { useOrgMembers } from "../../../hooks/useMembers";
 import { AdminLayout } from "../shared/AdminLayout";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { OutlineButton } from "../shared/Buttons";
-import { NAVY, GOLD, sanitizeRequiredInput } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeRequiredInput, isSyntheticEmail } from "../../../lib/constants";
 import { supabase } from "../../../lib/supabase";
 import {
   FolderArchive,
@@ -186,14 +186,37 @@ export function ReportsPage() {
       const guests = eventRegs?.filter(r => r.status !== "apology" && !r.is_member) ?? [];
       const apologies = eventRegs?.filter(r => r.status === "apology") ?? [];
 
+      // Helper function to resolve real email/phone from member directory
+      const getDisplayEmail = (r: any) => {
+        const matched = members?.find(
+          (m) => m.id === r.member_id || m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim()
+        );
+        if (matched?.email && !isSyntheticEmail(matched.email)) {
+          return matched.email;
+        }
+        if (r.email && !isSyntheticEmail(r.email)) {
+          return r.email;
+        }
+        return "—";
+      };
+
+      const getDisplayPhone = (r: any) => {
+        const matched = members?.find(
+          (m) => m.id === r.member_id || m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim()
+        );
+        if (r.phone && r.phone.trim()) return r.phone;
+        if (matched?.phone && matched.phone.trim()) return matched.phone;
+        return "—";
+      };
+
       const apologyRows = apologies.length > 0 ? apologies.map((r, i) => {
         return `
           <tr class="${i % 2 === 0 ? "even" : "odd"}">
             <td class="no">${i + 1}</td>
             <td class="name">${r.full_name}</td>
             <td>${r.buddy_group || "—"}</td>
-            <td>${r.phone ?? "—"}</td>
-            <td>${r.email}</td>
+            <td>${getDisplayPhone(r)}</td>
+            <td>${getDisplayEmail(r)}</td>
           </tr>`;
       }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No apologies registered for this event.</td></tr>`;
 
@@ -264,8 +287,8 @@ export function ReportsPage() {
               ${r.makeups && r.makeups.length > 0 ? `<div style="font-size: 8px; color: #B45309; font-weight: normal; margin-top: 1px;"><b>Make-ups:</b> ${r.makeups.map((m: ClubActivity) => `${m.club_name} (${m.date})`).join(", ")}</div>` : ''}
             </td>
             <td>${r.buddy_group || "—"}</td>
-            <td>${r.phone ?? "—"}</td>
-            <td>${r.email}</td>
+            <td>${getDisplayPhone(r)}</td>
+            <td>${getDisplayEmail(r)}</td>
           </tr>`;
       }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No club members registered for this event.</td></tr>`;
 
@@ -276,8 +299,8 @@ export function ReportsPage() {
             <td class="name">${r.full_name}</td>
             <td>${r.club_name || "—"}</td>
             <td>${r.district || "—"}</td>
-            <td>${r.phone ?? "—"}</td>
-            <td>${r.email}</td>
+            <td>${getDisplayPhone(r)}</td>
+            <td>${getDisplayEmail(r)}</td>
           </tr>`;
       }).join("") : `<tr><td colspan="6" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No visiting Rotarians registered for this event.</td></tr>`;
 
@@ -287,8 +310,8 @@ export function ReportsPage() {
             <td class="no">${i + 1}</td>
             <td class="name">${r.full_name}</td>
             <td>${r.occupation || "—"}</td>
-            <td>${r.phone ?? "—"}</td>
-            <td>${r.email}</td>
+            <td>${getDisplayPhone(r)}</td>
+            <td>${getDisplayEmail(r)}</td>
           </tr>`;
       }).join("") : `<tr><td colspan="5" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No guests registered for this event.</td></tr>`;
 

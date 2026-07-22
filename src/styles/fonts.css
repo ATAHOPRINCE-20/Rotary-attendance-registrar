@@ -1,14 +1,6 @@
-/* Modern Sans Serif Font: Satoshi */
-
-/* Modern Sans Serif Font: Inter */
-/* Font Awesome 5 Brands */
 @font-face {
   font-family: 'Font Awesome 5 Brands';
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.eot');
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.eot?#iefix') format('embedded-opentype'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.woff2') format('woff2'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.woff') format('woff'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.ttf') format('truetype');
+  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-brands-400.eot') format('embedded-opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -18,14 +10,9 @@
   font-family: 'Font Awesome 5 Brands', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* Font Awesome 5 Duotone */
 @font-face {
   font-family: 'Font Awesome 5 Duotone';
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.eot');
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.eot?#iefix') format('embedded-opentype'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.woff2') format('woff2'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.woff') format('woff'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.ttf') format('truetype');
+  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-duotone-900.eot') format('embedded-opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -35,14 +22,9 @@
   font-family: 'Font Awesome 5 Duotone', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* Font Awesome 5 Pro */
 @font-face {
   font-family: 'Font Awesome 5 Pro';
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.eot');
-  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.eot?#iefix') format('embedded-opentype'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.woff2') format('woff2'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.woff') format('woff'),
-       url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.ttf') format('truetype');
+  src: url('https://globalassets.clubrunner.ca/scripts/fontawesome/webfonts/fa-light-300.eot') format('embedded-opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

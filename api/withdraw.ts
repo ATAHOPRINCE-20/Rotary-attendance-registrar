@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit.js';
+import { rateLimit } from '../src/lib/rate-limit.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
@@ -21,7 +21,7 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
 
     if (options.body) {
       const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      reqOptions.headers!['Content-Length'] = Buffer.byteLength(bodyStr);
+      (reqOptions.headers as Record<string, any>)['Content-Length'] = Buffer.byteLength(bodyStr);
       options._bodyStr = bodyStr; // store for later
     }
 

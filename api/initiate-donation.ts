@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from './utils/rate-limit.js';
+import { rateLimit } from '../src/lib/rate-limit.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
@@ -26,7 +26,7 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
 
     if (options.body) {
       const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      reqOptions.headers!['Content-Length'] = Buffer.byteLength(bodyStr);
+      (reqOptions.headers as Record<string, any>)['Content-Length'] = Buffer.byteLength(bodyStr);
       options._bodyStr = bodyStr; // store for later
     }
 
@@ -110,7 +110,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     paymentMethod,
     phone,
     slug, // Used for constructing local sandbox redirects
-    campaignId
+    campaignId,
+    memberId,
+    duesCategoryId
   } = req.body;
 
   if (!organizationId || !amount || !fullName || !paymentMethod) {
@@ -151,7 +153,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         payment_method: paymentMethod,
         status: 'pending',
         phone_number: phone ? phone.trim() : null,
-        receipt_number: reference
+        receipt_number: reference,
+        member_id: memberId || null,
+        dues_category_id: duesCategoryId || null
       });
 
     if (dbError) {
