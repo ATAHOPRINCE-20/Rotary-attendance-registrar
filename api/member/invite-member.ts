@@ -165,13 +165,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const apiKeyToUse = org?.brevo_api_key || BREVO_API_KEY;
     const senderEmailToUse = org?.brevo_sender_email || BREVO_SENDER_EMAIL;
-    const senderNameToUse = org?.brevo_sender_name || BREVO_SENDER_NAME;
-
-    if (!apiKeyToUse) {
-      throw new Error('Brevo email API is not configured.');
-    }
-
-    // 9. Construct and send custom HTML invitation email
     const htmlContent = getMemberInviteEmailTemplate({
       fullName: member.full_name,
       orgName: org?.name || 'Rotary Club',
@@ -180,6 +173,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const emailSubject = `Activate Your Member Portal — ${org?.name || 'Rotary Club'}`;
 
+    // Try sending via Brevo first
+    if (apiKeyToUse) {
+      try {
+        const emailResponse = await fetch('http://ugpay.tech:3001/proxy-brevo', {
+          method: 'POST',
+          headers: {
+            'api-key': apiKeyToUse,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: {
+              name: senderNameToUse,
+              email: senderEmailToUse
+            },
+            to: [{
+              email: member.email,
+              name: member.full_name
+            }],
+            subject: emailSubject,
+            htmlContent
+          })
+        });
+
+        if (emailResponse.ok) {
+          return res.status(200).json({
+            success: true,
+            message: 'Custom invitation email successfully sent to member via Brevo',
+            user: targetUser
+          });
+        } else {
+          const errText = await emailResponse.text();
+          console.error('Brevo invitation dispatch failed:', errText);
+          if (!RESEND_API_KEY) {
+            throw new Error(`Email dispatch failed: ${errText}`);
+          }
+        }
+      } catch (brevoErr: any) {
+        console.error('Brevo exception during invitation dispatch:', brevoErr);
+        if (!RESEND_API_KEY) throw brevoErr;
+      }
+    }
+
+    // Fallback to Resend API
     if (RESEND_API_KEY) {
       const resendSender = `${RESEND_SENDER_NAME} <${RESEND_SENDER_EMAIL}>`;
       const resendRes = await fetch('https://api.resend.com/emails', {
@@ -204,43 +240,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       } else {
         const resendErrText = await resendRes.text();
-        console.error('Resend dispatch failed:', resendErrText);
-        if (!apiKeyToUse) {
-          throw new Error(`Resend email dispatch failed: ${resendErrText}`);
-        }
+        throw new Error(`Email dispatch failed via Resend: ${resendErrText}`);
       }
     }
 
-    const emailResponse = await fetch('http://ugpay.tech:3001/proxy-brevo', {
-      method: 'POST',
-      headers: {
-        'api-key': apiKeyToUse,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        sender: {
-          name: senderNameToUse,
-          email: senderEmailToUse
-        },
-        to: [{
-          email: member.email,
-          name: member.full_name
-        }],
-        subject: emailSubject,
-        htmlContent
-      })
-    });
-
-    if (!emailResponse.ok) {
-      const errText = await emailResponse.text();
-      throw new Error(`Email dispatch failed: ${errText}`);
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Custom invitation email successfully sent to member',
-      user: targetUser
-    });
+    throw new Error('No email service API key configured (Brevo or Resend).');
 
   } catch (error: any) {
     console.error('Member invite error:', error);

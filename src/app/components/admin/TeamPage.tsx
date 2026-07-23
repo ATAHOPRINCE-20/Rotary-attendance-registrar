@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { supabase } from "../../../lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "../shared/AdminLayout";
 import { PageCard, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, isSyntheticEmail } from "../../../lib/constants";
 import {
   Users,
   Plus,
@@ -16,6 +16,9 @@ import {
   X,
   UserCheck,
   Wallet,
+  Mail,
+  Loader2,
+  Search
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -26,7 +29,38 @@ export function TeamPage() {
   const queryClient = useQueryClient();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<"admin" | "treasurer" | "staff" | "member">("staff");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [selectedMemberName, setSelectedMemberName] = useState<string | null>(null);
+  const [searchMemberQuery, setSearchMemberQuery] = useState("");
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowMemberDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Query: Fetch club members for invitation lookup
+  const { data: members } = useQuery({
+    queryKey: ["org-members-list", organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select("id, full_name, email, phone, buddy_group")
+        .eq("organization_id", organization!.id)
+        .order("full_name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   // Query: Fetch all team members (profiles) in the organization
   const { data: team, isLoading } = useQuery<Profile[]>({
@@ -93,6 +127,47 @@ export function TeamPage() {
     setCopiedInviteLink(true);
     toast.success("Invitation link copied to clipboard!");
     setTimeout(() => setCopiedInviteLink(false), 2000);
+  }
+
+  async function handleSendInviteEmail(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!inviteEmail.trim() || !inviteEmail.includes("@")) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch("/api/team/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          inviteUrl: inviteLink
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || data.message || "Failed to send invitation email");
+      }
+
+      toast.success(`Invitation email sent to ${inviteEmail}!`);
+      setInviteEmail("");
+      setInviteModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to send invitation email.");
+    } finally {
+      setSendingEmail(false);
+    }
   }
 
   function handleToggleRole(userId: string, currentRole: string) {
@@ -427,10 +502,109 @@ export function TeamPage() {
               </button>
             </div>
 
-            <div className="px-6 py-5 flex flex-col gap-4">
+            <form onSubmit={handleSendInviteEmail} className="px-6 py-5 flex flex-col gap-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Generate a secure invitation link below. When your co-worker registers using this link, they will be automatically added to <strong>{organization?.name}</strong>.
+                Select a member from your club roster or type an email address below to send a team invitation.
               </p>
+
+              {/* Searchable Member Roster Dropdown */}
+              <div className="relative flex flex-col gap-1.5" ref={dropdownRef}>
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-foreground">Select Member from Roster</label>
+                  {selectedMemberName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMemberName(null);
+                        setSearchMemberQuery("");
+                        setInviteEmail("");
+                      }}
+                      className="text-[10px] font-bold text-[#17458F] hover:underline cursor-pointer"
+                    >
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search member by name..."
+                    value={selectedMemberName || searchMemberQuery}
+                    onChange={(e) => {
+                      setSelectedMemberName(null);
+                      setSearchMemberQuery(e.target.value);
+                      setShowMemberDropdown(true);
+                    }}
+                    onFocus={() => setShowMemberDropdown(true)}
+                    className="w-full px-4 py-2.5 pr-9 rounded-xl border border-border bg-input-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 font-medium"
+                  />
+                  <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+
+                  {showMemberDropdown && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto z-30 divide-y divide-border/40 animate-in fade-in duration-150">
+                      {members && members.filter(m => 
+                        (m.full_name || "").toLowerCase().includes(searchMemberQuery.toLowerCase()) ||
+                        (m.email || "").toLowerCase().includes(searchMemberQuery.toLowerCase())
+                      ).length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-muted-foreground">
+                          No member found matching "{searchMemberQuery}". Type their email below directly.
+                        </div>
+                      ) : (
+                        members?.filter(m => 
+                          (m.full_name || "").toLowerCase().includes(searchMemberQuery.toLowerCase()) ||
+                          (m.email || "").toLowerCase().includes(searchMemberQuery.toLowerCase())
+                        ).map((m) => {
+                          const hasEmail = m.email && !isSyntheticEmail(m.email);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMemberName(m.full_name);
+                                if (hasEmail) {
+                                  setInviteEmail(m.email!);
+                                } else {
+                                  setInviteEmail("");
+                                }
+                                setShowMemberDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/30 transition-all font-medium flex justify-between items-center cursor-pointer"
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-bold text-foreground">{m.full_name}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {hasEmail ? m.email : "No email stored — type email below"}
+                                </span>
+                              </div>
+                              {m.buddy_group && (
+                                <span className="text-[9px] bg-[#17458F]/5 text-[#17458F] px-1.5 py-0.5 rounded font-bold shrink-0 ml-2">
+                                  {m.buddy_group}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-foreground">Recipient Email Address</label>
+                <input
+                  type="email"
+                  placeholder="co-worker@rotaryclub.org"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 font-medium"
+                />
+                {selectedMemberName && !inviteEmail && (
+                  <p className="text-[10px] text-amber-700 font-medium mt-0.5">
+                    ⚠️ {selectedMemberName} has no email address stored on their member profile. Please enter their email address above.
+                  </p>
+                )}
+              </div>
 
               <SelectInput
                 label="Assign Role"
@@ -443,15 +617,16 @@ export function TeamPage() {
                 onChange={(val) => setInviteRole(val as "admin" | "treasurer" | "staff")}
               />
 
-              <div className="flex flex-col gap-1.5 mt-2">
-                <label className="text-xs font-semibold text-foreground">Invitation Link</label>
+              <div className="flex flex-col gap-1.5 mt-1">
+                <label className="text-xs font-semibold text-foreground">Or Share Link Directly</label>
                 <div className="flex items-center rounded-xl border border-border bg-input-background overflow-hidden p-1.5 focus-within:ring-2 focus-within:ring-[#17458F]/50">
                   <span className="flex-1 font-mono text-[11px] truncate px-2.5 text-muted-foreground select-all">
                     {inviteLink}
                   </span>
                   <button
+                    type="button"
                     onClick={handleCopyInviteLink}
-                    className="p-2.5 rounded-xl bg-[#F7A81B] hover:bg-[#e09412] text-white flex-shrink-0 transition-colors cursor-pointer"
+                    className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex-shrink-0 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1"
                     title="Copy to clipboard"
                   >
                     {copiedInviteLink ? <Check size={14} /> : <Copy size={14} />}
@@ -460,11 +635,18 @@ export function TeamPage() {
               </div>
 
               <div className="border-t border-border pt-4 mt-2 flex gap-3">
-                <OutlineButton onClick={() => setInviteModalOpen(false)} className="w-full justify-center">
-                  Close
+                <OutlineButton type="button" onClick={() => setInviteModalOpen(false)} className="flex-1 justify-center">
+                  Cancel
                 </OutlineButton>
+                <GoldButton
+                  type="submit"
+                  disabled={sendingEmail || !inviteEmail.trim()}
+                  className="flex-1 justify-center py-2.5 text-slate-900 font-bold"
+                >
+                  {sendingEmail ? <Loader2 size={16} className="animate-spin" /> : <><Mail size={14} /> Send Invitation</>}
+                </GoldButton>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

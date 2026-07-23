@@ -618,8 +618,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     const sanitizedComments = sanitizeInput(comments);
 
     if (regType === "club_member") {
-      if (!sanitizedFullName || (buddyGroupsList.length > 0 && !sanitizedBuddyGroup)) {
-        toast.error(buddyGroupsList.length > 0 ? "Please fill out required fields (Name and Buddy Group)." : "Please enter Full Name.");
+      if (!sanitizedFullName) {
+        toast.error("Please enter Full Name.");
         return;
       }
     } else {

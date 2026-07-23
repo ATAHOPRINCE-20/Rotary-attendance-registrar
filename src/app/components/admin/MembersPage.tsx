@@ -661,7 +661,7 @@ export function MembersPage() {
                 onChange={setPhone}
               />
               <SelectInput
-                label="Buddy Group (Optional)"
+                label="Buddy Group"
                 options={buddyGroupsList.map(g => ({ value: g, label: g }))}
                 value={buddyGroup}
                 onChange={setBuddyGroup}

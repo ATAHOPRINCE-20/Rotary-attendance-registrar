@@ -175,3 +175,41 @@ export function getGeneralCommsEmailTemplate(options: GeneralCommsOptions): stri
   `;
   return wrapEmailBody(body, orgName);
 }
+
+/**
+ * 4. Team Member Management Invitation Email Template
+ */
+interface TeamInviteOptions extends BaseEmailOptions {
+  fullName?: string;
+  role: string;
+  actionLink: string;
+}
+
+export function getTeamInviteEmailTemplate(options: TeamInviteOptions): string {
+  const orgName = options.orgName || "Rotary Club";
+  const roleTitle = options.role.charAt(0).toUpperCase() + options.role.slice(1);
+  const recipient = options.fullName ? `Dear <strong>${options.fullName}</strong>,` : "Hello,";
+  const body = `
+    <h1>Team Member Invitation</h1>
+    <p>${recipient}</p>
+    <p>You have been invited to join the management team for <strong>${orgName}</strong> as a <strong>${roleTitle}</strong>.</p>
+    <p>As a team member, you will have access to manage attendance registers, events, member dues, and club reports.</p>
+
+    <div class="info-box-gold">
+      <strong style="color: #92400e; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Setup Your Account</strong>
+      <p style="margin: 6px 0 0 0; color: #78350f; font-size: 14px;">
+        Click the button below to complete your registration and log in to your team dashboard.
+      </p>
+    </div>
+
+    <div class="btn-container">
+      <a href="${options.actionLink}" class="btn">Accept Invitation & Join Team</a>
+    </div>
+
+    <div class="link-alt">
+      If the button above does not work, copy and paste this link into your browser:<br>
+      <a href="${options.actionLink}" style="color: #17458F;">${options.actionLink}</a>
+    </div>
+  `;
+  return wrapEmailBody(body, orgName);
+}

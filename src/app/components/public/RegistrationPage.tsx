@@ -285,12 +285,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
         setCurrentStep(3);
       }
     } else if (currentStep === 3) {
-      if (regType === "club_member") {
-        if (buddyGroupsList.length > 0 && !buddyGroup.trim()) {
-          setError("Please select your Buddy Group.");
-          return;
-        }
-      } else if (regType === "rotarian" || regType === "rotaractor") {
+      if (regType === "rotarian" || regType === "rotaractor") {
         if (!clubName.trim() || !district.trim()) {
           setError("Please enter your Club Name and District.");
           return;
@@ -433,13 +428,12 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     }
 
     if (regType === "club_member") {
-      const isBuddyGroupRequired = buddyGroupsList.length > 0;
-      if (!sanitizedFullName || (isBuddyGroupRequired && !sanitizedBuddyGroup)) {
-        setError(isBuddyGroupRequired ? "Please enter your Full Name and select your Buddy Group." : "Please enter your Full Name.");
+      if (!sanitizedFullName) {
+        setError("Please enter your Full Name.");
         return;
       }
       if (isManualInput && !sanitizedEmail) {
-        setError(isBuddyGroupRequired ? "Please fill out required fields (Name, Email, and Buddy Group)." : "Please fill out required fields (Name and Email).");
+        setError("Please fill out required fields (Name and Email).");
         return;
       }
     } else {
@@ -860,13 +854,13 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                     ) : (
                       <div>
                         <TextInput
-                          label="Buddy Group (Optional)"
+                          label="Buddy Group"
                           placeholder="e.g. Group A"
                           value={buddyGroup}
                           onChange={setBuddyGroup}
                         />
                         <p className="text-xs text-muted-foreground mt-1.5">
-                          Your club has not configured buddy groups. You can enter one manually or leave this blank.
+                          Enter the Buddy Group you belong to.
                         </p>
                       </div>
                     )}
