@@ -105,6 +105,9 @@ export function getMemberInviteEmailTemplate(options: MemberInviteOptions): stri
       <p style="margin: 6px 0 0 0; color: #78350f; font-size: 14px;">
         Click the button below to set up your password and activate your account.
       </p>
+      <p style="margin: 6px 0 0 0; color: #92400e; font-size: 12px; font-weight: 700;">
+        ⏰ Note: This invitation link is valid for 24 hours.
+      </p>
     </div>
 
     <div class="btn-container">

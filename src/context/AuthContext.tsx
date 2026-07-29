@@ -248,6 +248,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Automatic JWT Token Refreshment
+  useEffect(() => {
+    async function checkAndRefreshJWT() {
+      try {
+        const { data: { session: activeSession } } = await supabase.auth.getSession();
+        if (activeSession) {
+          const expiresAt = activeSession.expires_at || 0;
+          const nowInSec = Math.floor(Date.now() / 1000);
+          // If token expires within 10 minutes (600s), refresh silently
+          if (expiresAt - nowInSec < 600) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed.session) {
+              setSession(refreshed.session);
+              setUser(refreshed.session.user);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[AuthContext] Silent token refresh check failed:", e);
+      }
+    }
+
+    // Refresh check every 4 minutes
+    const interval = setInterval(checkAndRefreshJWT, 4 * 60 * 1000);
+
+    // Refresh check whenever tab is focused
+    const handleFocus = () => {
+      checkAndRefreshJWT();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
   useEffect(() => {
     async function syncImpersonation() {
       const activeOrgId = impersonatedOrgId || profile?.organization_id;
@@ -336,7 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error = e;
     }
 
-    if (error && (error.status === 422 || error.message?.toLowerCase().includes("redirect"))) {
+    if (error && (error.status === 422 || error.message?.toLowerCase().includes("redirect")) && error.message?.toLowerCase().includes("redirect")) {
       try {
         console.warn("[AuthContext] Redirect URL not whitelisted, retrying default signup...");
         const retry = await supabase.auth.signUp({
@@ -353,9 +390,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setLoading(false);
-      const userMessage = error.status === 500 || error.message?.includes("500") || String(error).includes("500")
-        ? "Supabase Email Server Error (500). Please disable Custom SMTP in Supabase Dashboard -> Authentication -> Providers -> Email to test signup."
-        : error.message || "Signup failed.";
+      let userMessage = error.message || "Signup failed.";
+      
+      if (error.status === 500 || error.message?.includes("500") || String(error).includes("500")) {
+        userMessage = "Supabase Email Server Error (500). Please disable Custom SMTP in Supabase Dashboard -> Authentication -> Providers -> Email to test signup.";
+      } else if (error.status === 422 || error.message?.toLowerCase().includes("disabled") || error.message?.toLowerCase().includes("not allowed")) {
+        userMessage = error.message || "Signups are currently disabled in your Supabase project. Go to Supabase Dashboard -> Authentication -> Providers -> Email and enable 'Allow new users to sign up'.";
+      }
+      
       return { error: userMessage, session: null };
     }
     if (data.session?.user) {

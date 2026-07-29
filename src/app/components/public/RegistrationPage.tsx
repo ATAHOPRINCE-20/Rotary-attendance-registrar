@@ -7,7 +7,7 @@ import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
 import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone } from "../../../lib/constants";
-import { AlertCircle, ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronLeft, Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { usePublicOrgMembers, useCreateMember } from "../../../hooks/useMembers";
@@ -168,6 +168,9 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const clubDropdownRef = useRef<HTMLDivElement>(null);
   const submitIntentRef = useRef(false);
 
+  const [autoCheckingIn, setAutoCheckingIn] = useState(false);
+  const [autoCheckInUser, setAutoCheckInUser] = useState<any>(null);
+
   // Fallback to manual if members table query fails
   useEffect(() => {
     if (membersError) {
@@ -175,6 +178,96 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       setIsManualInput(true);
     }
   }, [membersError]);
+
+  // Active Authenticated Member Session Auto Check-In (0-Tap Instant Check-In)
+  useEffect(() => {
+    if (editQrRef || existingReg) return;
+
+    let isMounted = true;
+    async function checkActiveMemberSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user || !isMounted) return;
+
+        let { data: memData } = await supabase
+          .from("members")
+          .select("*, organizations(name, district)")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        if (!memData && session.user.email) {
+          const { data: emailMem } = await supabase
+            .from("members")
+            .select("*, organizations(name, district)")
+            .ilike("email", session.user.email)
+            .maybeSingle();
+          memData = emailMem;
+        }
+
+        if (memData && isMounted) {
+          setAutoCheckingIn(true);
+          setAutoCheckInUser(memData);
+
+          const hostingOrgId = organization?.id || event.organization_id;
+          const isHomeClubMember = memData.organization_id === hostingOrgId;
+
+          let visitorClubName = null;
+          let visitorDistrict = null;
+
+          if (!isHomeClubMember) {
+            visitorClubName = (memData.organizations as any)?.name || memData.club_name || "Visiting Rotary Club";
+            visitorDistrict = memData.district || (memData.organizations as any)?.district || null;
+          }
+
+          const filteredMakeups = (memData.makeups || []).filter(
+            (m: any) => m.club_name && m.club_name.trim() !== ""
+          );
+          const filteredVisits = (memData.visits || []).filter(
+            (v: any) => v.club_name && v.club_name.trim() !== ""
+          );
+
+          const payload = {
+            event_id: event.id,
+            organization_id: hostingOrgId,
+            full_name: memData.full_name,
+            email: memData.email || session.user.email || null,
+            phone: memData.phone || null,
+            is_member: true,
+            club_name: isHomeClubMember ? null : visitorClubName,
+            district: isHomeClubMember ? null : visitorDistrict,
+            buddy_group: isHomeClubMember ? (memData.buddy_group || null) : null,
+            occupation: null,
+            organization_name: null,
+            comments: null,
+            status: "pending",
+            member_id: isHomeClubMember ? memData.id : null,
+            visits: filteredVisits.length > 0 ? filteredVisits : null,
+            makeups: filteredMakeups.length > 0 ? filteredMakeups : null,
+          };
+
+          const reg = await mutation.mutateAsync(payload);
+          if (reg?.qr_ref && isMounted) {
+            localStorage.setItem(`reg-ref-${event.id}`, reg.qr_ref);
+            if (isHomeClubMember) {
+              toast.success(`Welcome back, ${memData.full_name}! Checked in as Home Club Member.`);
+            } else {
+              toast.success(`Welcome ${memData.full_name}! Registered as Visiting Rotarian from ${visitorClubName}.`);
+            }
+            navigate(`${base}/post-register?ref=${reg.qr_ref}`);
+          }
+        }
+      } catch (err: any) {
+        console.error("[InstantCheckIn] Auto check-in exception:", err);
+        if (isMounted) setAutoCheckingIn(false);
+      }
+    }
+
+    checkActiveMemberSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [event?.id, editQrRef, existingReg]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -233,6 +326,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
   const [buddyGroup, setBuddyGroup] = useState(savedData.buddyGroup || "");
   const [occupation, setOccupation] = useState(savedData.occupation || "");
   const [comments, setComments] = useState(savedData.comments || "");
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Autocomplete states
@@ -402,10 +496,15 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       return;
     }
 
+    if (isSubmittingForm || mutation.isPending || (updateMutation && updateMutation.isPending)) {
+      return;
+    }
+
     if (!submitIntentRef.current) {
       return;
     }
     submitIntentRef.current = false;
+    setIsSubmittingForm(true);
 
     setError(null);
 
@@ -424,27 +523,32 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
     if (!regType) {
       setError("Please select a registration type.");
+      setIsSubmittingForm(false);
       return;
     }
 
     if (regType === "club_member") {
       if (!sanitizedFullName) {
         setError("Please enter your Full Name.");
+        setIsSubmittingForm(false);
         return;
       }
       if (isManualInput && !sanitizedEmail) {
         setError("Please fill out required fields (Name and Email).");
+        setIsSubmittingForm(false);
         return;
       }
     } else {
       if (!sanitizedFullName || !sanitizedEmail) {
         setError("Please fill out required fields (Name and Email Address).");
+        setIsSubmittingForm(false);
         return;
       }
     }
 
     if ((regType === "rotarian" || regType === "rotaractor") && (!sanitizedClubName || !sanitizedDistrict)) {
       setError("Please enter your Club Name and District.");
+      setIsSubmittingForm(false);
       return;
     }
 
@@ -464,6 +568,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
 
     if (regType === "club_member" && (existingMakeupsCount + filteredMakeups.length > 2)) {
       setError(`You have already registered ${existingMakeupsCount} make-up(s) this month. You cannot exceed 2 make-ups per month (attempted to add ${filteredMakeups.length} more).`);
+      setIsSubmittingForm(false);
       return;
     }
 
@@ -535,7 +640,35 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
     } catch (err: any) {
       console.error(err);
       setError(getFriendlyErrorMessage(err));
+      setIsSubmittingForm(false);
     }
+  }
+
+  if (autoCheckingIn && autoCheckInUser) {
+    return (
+      <div className="min-h-screen bg-[#f4f6fb] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl border border-border/40 shadow-xl p-8 max-w-md w-full text-center flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
+          <div className="w-16 h-16 rounded-full bg-[#17458F]/10 border border-[#17458F]/20 flex items-center justify-center text-[#17458F] animate-pulse">
+            <Sparkles size={32} />
+          </div>
+          <div>
+            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
+              Instant Member Check-In
+            </span>
+            <h2 className="text-xl font-black mt-2" style={{ color: NAVY }}>
+              Checking you in...
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Welcome back, <strong className="text-foreground">{autoCheckInUser.full_name}</strong>! Automatically processing your registration for <strong className="text-foreground">{event.title}</strong>.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-bold text-[#17458F] bg-[#17458F]/5 px-4 py-2 rounded-full border border-[#17458F]/10 mt-2">
+            <Loader2 size={14} className="animate-spin" />
+            Generating entrance pass...
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -723,7 +856,7 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                               >
                                 <span>{m.full_name}</span>
                                 {m.buddy_group && (
-                                  <span className="text-[10px] bg-[#17458F]/5 text-[#17458F] px-1.5 py-0.5 rounded font-bold">
+                                  <span className="text-[10px] bg-[#17458F]/10 text-[#17458F] px-2 py-0.5 rounded-full font-bold whitespace-nowrap inline-flex items-center">
                                     {m.buddy_group}
                                   </span>
                                 )}
@@ -876,12 +1009,12 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                   <div className="flex flex-col gap-6 p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] dark:bg-[#18181B] dark:border-[#27272A]">
                     <div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#A1A1AA]" style={{ fontFamily: "var(--font-sans)" }}>
-                        Recent Club Activities
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          Report any other club visits or make-ups you completed this month.
-                        </p>
-                      </div>
+                        Recent Club Activities & Attendance
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Report any other club visits or make-ups you completed this month.
+                      </p>
+                    </div>
 
                       {/* VISITS SECTION */}
                       <div className="flex flex-col gap-3">
@@ -1065,10 +1198,16 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
                 <GoldButton 
                   type="submit" 
                   onClick={() => { submitIntentRef.current = true; }}
-                  disabled={mutation.isPending} 
-                  className="flex-1 justify-center"
+                  disabled={isSubmittingForm || mutation.isPending || (updateMutation && updateMutation.isPending)} 
+                  className="flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {mutation.isPending ? "Submitting..." : "Complete Registration"}
+                  {isSubmittingForm || mutation.isPending || (updateMutation && updateMutation.isPending) ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" /> Submitting...
+                    </span>
+                  ) : (
+                    "Complete Registration"
+                  )}
                 </GoldButton>
               )}
             </div>

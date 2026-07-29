@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useMemberAuth } from "../../../context/MemberAuthContext";
 import { supabase } from "../../../lib/supabase";
-import type { MemberDuesBalance, Donation } from "../../../types/database";
+import type { MemberDuesBalance, Donation, ClubActivity } from "../../../types/database";
 import { RotaryLogo } from "../shared/RotaryLogo";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
@@ -10,7 +10,8 @@ import {
   LogOut, Wallet, ShieldCheck, Smartphone, 
   Sparkles, RefreshCw, CheckCircle2, AlertCircle,
   HelpCircle, Calendar, Coins, Loader2,
-  Clock, MapPin, ArrowRight, Menu, X, Receipt, Printer, FileText
+  Clock, MapPin, ArrowRight, Menu, X, Receipt, Printer, FileText,
+  Plus, Trash2, Building2, Save, Award, ChevronDown, ChevronUp
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -22,7 +23,7 @@ import type { Event } from "../../../types/database";
 import confetti from "canvas-confetti";
 
 export function MemberDuesDashboard() {
-  const { member, organization, loading: authLoading, signOut } = useMemberAuth();
+  const { member, organization, loading: authLoading, impersonatedMemberId, impersonateMember, signOut } = useMemberAuth();
   const navigate = useNavigate();
 
   const [dues, setDues] = useState<MemberDuesBalance[]>([]);
@@ -53,10 +54,16 @@ export function MemberDuesDashboard() {
 
   // Fetch events using usePublicEvents hook
   const { data: upcomingEvents, isLoading: loadingEvents } = usePublicEvents(organization?.id);
+  const [showAllMemberEvents, setShowAllMemberEvents] = useState(false);
 
   // Tab & Mobile Menu layout states
-  const [activeTab, setActiveTab] = useState<"dues" | "events" | "history">("dues");
+  const [activeTab, setActiveTab] = useState<"dues" | "events" | "history" | "activities">("dues");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Member Activities state (Visits & Make-ups)
+  const [memberVisits, setMemberVisits] = useState<ClubActivity[]>([]);
+  const [memberMakeups, setMemberMakeups] = useState<ClubActivity[]>([]);
+  const [savingActivities, setSavingActivities] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !member) {
@@ -126,8 +133,43 @@ export function MemberDuesDashboard() {
       loadDuesLedger();
       loadPaymentHistory();
       setPhone(member.phone || "");
+      setMemberVisits(member.visits || []);
+      setMemberMakeups(member.makeups || []);
     }
   }, [member]);
+
+  const handleSaveActivities = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!member) return;
+
+    setSavingActivities(true);
+    try {
+      const sanitizedVisits = memberVisits
+        .map((v) => ({ club_name: v.club_name.trim(), date: v.date.trim() }))
+        .filter((v) => v.club_name !== "");
+
+      const sanitizedMakeups = memberMakeups
+        .map((m) => ({ club_name: m.club_name.trim(), date: m.date.trim() }))
+        .filter((m) => m.club_name !== "");
+
+      const { error: updateErr } = await supabase
+        .from("members")
+        .update({
+          visits: sanitizedVisits,
+          makeups: sanitizedMakeups,
+        })
+        .eq("id", member.id);
+
+      if (updateErr) throw updateErr;
+
+      toast.success("My activities and make-ups saved successfully!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to save activities.");
+    } finally {
+      setSavingActivities(false);
+    }
+  };
 
   // Polling loop for mobile money payments
   useEffect(() => {
@@ -245,8 +287,32 @@ export function MemberDuesDashboard() {
     .toUpperCase() ?? "ME";
 
   return (
-    <div className="flex h-screen bg-[#f4f6fb] overflow-hidden font-sans">
-      {/* ── SIDEBAR ───────────────────────────────────────────────────── */}
+    <div className="flex flex-col h-screen bg-[#f4f6fb] overflow-hidden font-sans">
+      {/* Impersonation Top Banner */}
+      {impersonatedMemberId && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-extrabold flex items-center justify-between shadow-md shrink-0 z-50">
+          <div className="flex items-center gap-2">
+            <span className="bg-slate-950 text-amber-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+              Admin Impersonation Mode
+            </span>
+            <span>
+              Impersonating Member: <strong>{member?.full_name}</strong> {member?.email ? `(${member.email})` : ""}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              impersonateMember(null);
+              navigate("/admin/members");
+            }}
+            className="bg-slate-950 text-white px-3 py-1 rounded-xl text-[11px] font-bold hover:bg-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <LogOut size={12} /> Exit Impersonation & Return to Admin
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── SIDEBAR ───────────────────────────────────────────────────── */}
       <aside className="hidden lg:flex flex-col w-60 shrink-0 h-full border-r border-border/60 bg-white">
         {/* Logo */}
         <div className="flex flex-col items-center justify-center px-5 py-6 border-b border-border/40 min-h-[110px]">
@@ -286,6 +352,18 @@ export function MemberDuesDashboard() {
           >
             <Receipt size={16} />
             <span className="flex-1 text-left">Payment History</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("activities")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 ease-out relative cursor-pointer ${
+              activeTab === "activities"
+                ? "font-extrabold text-[#001D4A] bg-muted/30"
+                : "font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-sm"
+            }`}
+          >
+            <Award size={16} />
+            <span className="flex-1 text-left">My Make-ups & Visits</span>
           </button>
 
           <button
@@ -342,8 +420,8 @@ export function MemberDuesDashboard() {
             >
               <Menu size={18} />
             </button>
-            <h2 className="text-sm font-extrabold uppercase tracking-wider animate-in fade-in max-w-[240px] truncate" style={{ color: NAVY }}>
-              {activeTab === "dues" ? (organization?.name || "Member Portal") : activeTab === "history" ? "Payment History & Receipts" : "Upcoming Club Events"}
+            <h2 className="text-sm font-extrabold uppercase tracking-wider animate-in fade-in max-w-[280px] truncate" style={{ color: NAVY }}>
+              {activeTab === "dues" ? (organization?.name || "Member Portal") : activeTab === "history" ? "Payment History & Receipts" : activeTab === "activities" ? "My Make-ups & Visits" : "Upcoming Club Events"}
             </h2>
           </div>
 
@@ -471,31 +549,45 @@ export function MemberDuesDashboard() {
                       const pctPaid = due.amount_due > 0 ? Math.min(100, Math.round((due.amount_paid / due.amount_due) * 100)) : 100;
 
                       return (
-                        <div key={due.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/10 transition-all">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-extrabold text-md" style={{ color: NAVY }}>
-                                {due.dues_category?.name || "Membership Dues"}
-                              </h4>
-                              
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                due.status === "paid" 
-                                  ? "bg-emerald-50 border border-emerald-200 text-emerald-600"
-                                  : due.status === "partially_paid"
-                                  ? "bg-yellow-50 border border-yellow-200 text-yellow-600"
-                                  : "bg-rose-50 border border-rose-200 text-rose-600"
-                              }`}>
-                                {due.status.replace("_", " ")}
+                        <div key={due.id} className="p-4 sm:p-6 flex flex-col gap-4 hover:bg-muted/10 transition-all">
+                          {/* Top Row: Category Title, Status Badge & Outstanding Amount */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-black text-sm sm:text-md" style={{ color: NAVY }}>
+                                  {due.dues_category?.name || "Membership Dues"}
+                                </h4>
+                                
+                                <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                  due.status === "paid" 
+                                    ? "bg-emerald-50 border border-emerald-200 text-emerald-600"
+                                    : due.status === "partially_paid"
+                                    ? "bg-yellow-50 border border-yellow-200 text-yellow-600"
+                                    : "bg-rose-50 border border-rose-200 text-rose-600"
+                                }`}>
+                                  {due.status.replace("_", " ")}
+                                </span>
+                              </div>
+                              {due.dues_category?.description && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {due.dues_category.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-[9px] uppercase font-bold text-slate-400 block">Outstanding</span>
+                              <span className="text-sm sm:text-base font-black text-rose-600">
+                                UGX {outstanding.toLocaleString()}
                               </span>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-                              {due.dues_category?.description || "Ongoing club subscription or fundraiser pot allocation."}
-                            </p>
+                          </div>
 
-                            {/* Inline Visual Progress Bar */}
-                            <div className="w-full max-w-xs mt-3">
+                          {/* Progress bar & Dates */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                            <div className="flex-1 max-w-sm">
                               <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold mb-1">
-                                <span>UGX {due.amount_paid.toLocaleString()} paid of UGX {due.amount_due.toLocaleString()}</span>
+                                <span>Paid UGX {due.amount_paid.toLocaleString()} of UGX {due.amount_due.toLocaleString()}</span>
                                 <span>{pctPaid}%</span>
                               </div>
                               <div className="h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/50">
@@ -508,34 +600,25 @@ export function MemberDuesDashboard() {
                                 />
                               </div>
                             </div>
-                            
+
                             {due.due_date && (
-                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-2 font-semibold">
-                                <Calendar size={11} /> Due Date: {new Date(due.due_date).toLocaleDateString()}
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold">
+                                <Calendar size={11} /> Due: {new Date(due.due_date).toLocaleDateString()}
                               </div>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-6 sm:text-right shrink-0">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Statement Ledger</span>
-                              <div className="text-xs text-slate-600">
-                                Due: <strong className="text-foreground">UGX {due.amount_due.toLocaleString()}</strong>
-                              </div>
-                              <div className="text-xs text-emerald-600">
-                                Paid: <strong>UGX {due.amount_paid.toLocaleString()}</strong>
-                              </div>
-                            </div>
-
+                          {/* Action Button: Full width on mobile */}
+                          <div className="pt-2">
                             {outstanding > 0 ? (
                               <GoldButton
                                 onClick={() => openPayment(due)}
-                                className="px-5 py-2 text-xs font-black shadow-md hover:scale-[1.03]"
+                                className="w-full sm:w-auto px-6 py-2.5 text-xs font-black shadow-md hover:scale-[1.02] flex items-center justify-center gap-2"
                               >
-                                Pay UGX {outstanding.toLocaleString()}
+                                Pay UGX {outstanding.toLocaleString()} Now
                               </GoldButton>
                             ) : (
-                              <span className="h-9 px-4 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl">
+                              <span className="w-full sm:w-auto h-9 px-4 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl">
                                 Fully Cleared
                               </span>
                             )}
@@ -592,61 +675,326 @@ export function MemberDuesDashboard() {
                     <p className="text-xs text-slate-400 mt-1">Receipts for your payments will appear here once cleared.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-border bg-slate-50/50 font-bold text-muted-foreground uppercase text-[9px] tracking-wider">
-                          <th className="px-5 py-3.5">Date</th>
-                          <th className="px-5 py-3.5">Category / Description</th>
-                          <th className="px-5 py-3.5">Receipt #</th>
-                          <th className="px-5 py-3.5 text-right">Amount Paid</th>
-                          <th className="px-5 py-3.5 text-center">Status</th>
-                          <th className="px-5 py-3.5 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {history.map((tx) => (
-                          <tr key={tx.id} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="px-5 py-3.5 font-semibold text-slate-700">
-                              {new Date(tx.created_at).toLocaleDateString("en-GB", {
-                                day: "numeric", month: "short", year: "numeric",
-                              })}
-                            </td>
-                            <td className="px-5 py-3.5 font-bold text-foreground">
-                              {tx.category || "Club Contribution"}
-                            </td>
-                            <td className="px-5 py-3.5 font-mono text-[11px] text-slate-500">
-                              {tx.receipt_number || tx.id.slice(0, 8)}
-                            </td>
-                            <td className="px-5 py-3.5 text-right font-black text-emerald-600">
-                              {tx.currency || "UGX"} {Number(tx.amount).toLocaleString()}
-                            </td>
-                            <td className="px-5 py-3.5 text-center">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
-                                tx.status === "completed"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : tx.status === "pending"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-red-100 text-red-600"
-                              }`}>
-                                <CheckCircle2 size={8} /> {tx.status}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5 text-right">
-                              <button
-                                onClick={() => setSelectedReceipt(tx)}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
-                              >
-                                <FileText size={11} /> Receipt
-                              </button>
-                            </td>
+                  <>
+                    {/* DESKTOP TABLE VIEW */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-border bg-slate-50/50 font-bold text-muted-foreground uppercase text-[9px] tracking-wider">
+                            <th className="px-5 py-3.5">Date</th>
+                            <th className="px-5 py-3.5">Category / Description</th>
+                            <th className="px-5 py-3.5">Receipt #</th>
+                            <th className="px-5 py-3.5 text-right">Amount Paid</th>
+                            <th className="px-5 py-3.5 text-center">Status</th>
+                            <th className="px-5 py-3.5 text-right">Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {history.map((tx) => (
+                            <tr key={tx.id} className="hover:bg-slate-50/60 transition-colors">
+                              <td className="px-5 py-3.5 font-semibold text-slate-700">
+                                {new Date(tx.created_at).toLocaleDateString("en-GB", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })}
+                              </td>
+                              <td className="px-5 py-3.5 font-bold text-foreground">
+                                {tx.category || "Club Contribution"}
+                              </td>
+                              <td className="px-5 py-3.5 font-mono text-[11px] text-slate-500">
+                                {tx.receipt_number || tx.id.slice(0, 8)}
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-black text-emerald-600">
+                                {tx.currency || "UGX"} {Number(tx.amount).toLocaleString()}
+                              </td>
+                              <td className="px-5 py-3.5 text-center">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                                  tx.status === "completed"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : tx.status === "pending"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-red-100 text-red-600"
+                                }`}>
+                                  <CheckCircle2 size={8} /> {tx.status}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-right">
+                                <button
+                                  onClick={() => setSelectedReceipt(tx)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                                >
+                                  <FileText size={11} /> Receipt
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* MOBILE CARD VIEW (No horizontal scrolling) */}
+                    <div className="block sm:hidden divide-y divide-border/30">
+                      {history.map((tx) => (
+                        <div key={tx.id} className="p-4 flex flex-col gap-2 bg-white">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold text-xs text-foreground">{tx.category || "Club Contribution"}</h4>
+                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                Receipt #{tx.receipt_number || tx.id.slice(0, 8)} • {new Date(tx.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                              </p>
+                            </div>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase shrink-0 ${
+                              tx.status === "completed"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : tx.status === "pending"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-red-100 text-red-600"
+                            }`}>
+                              <CheckCircle2 size={8} /> {tx.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="text-sm font-black text-emerald-600">
+                              {tx.currency || "UGX"} {Number(tx.amount).toLocaleString()}
+                            </span>
+                            <button
+                              onClick={() => setSelectedReceipt(tx)}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg cursor-pointer"
+                            >
+                              <FileText size={11} /> View Receipt
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
+            </div>
+          ) : activeTab === "activities" ? (
+            <div className="flex flex-col gap-6 max-w-4xl">
+              <div>
+                <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: GOLD }}>
+                  Attendance & Engagement
+                </p>
+                <h1 className="text-2xl font-black" style={{ color: NAVY }}>
+                  My Make-ups & Club Visits
+                </h1>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Log your visits to other Rotary/Rotaract clubs and monthly make-ups. These records are automatically attached when you check into club meetings.
+                </p>
+              </div>
+
+              {/* Monthly Make-ups Summary Card */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white border border-border/40 shadow-sm p-5 rounded-2xl flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                      <Award size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Make-ups Logged (This Month)</p>
+                      <h3 className="text-xl font-black mt-0.5" style={{ color: NAVY }}>
+                        {memberMakeups.length} <span className="text-xs text-muted-foreground font-normal">/ 2 max allowed</span>
+                      </h3>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    memberMakeups.length >= 2 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                  }`}>
+                    {memberMakeups.length >= 2 ? "Limit Reached" : `${2 - memberMakeups.length} Available`}
+                  </span>
+                </div>
+
+                <div className="bg-white border border-border/40 shadow-sm p-5 rounded-2xl flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600 shrink-0">
+                      <Building2 size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Other Clubs Visited</p>
+                      <h3 className="text-xl font-black mt-0.5" style={{ color: NAVY }}>
+                        {memberVisits.length} <span className="text-xs text-muted-foreground font-normal">total visits</span>
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800">
+                    Unlimited
+                  </span>
+                </div>
+              </div>
+
+              {/* Form Card: Log Make-ups & Visited Clubs */}
+              <form onSubmit={handleSaveActivities} className="flex flex-col gap-6">
+                
+                {/* MAKE-UPS SECTION */}
+                <div className="bg-white border border-border/40 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2" style={{ color: NAVY }}>
+                        <Award size={16} className="text-amber-500" />
+                        Club Make-ups Completed
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Report make-ups completed at other Rotary/Rotaract clubs (maximum 2 per calendar month).
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (memberMakeups.length >= 2) {
+                          toast.error("You cannot exceed the limit of 2 make-ups per month.");
+                          return;
+                        }
+                        setMemberMakeups([...memberMakeups, { club_name: "", date: new Date().toISOString().split("T")[0] }]);
+                      }}
+                      disabled={memberMakeups.length >= 2}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1 transition-all cursor-pointer ${
+                        memberMakeups.length >= 2
+                          ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                          : "bg-[#17458F]/5 text-[#17458F] border-[#17458F]/20 hover:bg-[#17458F]/15"
+                      }`}
+                    >
+                      <Plus size={13} /> Add Make-up
+                    </button>
+                  </div>
+
+                  {memberMakeups.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-3 text-center">
+                      No make-ups logged for this month yet. Tap "+ Add Make-up" above to log one.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {memberMakeups.map((makeup, index) => (
+                        <div key={index} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center bg-slate-50/70 p-3 rounded-xl border border-slate-200/60">
+                          <div className="flex-1">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Rotary / Rotaract Club Name</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Rotary Club of Ntinda"
+                              value={makeup.club_name}
+                              onChange={(e) => {
+                                const newArr = [...memberMakeups];
+                                newArr[index] = { ...newArr[index], club_name: e.target.value };
+                                setMemberMakeups(newArr);
+                              }}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-white text-foreground font-semibold focus:outline-none focus:ring-1"
+                              required
+                            />
+                          </div>
+                          <div className="w-full sm:w-40">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Date Completed</label>
+                            <input
+                              type="date"
+                              value={makeup.date}
+                              onChange={(e) => {
+                                const newArr = [...memberMakeups];
+                                newArr[index] = { ...newArr[index], date: e.target.value };
+                                setMemberMakeups(newArr);
+                              }}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-white text-foreground font-semibold focus:outline-none focus:ring-1"
+                              required
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setMemberMakeups(memberMakeups.filter((_, i) => i !== index))}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer self-end sm:self-auto mt-4 sm:mt-0"
+                            title="Remove makeup"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* VISITS SECTION */}
+                <div className="bg-white border border-border/40 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2" style={{ color: NAVY }}>
+                        <Building2 size={16} className="text-sky-600" />
+                        Other Clubs Visited
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Record meetings or fellowships visited at sister Rotary/Rotaract clubs.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMemberVisits([...memberVisits, { club_name: "", date: new Date().toISOString().split("T")[0] }])}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl border bg-[#17458F]/5 text-[#17458F] border-[#17458F]/20 hover:bg-[#17458F]/15 flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Plus size={13} /> Add Visit
+                    </button>
+                  </div>
+
+                  {memberVisits.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-3 text-center">
+                      No club visits logged yet. Tap "+ Add Visit" above to log a visit.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {memberVisits.map((visit, index) => (
+                        <div key={index} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center bg-slate-50/70 p-3 rounded-xl border border-slate-200/60">
+                          <div className="flex-1">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Rotary / Rotaract Club Name</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Rotary Club of Kampala"
+                              value={visit.club_name}
+                              onChange={(e) => {
+                                const newArr = [...memberVisits];
+                                newArr[index] = { ...newArr[index], club_name: e.target.value };
+                                setMemberVisits(newArr);
+                              }}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-white text-foreground font-semibold focus:outline-none focus:ring-1"
+                              required
+                            />
+                          </div>
+                          <div className="w-full sm:w-40">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Visit Date</label>
+                            <input
+                              type="date"
+                              value={visit.date}
+                              onChange={(e) => {
+                                const newArr = [...memberVisits];
+                                newArr[index] = { ...newArr[index], date: e.target.value };
+                                setMemberVisits(newArr);
+                              }}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-white text-foreground font-semibold focus:outline-none focus:ring-1"
+                              required
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setMemberVisits(memberVisits.filter((_, i) => i !== index))}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer self-end sm:self-auto mt-4 sm:mt-0"
+                            title="Remove visit"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Save Submit Button */}
+                <div className="flex justify-end pt-2">
+                  <GoldButton
+                    type="submit"
+                    disabled={savingActivities}
+                    className="px-8 py-3 text-xs font-black shadow-lg flex items-center gap-2"
+                  >
+                    {savingActivities ? <Loader2 size={16} className="animate-spin" /> : <><Save size={15} /> Save Activities & Make-ups</>}
+                  </GoldButton>
+                </div>
+              </form>
             </div>
           ) : (
             <div className="flex flex-col gap-6 max-w-6xl">
@@ -676,77 +1024,99 @@ export function MemberDuesDashboard() {
                     There are no upcoming gatherings configured. fellowship details will appear here once scheduled.
                   </p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {upcomingEvents.map((ev) => {
-                    const eventDate = new Date(ev.date);
-                    return (
-                      <PageCard key={ev.id} className="overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col h-full">
-                        {ev.cover_image_url && (
-                          <div className="w-full h-36 bg-muted overflow-hidden flex-shrink-0">
-                            <img
-                              src={ev.cover_image_url}
-                              alt={ev.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        <div className="p-5 flex-1 flex flex-col justify-between gap-4">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span
-                                className="text-[9px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full"
-                                style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
-                              >
-                                {ev.type || "General"}
-                              </span>
-                              {ev.capacity && (
-                                <span className="text-[9px] font-semibold text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
-                                  Cap: {ev.capacity}
-                                </span>
-                              )}
-                            </div>
-                            <h3 className="text-sm font-black leading-snug text-slate-800 line-clamp-2" style={{ fontFamily: "var(--font-sans)" }}>
-                              {ev.title}
-                            </h3>
-                            {ev.description && (
-                              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-2 leading-relaxed">
-                                {ev.description}
-                              </p>
+              ) : (() => {
+                const sortedUpcomingEvents = [...upcomingEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                const displayedUpcomingEvents = showAllMemberEvents ? sortedUpcomingEvents : sortedUpcomingEvents.slice(0, 3);
+                return (
+                  <div className="flex flex-col gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {displayedUpcomingEvents.map((ev) => {
+                        const eventDate = new Date(ev.date);
+                        return (
+                          <PageCard key={ev.id} className="overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col h-full">
+                            {ev.cover_image_url && (
+                              <div className="w-full h-36 bg-muted overflow-hidden flex-shrink-0">
+                                <img
+                                  src={ev.cover_image_url}
+                                  alt={ev.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                             )}
-                          </div>
+                            <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                              <div>
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <span
+                                    className="text-[9px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full"
+                                    style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
+                                  >
+                                    {ev.type || "General"}
+                                  </span>
+                                  {ev.capacity && (
+                                    <span className="text-[9px] font-semibold text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
+                                      Cap: {ev.capacity}
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="text-sm font-black leading-snug text-slate-800 line-clamp-2" style={{ fontFamily: "var(--font-sans)" }}>
+                                  {ev.title}
+                                </h3>
+                                {ev.description && (
+                                  <p className="text-[11px] text-muted-foreground line-clamp-2 mt-2 leading-relaxed">
+                                    {ev.description}
+                                  </p>
+                                )}
+                              </div>
 
-                          <div className="pt-3 border-t border-border/40 flex flex-col gap-1 text-[10px] text-slate-500">
-                            <span className="flex items-center gap-1.5">
-                              <Calendar size={11} style={{ color: GOLD }} />
-                              {eventDate.toLocaleDateString("en-US", {
-                                weekday: "short",
-                                month: "short",
-                                day: "numeric",
-                              })} at {eventDate.toLocaleTimeString("en-US", {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                            {ev.location && (
-                              <span className="flex items-center gap-1.5 truncate">
-                                <MapPin size={11} style={{ color: GOLD }} />
-                                {ev.location}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => setSelectedEvent(ev)}
-                              className="text-[10px] text-[#F7A81B] hover:text-[#e09412] font-black mt-2 self-start flex items-center gap-0.5 cursor-pointer font-sans"
-                            >
-                              View Details <ArrowRight size={11} />
-                            </button>
-                          </div>
-                        </div>
-                      </PageCard>
-                    );
-                  })}
-                </div>
-              )}
+                              <div className="pt-3 border-t border-border/40 flex flex-col gap-1 text-[10px] text-slate-500">
+                                <span className="flex items-center gap-1.5">
+                                  <Calendar size={11} style={{ color: GOLD }} />
+                                  {eventDate.toLocaleDateString("en-US", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                  })} at {eventDate.toLocaleTimeString("en-US", {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                {ev.location && (
+                                  <span className="flex items-center gap-1.5 truncate">
+                                    <MapPin size={11} style={{ color: GOLD }} />
+                                    {ev.location}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => setSelectedEvent(ev)}
+                                  className="text-[10px] text-[#F7A81B] hover:text-[#e09412] font-black mt-2 self-start flex items-center gap-0.5 cursor-pointer font-sans"
+                                >
+                                  View Details <ArrowRight size={11} />
+                                </button>
+                              </div>
+                            </div>
+                          </PageCard>
+                        );
+                      })}
+                    </div>
+
+                    {sortedUpcomingEvents.length > 3 && (
+                      <div className="flex justify-center mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllMemberEvents(!showAllMemberEvents)}
+                          className="px-6 py-2.5 rounded-xl border border-border bg-white hover:bg-slate-50 text-xs font-bold text-[#17458F] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                        >
+                          {showAllMemberEvents ? (
+                            <>Show Less <ChevronUp size={14} /></>
+                          ) : (
+                            <>Show More Events ({sortedUpcomingEvents.length - 3} more) <ChevronDown size={14} /></>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </main>
@@ -1147,6 +1517,7 @@ export function MemberDuesDashboard() {
           </PageCard>
         </div>
       )}
+      </div>
     </div>
   );
 }

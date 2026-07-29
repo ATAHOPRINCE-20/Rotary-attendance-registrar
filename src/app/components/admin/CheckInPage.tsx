@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router";
 import { useState, useEffect, Fragment, MouseEvent } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useEvent } from "../../../hooks/useEvents";
-import { useEventRegistrations, useCheckIn, useSubmitRegistration, useUpdateRegistration } from "../../../hooks/useRegistrations";
+import { useEventRegistrations, useCheckIn, useSubmitRegistration, useUpdateRegistration, useDeleteRegistration } from "../../../hooks/useRegistrations";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
@@ -19,12 +19,14 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
 import { useCreateMember, useOrgMembers } from "../../../hooks/useMembers";
+import { FellowshipReportModal } from "./FellowshipReportModal";
 
 
 export function CheckInPage() {
@@ -78,6 +80,20 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   const { data: members } = useOrgMembers(organization?.id);
   const updateRegistrationMutation = useUpdateRegistration();
   const checkInMutation = useCheckIn();
+  const deleteRegistrationMutation = useDeleteRegistration();
+  const [isFellowshipModalOpen, setIsFellowshipModalOpen] = useState(false);
+
+  const handleDeleteRegistration = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the registration for "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await deleteRegistrationMutation.mutateAsync({ id, eventId: eventId! });
+      toast.success(`Registration for "${name}" deleted successfully.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete registration.");
+    }
+  };
 
   const handleConvertToHomeMember = async (r: any) => {
     try {
@@ -132,7 +148,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   const [fullName, setFullName] = useState(savedData.fullName || "");
   const [email, setEmail] = useState(savedData.email || "");
   const [phone, setPhone] = useState(savedData.phone || "");
-  const [regType, setRegType] = useState<"guest" | "rotarian" | "club_member">(savedData.regType || "guest");
+  const [regType, setRegType] = useState<"guest" | "rotarian" | "rotaractor" | "club_member">(savedData.regType || "guest");
   const [clubName, setClubName] = useState(savedData.clubName || "");
   const [district, setDistrict] = useState(savedData.district || "");
   const [buddyGroup, setBuddyGroup] = useState(savedData.buddyGroup || "");
@@ -606,13 +622,16 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   async function handleAddAttendee(e: React.FormEvent) {
     e.preventDefault();
 
+    if (submitting || registerMutation.isPending) return;
+    setSubmitting(true);
+
     const sanitizedFullName = sanitizeRequiredInput(fullName);
     const sanitizedEmail = email.trim() 
       ? sanitizeRequiredInput(email) 
       : `attendee-${Date.now()}@${organization?.slug || "agoroll"}.org`;
     const sanitizedPhone = phone.trim() ? formatUgandanPhone(phone) : null;
-    const sanitizedClubName = regType === "rotarian" ? sanitizeRequiredInput(clubName) : null;
-    const sanitizedDistrict = regType === "rotarian" ? sanitizeRequiredInput(district) : null;
+    const sanitizedClubName = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(clubName) : null;
+    const sanitizedDistrict = (regType === "rotarian" || regType === "rotaractor") ? sanitizeRequiredInput(district) : null;
     const sanitizedBuddyGroup = regType === "club_member" ? sanitizeRequiredInput(buddyGroup) : null;
     const sanitizedOccupation = regType !== "club_member" ? sanitizeInput(occupation) : null;
     const sanitizedComments = sanitizeInput(comments);
@@ -629,7 +648,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
       }
     }
 
-    if (regType === "rotarian" && (!sanitizedClubName || !sanitizedDistrict)) {
+    if ((regType === "rotarian" || regType === "rotaractor") && (!sanitizedClubName || !sanitizedDistrict)) {
       toast.error("Please enter Club Name and District.");
       return;
     }
@@ -655,7 +674,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
     setSubmitting(true);
     try {
-      const isRotaryMember = regType === "rotarian" || regType === "club_member";
+      const isRotaryMember = regType === "rotarian" || regType === "rotaractor" || regType === "club_member";
 
       let finalMemberId = null;
 
@@ -756,21 +775,27 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     <AdminLayout
       pageTitle={event.title}
       actions={
-        <div className="flex items-center gap-2">
-          {/* QR Scanner view toggle button removed */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer"
+            className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer whitespace-nowrap"
             style={{ background: GOLD }}
           >
-            <Plus size={14} /> Register Attendee
+            <Plus size={14} /> <span className="hidden sm:inline">Register Attendee</span><span className="sm:hidden">Register</span>
+          </button>
+          <button
+            onClick={() => setIsFellowshipModalOpen(true)}
+            className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold text-white bg-[#001D4A] hover:bg-[#002868] transition-all cursor-pointer shadow-sm whitespace-nowrap"
+            title="Generate Official Rotary Report"
+          >
+            <FileText size={14} className="text-[#F7A81B]" /> <span>Report</span>
           </button>
           <button
             onClick={downloadAttendanceReport}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted bg-card transition-all cursor-pointer"
+            className="p-1.5 sm:px-3.5 sm:py-2 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted bg-card transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
             title="Download Attendance Report (PDF/Print)"
           >
-            <Printer size={14} /> Print Report
+            <Printer size={14} /> <span className="hidden sm:inline">Print Report</span>
           </button>
         </div>
       }
@@ -1005,9 +1030,11 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                             Home Club Member
                                           </p>
                                           {r.buddy_group && (
-                                            <p className="text-foreground mt-0.5">
+                                            <p className="text-foreground mt-1 flex items-center gap-1.5">
                                               <span className="text-muted-foreground font-semibold">Buddy Group:</span>{" "}
-                                              {r.buddy_group}
+                                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20 whitespace-nowrap">
+                                                {r.buddy_group}
+                                              </span>
                                             </p>
                                           )}
                                         </div>
@@ -1105,8 +1132,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                     </div>
                                   )}
 
-                                  {/* Status display */}
-                                  <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between">
+                                  {/* Status display & Delete action */}
+                                  <div className="sm:col-span-2 md:col-span-3 border-t border-border/40 pt-3 flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
                                       {r.status === "checked-in" ? (
                                         <span className="text-xs text-emerald-800 font-bold px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-1.5">
@@ -1122,6 +1149,18 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                                         </span>
                                       )}
                                     </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteRegistration(r.id, r.full_name);
+                                      }}
+                                      className="text-xs font-bold text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-xl border border-destructive/20 cursor-pointer transition-all flex items-center gap-1.5 shadow-2xs"
+                                      title="Delete registration record"
+                                    >
+                                      <Trash2 size={13} /> Delete Registration
+                                    </button>
                                   </div>
                                 </div>
                               </td>
@@ -1189,10 +1228,11 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 <label className="text-[11px] font-bold text-muted-foreground uppercase" style={{ fontFamily: "var(--font-sans)" }}>
                   Registration Type
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: "club_member", label: "Home Club Member" },
                     { id: "rotarian", label: "Visiting Rotarian" },
+                    { id: "rotaractor", label: "Visiting Rotaractor" },
                     { id: "guest", label: "Guest / Visitor" },
                   ].map((type) => {
                     const isSelected = regType === type.id;
@@ -1201,7 +1241,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                         key={type.id}
                         type="button"
                         onClick={() => setRegType(type.id as any)}
-                        className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
+                        className={`py-2 px-2.5 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
                           isSelected
                             ? "border-[#17458F] bg-[#17458F]/5 text-[#17458F]"
                             : "border-border bg-card text-foreground hover:bg-muted"
@@ -1214,21 +1254,21 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
                 </div>
               </div>
 
-              {regType === "rotarian" && (
+              {(regType === "rotarian" || regType === "rotaractor") && (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-muted/20 rounded-xl border border-border/40 animate-in fade-in slide-in-from-top-1">
                   <TextInput
-                    label="Club Name"
-                    placeholder="e.g. Rotary Club of Ntinda"
+                    label={regType === "rotaractor" ? "Rotaract Club Name" : "Rotary Club Name"}
+                    placeholder={regType === "rotaractor" ? "e.g. Rotaract Club of Kampala" : "e.g. Rotary Club of Ntinda"}
                     value={clubName}
                     onChange={setClubName}
-                    required={regType === "rotarian"}
+                    required
                   />
                   <TextInput
                     label="District"
                     placeholder="e.g. 9213"
                     value={district}
                     onChange={setDistrict}
-                    required={regType === "rotarian"}
+                    required
                   />
                 </div>
               )}
@@ -1457,6 +1497,14 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           </div>
         </div>
       )}
+
+      {/* Fellowship Report Modal */}
+      <FellowshipReportModal
+        isOpen={isFellowshipModalOpen}
+        onClose={() => setIsFellowshipModalOpen(false)}
+        event={event}
+        organization={organization}
+      />
     </AdminLayout>
   );
 }

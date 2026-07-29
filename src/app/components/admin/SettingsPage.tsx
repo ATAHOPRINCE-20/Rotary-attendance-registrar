@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { NAVY, sanitizeInput } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
 import { QRCodeSVG } from "qrcode.react";
-import { X, Settings, Eye, EyeOff } from "lucide-react";
+import { Upload, X, Settings, Eye, EyeOff } from "lucide-react";
 
 export default function SettingsPage() {
   const { organization, refreshProfile } = useAuth();
@@ -21,6 +21,11 @@ export default function SettingsPage() {
   
   const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
   const [isEditingBrevo, setIsEditingBrevo] = useState(false);
+
+  // Logo upload states
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [savingLogo, setSavingLogo] = useState(false);
   
   const [showQRModal, setShowQRModal] = useState(false);
   const [linkMode, setLinkMode] = useState<"qr" | "phone">("qr");
@@ -29,6 +34,69 @@ export default function SettingsPage() {
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<"not_started" | "initializing" | "waiting_for_qr" | "connected" | "disconnected">("not_started");
   const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1.5 * 1024 * 1024) {
+      toast.error("Logo file size must be less than 1.5MB");
+      return;
+    }
+
+    setLogoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleUploadLogo() {
+    if (!organization || (!logoFile && !logoPreview)) return;
+    setSavingLogo(true);
+    try {
+      let logoUrl = organization.logo_url;
+      if (logoFile) {
+        try {
+          const fileExt = logoFile.name.split(".").pop();
+          const fileName = `${organization.slug}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(filePath, logoFile, { upsert: true, contentType: logoFile.type });
+
+          if (uploadErr) throw uploadErr;
+
+          const { data: publicUrlData } = supabase.storage
+            .from("logos")
+            .getPublicUrl(filePath);
+
+          logoUrl = publicUrlData.publicUrl;
+        } catch (storageErr) {
+          console.warn("Storage upload failed, falling back to Base64:", storageErr);
+          logoUrl = logoPreview;
+        }
+      }
+
+      const { error: updateErr } = await supabase
+        .from("organizations")
+        .update({ logo_url: logoUrl })
+        .eq("id", organization.id);
+
+      if (updateErr) throw updateErr;
+
+      toast.success("Club logo updated successfully!");
+      setLogoFile(null);
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to update club logo.");
+    } finally {
+      setSavingLogo(false);
+    }
+  }
 
   async function fetchWithAuth(url: string, options: RequestInit = {}) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -227,6 +295,77 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Club Logo & Profile Settings Card */}
+        <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                Club Logo & Branding
+              </h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Upload your club's official logo. This logo appears on your portal header, meeting passes, and attendance reports.
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-lg">
+              /org/{organization?.slug}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative group">
+              {logoPreview || organization?.logo_url ? (
+                <img
+                  src={logoPreview || organization?.logo_url || "/assets/rotary_gold_logo.png"}
+                  className="w-full h-full object-contain p-2"
+                  alt="Club Logo"
+                />
+              ) : (
+                <span className="text-[10px] text-muted-foreground font-semibold">No Logo</span>
+              )}
+            </div>
+
+            <div className="flex-1 flex flex-col gap-2 text-center sm:text-left">
+              <div>
+                <h4 className="text-sm font-black text-slate-800">{organization?.name}</h4>
+                <p className="text-xs text-slate-500">
+                  {organization?.district ? `District ${organization.district}` : "District Not Set"} • {organization?.country || "Location Not Set"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 mt-1 justify-center sm:justify-start">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoChange}
+                  className="hidden"
+                  id="settings-club-logo"
+                />
+                <label
+                  htmlFor="settings-club-logo"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 cursor-pointer transition-all shadow-xs"
+                >
+                  <Upload size={13} className="mr-1.5" /> Choose New Logo
+                </label>
+
+                {(logoFile || logoPreview) && (
+                  <button
+                    type="button"
+                    onClick={handleUploadLogo}
+                    disabled={savingLogo}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
+                    style={{ background: NAVY }}
+                  >
+                    {savingLogo ? "Uploading..." : "Save Logo"}
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Recommended: PNG or JPG image under 1.5MB.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* WhatsApp Settings Card */}
         <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4">
           <div>

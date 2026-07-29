@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { FellowshipReportModal } from "./FellowshipReportModal";
 import type { ClubActivity } from "../../../types/database";
 
 export function ReportsPage() {
@@ -36,6 +37,7 @@ export function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [printingEventId, setPrintingEventId] = useState<string | null>(null);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [selectedReportEvent, setSelectedReportEvent] = useState<any | null>(null);
 
   // Queries
   const { data: events, isLoading: eventsLoading } = useQuery({
@@ -677,26 +679,26 @@ export function ReportsPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md tracking-wider">
+                          <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200/60 tracking-wider">
                             {ev.type || "General"}
                           </span>
-                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${
                             ev.status === "published"
-                              ? "bg-emerald-100 text-emerald-800"
+                              ? "bg-slate-100 text-slate-700 border-slate-200/60"
                               : ev.status === "closed"
-                              ? "bg-rose-100 text-rose-800"
-                              : "bg-slate-100 text-slate-800"
+                              ? "bg-slate-100 text-slate-600 border-slate-200/60"
+                              : "bg-slate-50 text-slate-500 border-slate-200/40"
                           }`}>
                             {ev.status}
                           </span>
                         </div>
-                        <h3 className="text-sm font-extrabold text-foreground leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                        <h3 className="text-sm font-extrabold text-[#001D4A] leading-snug" style={{ fontFamily: "var(--font-sans)" }}>
                           {ev.title}
                         </h3>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground mt-1 font-medium">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-1 font-medium">
                           <span className="flex items-center gap-1"><Calendar size={12} /> {formattedDate}</span>
                           {ev.location && <span className="hidden sm:inline">&bull;</span>}
-                          {ev.location && <span>Venue: <strong>{ev.location}</strong></span>}
+                          {ev.location && <span>Venue: <strong className="text-slate-700">{ev.location}</strong></span>}
                         </div>
                       </div>
                     </div>
@@ -704,11 +706,11 @@ export function ReportsPage() {
                     {/* Quick overview metrics on right side when collapsed */}
                     <div className="flex items-center gap-6">
                       <div className="hidden sm:flex flex-col items-end">
-                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Attendance</p>
-                        <p className="text-xs font-black text-foreground mt-0.5">{stats.total} Attendees</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Attendance</p>
+                        <p className="text-xs font-black text-[#001D4A] mt-0.5">{stats.total} Attendees</p>
                       </div>
                       
-                      <div className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors shrink-0">
+                      <div className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors shrink-0">
                         {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </div>
                     </div>
@@ -716,7 +718,7 @@ export function ReportsPage() {
 
                   {/* Expanded Content details */}
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-4 border-t border-dashed border-border/60 bg-slate-50/50 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col gap-4">
+                    <div className="px-5 pb-5 pt-4 border-t border-slate-200/60 bg-slate-50/40 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col gap-4">
                       
                       {/* Top Row: Stats summary & Actions */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
@@ -725,56 +727,65 @@ export function ReportsPage() {
                           {/* Headcounts */}
                           <div className="flex gap-6">
                             <div>
-                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Total Registered</p>
-                              <p className="text-base font-black mt-0.5" style={{ color: NAVY }}>{stats.total}</p>
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Registered</p>
+                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.total}</p>
                             </div>
                             <div>
-                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Present</p>
-                              <p className="text-base font-black mt-0.5 text-emerald-700">{stats.checkedIn}</p>
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Present</p>
+                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.checkedIn}</p>
                             </div>
                             <div>
-                              <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Apologies</p>
-                              <p className="text-base font-black mt-0.5 text-amber-700">{stats.apologies || 0}</p>
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Apologies</p>
+                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.apologies || 0}</p>
                             </div>
                           </div>
 
                           {/* Buddy Group Leader */}
                           <div className="min-w-[140px]">
-                            <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider">Buddy Group Leader</p>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Buddy Group Leader</p>
                             {stats.leader ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 mt-1">
-                                🌟 {stats.leader} ({stats.leaderCount} Present)
-                              </span>
+                              <p className="text-xs font-bold text-[#001D4A] mt-1">
+                                {stats.leader} <span className="font-medium text-slate-500">({stats.leaderCount} Present)</span>
+                              </p>
                             ) : (
-                              <p className="text-xs text-muted-foreground mt-1 font-medium">—</p>
+                              <p className="text-xs text-slate-400 mt-1 font-medium">—</p>
                             )}
                           </div>
                         </div>
 
                         {/* Expanded Actions */}
                         <div 
-                          className="flex items-center gap-2 pt-2 sm:pt-0"
+                          className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0"
                           onClick={(e) => e.stopPropagation()} // protect click area
                         >
-                          <OutlineButton
+                          <button
                             onClick={() => handlePrintReport(ev)}
                             disabled={isPrinting}
-                            className="py-2 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5"
+                            className="py-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
                           >
                             {isPrinting ? (
                               <>
-                                <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                <span className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
                                 Loading...
                               </>
                             ) : (
                               <>
-                                <Printer size={13} /> Print Register
+                                <Printer size={13} className="text-slate-500" /> Print Register
                               </>
                             )}
-                          </OutlineButton>
+                          </button>
+                          <button
+                            onClick={() => setSelectedReportEvent(ev)}
+                            className="py-2 px-3.5 bg-[#001D4A]/5 hover:bg-[#001D4A]/10 text-[#001D4A] border border-[#001D4A]/20 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <FileText size={13} className="text-[#001D4A]" />
+                            {ev.fellowship_report || (ev.description && ev.description.startsWith("[FELLOWSHIP_REPORT]"))
+                              ? "Fellowship Report"
+                              : "Create Report"}
+                          </button>
                           <button
                             onClick={() => navigate(`/admin/checkin/${ev.id}`)}
-                            className="py-2 px-3.5 bg-[#17458F] hover:bg-[#17458F]/95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                            className="py-2 px-3.5 bg-[#001D4A] hover:bg-[#001D4A]/90 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Users size={13} /> View Attendees
                           </button>
@@ -783,9 +794,9 @@ export function ReportsPage() {
 
                       {/* Bottom Section: Buddy Group Breakdown */}
                       <div className="pt-3 border-t border-slate-200/60">
-                        <p className="text-[9px] uppercase font-extrabold text-muted-foreground tracking-wider mb-2">Buddy Group Breakdown (Present)</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">Buddy Group Breakdown (Present)</p>
                         {allEventGroups.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">No buddy groups configured.</p>
+                          <p className="text-xs text-slate-400 italic">No buddy groups configured.</p>
                         ) : (
                           <div className="flex flex-wrap gap-2">
                             {allEventGroups.map((group) => {
@@ -794,15 +805,14 @@ export function ReportsPage() {
                               return (
                                 <div
                                   key={group}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs transition-all whitespace-nowrap ${
                                     isLeader
-                                      ? "bg-amber-50 text-amber-800 border-amber-200 shadow-sm"
+                                      ? "bg-[#001D4A]/5 text-[#001D4A] border border-[#001D4A]/20 font-bold"
                                       : count > 0
-                                      ? "bg-emerald-50/50 text-emerald-800 border-emerald-100"
-                                      : "bg-slate-50 text-slate-400 border-slate-100"
+                                      ? "bg-white text-slate-700 border border-slate-200 font-medium"
+                                      : "bg-slate-50 text-slate-400 border border-slate-200/40"
                                   }`}
                                 >
-                                  {isLeader && <span>🌟</span>}
                                   <span>{group}:</span>
                                   <span className="font-extrabold">{count}</span>
                                 </div>
@@ -819,6 +829,14 @@ export function ReportsPage() {
           </div>
         )}
       </div>
+
+      {/* Fellowship Report Modal */}
+      <FellowshipReportModal
+        isOpen={!!selectedReportEvent}
+        onClose={() => setSelectedReportEvent(null)}
+        event={selectedReportEvent}
+        organization={organization}
+      />
     </AdminLayout>
   );
 }

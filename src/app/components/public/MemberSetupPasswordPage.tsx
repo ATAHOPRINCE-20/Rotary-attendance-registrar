@@ -26,6 +26,15 @@ export function MemberSetupPasswordPage() {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
       const email = params.get("email");
+      const exp = params.get("exp");
+
+      // Enforce 24-hour invitation link expiration
+      if (exp && !isNaN(Number(exp)) && Date.now() > Number(exp)) {
+        setError("This invitation link has expired (invitation links are valid for 24 hours). Please contact your club administrator to request a new invite.");
+        setHasSession(false);
+        setCheckingSession(false);
+        return;
+      }
 
       if (token && email) {
         setCheckingSession(true);
@@ -37,7 +46,7 @@ export function MemberSetupPasswordPage() {
           });
           
           if (verifyErr) {
-            setError(verifyErr.message || "Failed to verify invitation token.");
+            setError(verifyErr.message || "Failed to verify invitation token. Link may have expired.");
             setHasSession(false);
           } else if (data?.session) {
             setHasSession(true);
@@ -103,6 +112,8 @@ export function MemberSetupPasswordPage() {
         return;
       }
 
+      let destination = "/member/dashboard";
+
       if (data.user) {
         const userId = data.user.id;
         const userEmail = data.user.email;
@@ -115,27 +126,45 @@ export function MemberSetupPasswordPage() {
             .ilike("email", userEmail);
         }
 
-        // Ensure a profile row exists with role 'member' if no profile
-        const { data: existingProf } = await supabase
+        // Check user profile role for smart navigation
+        const { data: userProf } = await supabase
           .from("profiles")
-          .select("id")
+          .select("role, organization_id")
           .eq("id", userId)
           .maybeSingle();
 
-        if (!existingProf && userEmail) {
-          const { data: memberRec } = await supabase
-            .from("members")
-            .select("organization_id, full_name")
-            .ilike("email", userEmail)
-            .maybeSingle();
+        if (userProf) {
+          if (userProf.role && userProf.role !== "member") {
+            destination = "/admin/dashboard";
+          }
+        } else if (userEmail) {
+          const meta = data.user.user_metadata || {};
+          const metaOrgId = meta.organization_id;
+          const metaRole = meta.role || "staff";
 
-          if (memberRec) {
+          if (metaOrgId) {
             await supabase.from("profiles").insert({
               id: userId,
-              organization_id: memberRec.organization_id,
-              full_name: memberRec.full_name,
-              role: "member"
+              organization_id: metaOrgId,
+              full_name: meta.full_name || userEmail.split("@")[0],
+              role: metaRole
             });
+            if (metaRole !== "member") destination = "/admin/dashboard";
+          } else {
+            const { data: memberRec } = await supabase
+              .from("members")
+              .select("organization_id, full_name")
+              .ilike("email", userEmail)
+              .maybeSingle();
+
+            if (memberRec) {
+              await supabase.from("profiles").insert({
+                id: userId,
+                organization_id: memberRec.organization_id,
+                full_name: memberRec.full_name,
+                role: "member"
+              });
+            }
           }
         }
       }
@@ -144,7 +173,7 @@ export function MemberSetupPasswordPage() {
       
       // Auto redirect after 2.5 seconds
       setTimeout(() => {
-        navigate("/member/dashboard");
+        navigate(destination);
       }, 2500);
 
     } catch (e: any) {

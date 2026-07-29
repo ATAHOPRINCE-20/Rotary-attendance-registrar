@@ -77,35 +77,55 @@ export function MemberLoginPage() {
       }
 
       if (data?.user) {
-        // Verify they are a member
-        const { data: member } = await supabase
+        // 1. Check user profile role first
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        // 2. Check if linked to members table (by user_id or email)
+        let { data: member } = await supabase
           .from("members")
           .select("id")
           .eq("user_id", data.user.id)
           .maybeSingle();
 
-        if (!member) {
-          // Signed in user is not a member (might be admin)
-          // We let them through if they are admin, but direct them to the appropriate portal
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", data.user.id)
+        if (!member && data.user.email) {
+          const { data: emailMem } = await supabase
+            .from("members")
+            .select("id")
+            .ilike("email", data.user.email)
             .maybeSingle();
 
-          if (profile) {
-            navigate("/admin/dashboard");
-            return;
+          if (emailMem) {
+            member = emailMem;
+            // Auto link user_id
+            await supabase.from("members").update({ user_id: data.user.id }).eq("id", emailMem.id);
           }
+        }
 
-          // Logout since they don't belong here
-          await supabase.auth.signOut();
-          setError("Your account is not registered as a club member. Please check with your administrator.");
-          setLoading(false);
+        // 3. Route user based on their active role
+        if (profile?.role === "treasurer") {
+          navigate("/treasurer/dashboard", { replace: true });
           return;
         }
 
-        navigate("/member/dashboard");
+        if (profile?.role === "admin" || profile?.role === "super_admin") {
+          navigate("/admin/dashboard", { replace: true });
+          return;
+        }
+
+        if (member || profile?.role === "member") {
+          navigate("/member/dashboard", { replace: true });
+          return;
+        }
+
+        // Logout if user does not belong to any role
+        await supabase.auth.signOut();
+        setError("Your account is not registered as a club member or staff. Please check with your administrator.");
+        setLoading(false);
+        return;
       }
     } catch (e: any) {
       setError(e.message || "An unexpected error occurred.");
@@ -263,7 +283,7 @@ export function MemberLoginPage() {
 
             {/* Method 1: Email and Password Login */}
             {method === "password" && (
-              <>
+              <form onSubmit={(e) => { e.preventDefault(); handlePasswordLogin(); }} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-semibold text-foreground">Email Address</label>
                   <input
@@ -271,7 +291,7 @@ export function MemberLoginPage() {
                     placeholder="name@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+                    autoComplete="email"
                     className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 transition-all"
                   />
                 </div>
@@ -292,7 +312,7 @@ export function MemberLoginPage() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+                      autoComplete="current-password"
                       className="w-full px-4 py-3 pr-11 rounded-xl border border-border bg-input-background text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 transition-all"
                     />
                     <button
@@ -306,10 +326,10 @@ export function MemberLoginPage() {
                   </div>
                 </div>
 
-                <GoldButton onClick={handlePasswordLogin} className="w-full justify-center py-3 text-slate-900 mt-2 hover:brightness-110" disabled={loading}>
+                <GoldButton type="submit" className="w-full justify-center py-3 text-slate-900 mt-2 hover:brightness-110" disabled={loading}>
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={16} /> Sign In</>}
                 </GoldButton>
-              </>
+              </form>
             )}
 
             {/* Method 2: OTP Verification Login */}

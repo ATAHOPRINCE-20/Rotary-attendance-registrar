@@ -44,7 +44,15 @@ export function getFriendlyErrorMessage(err: any): string {
     return "Access denied. You do not have permission.";
   }
 
-  // 3. Supabase Auth Errors
+  // 3. Supabase Auth Errors & Session Expiration
+  if (
+    msgLower.includes("unauthorized") ||
+    msgLower.includes("session expired") ||
+    msgLower.includes("invalid token") ||
+    msgLower.includes("jwt expired")
+  ) {
+    return "Your login session has expired for security. Please sign in again.";
+  }
   if (msgLower.includes("invalid login credentials") || msgLower.includes("invalid credentials")) {
     return "Incorrect email or password.";
   }

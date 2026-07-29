@@ -4,13 +4,15 @@ import { supabase } from "../lib/supabase";
 import type { Member, Organization } from "../types/database";
 
 interface MemberAuthContextValue {
-  session:      Session | null;
-  user:         User | null;
-  member:       Member | null;
-  organization: Organization | null;
-  loading:      boolean;
-  signOut:      () => Promise<void>;
-  refreshMember: () => Promise<void>;
+  session:              Session | null;
+  user:                 User | null;
+  member:               Member | null;
+  organization:         Organization | null;
+  loading:              boolean;
+  impersonatedMemberId: string | null;
+  impersonateMember:    (memberId: string | null) => void;
+  signOut:              () => Promise<void>;
+  refreshMember:        () => Promise<void>;
 }
 
 const MemberAuthContext = createContext<MemberAuthContextValue | null>(null);
@@ -21,8 +23,22 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
   const [member, setMember]             = useState<Member | null>(null);
   const [organization, setOrg]          = useState<Organization | null>(null);
   const [loading, setLoading]           = useState(true);
+  const [impersonatedMemberId, setImpersonatedMemberId] = useState<string | null>(
+    typeof window !== "undefined" ? sessionStorage.getItem("impersonated_member_id") : null
+  );
 
   const loadingUserRef = useRef<string | null>(null);
+
+  function impersonateMember(memberId: string | null) {
+    if (typeof window !== "undefined") {
+      if (memberId) {
+        sessionStorage.setItem("impersonated_member_id", memberId);
+      } else {
+        sessionStorage.removeItem("impersonated_member_id");
+      }
+    }
+    setImpersonatedMemberId(memberId);
+  }
 
   async function loadMember(userId: string, force = false): Promise<void> {
     if (!force && loadingUserRef.current === userId) {
@@ -33,19 +49,36 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     try {
-      // 1. Fetch the member record associated with this user ID
-      let { data: memData, error: memErr } = await supabase
-        .from("members")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
+      let memData: Member | null = null;
 
-      if (memErr) {
-        console.error("[MemberAuthContext] loadMember error:", memErr.message);
+      // 1. Check if Admin Impersonation mode is active first
+      const activeImpersonatedId = impersonatedMemberId || (typeof window !== "undefined" ? sessionStorage.getItem("impersonated_member_id") : null);
+
+      if (activeImpersonatedId) {
+        const { data: impMem } = await supabase
+          .from("members")
+          .select("*")
+          .eq("id", activeImpersonatedId)
+          .maybeSingle();
+
+        if (impMem) {
+          memData = impMem;
+        }
       }
 
-      // Fallback: If not found by user_id, check by user email
-      if (!memData) {
+      // 2. If not impersonating or impersonation target not found, fetch by user ID
+      if (!memData && userId && userId !== "impersonated") {
+        const { data: userMem } = await supabase
+          .from("members")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (userMem) memData = userMem;
+      }
+
+      // 3. Fallback: Check by user email
+      if (!memData && userId && userId !== "impersonated") {
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.email) {
           const { data: emailMem } = await supabase
@@ -56,7 +89,6 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
 
           if (emailMem) {
             memData = emailMem;
-            // Auto-link user_id for RLS and future loads
             await supabase
               .from("members")
               .update({ user_id: userId })
@@ -68,7 +100,7 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
       if (memData) {
         setMember(memData);
 
-        // 2. Fetch their organization details
+        // Fetch organization details
         const { data: orgData, error: orgErr } = await supabase
           .from("organizations")
           .select("*")
@@ -96,7 +128,7 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshMember() {
-    if (user) await loadMember(user.id, true);
+    if (user || impersonatedMemberId) await loadMember(user?.id || "impersonated", true);
   }
 
   useEffect(() => {
@@ -109,8 +141,8 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        loadMember(session.user.id).finally(() => {
+      if (session?.user || impersonatedMemberId) {
+        loadMember(session?.user?.id || "impersonated", true).finally(() => {
           clearTimeout(safetyTimer);
         });
       } else {
@@ -124,8 +156,8 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          await loadMember(session.user.id);
+        if (session?.user || impersonatedMemberId) {
+          await loadMember(session?.user?.id || "impersonated", true);
         } else {
           setMember(null);
           setOrg(null);
@@ -139,9 +171,13 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [impersonatedMemberId]);
 
   async function signOut() {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("impersonated_member_id");
+    }
+    setImpersonatedMemberId(null);
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);
@@ -157,6 +193,8 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
       member,
       organization,
       loading,
+      impersonatedMemberId,
+      impersonateMember,
       signOut,
       refreshMember
     }}>

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 
 export function PageCard({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-card rounded-2xl shadow-sm border border-border p-6 ${className}`}>
+    <div className={`bg-card rounded-2xl shadow-sm border border-border p-4 sm:p-6 max-w-full overflow-hidden box-border ${className}`}>
       {children}
     </div>
   );

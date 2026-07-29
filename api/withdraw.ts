@@ -146,10 +146,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Calculate balance ledger
-    // Get total completed donations
+    // Get total completed donations (filtering out cash collections)
     const { data: donations, error: donError } = await supabase
       .from('donations')
-      .select('amount')
+      .select('amount, payment_method')
       .eq('organization_id', organizationId)
       .eq('status', 'completed');
 
@@ -164,12 +164,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (withError) throw withError;
 
-    const totalDonations = donations.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    const totalDigitalDonations = donations
+      .filter((d: any) => d.payment_method !== 'cash')
+      .reduce((sum: number, d: any) => sum + Number(d.amount), 0);
     const totalWithdrawals = withdrawals.reduce((sum: number, w: any) => sum + Number(w.amount), 0);
-    const withdrawableBalance = totalDonations - totalWithdrawals;
+    const withdrawableBalance = Math.max(0, totalDigitalDonations - totalWithdrawals);
 
     if (payoutAmount > withdrawableBalance) {
-      return res.status(400).json({ error: `Insufficient balance. Withdrawable balance is UGX ${withdrawableBalance.toLocaleString()}.` });
+      return res.status(400).json({ error: `Insufficient balance. Withdrawable electronic balance is UGX ${withdrawableBalance.toLocaleString()} (physical cash payments excluded).` });
     }
 
     // 3. Setup credentials

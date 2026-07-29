@@ -73,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'Forbidden: You do not belong to this organization' });
   }
 
-  if (!['admin', 'super_admin'].includes(profile.role)) {
+  if (!['admin', 'super_admin'].includes((profile as any).role)) {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
   }
 

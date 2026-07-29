@@ -6,6 +6,7 @@ import { useOrgRegistrations, useEventRegistrations } from "../../../hooks/useRe
 import { useOrgMembers } from "../../../hooks/useMembers";
 import { useOrgDonations } from "../../../hooks/useDonations";
 import { supabase } from "../../../lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
@@ -24,6 +25,11 @@ import {
   MessageSquare,
   Mail,
   CreditCard,
+  Wallet,
+  Coins,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -42,6 +48,95 @@ export function AdminDashboard() {
   const { data: members,       isLoading: membersLoading   } = useOrgMembers(organization?.id);
 
   const loading = eventsLoading || regsLoading || donationsLoading;
+
+  // ── Admin's Own Member Record & Personal Dues ──────────────────────────────
+  const { data: myMemberRecord } = useQuery<{ id: string; full_name: string; email: string; phone?: string } | null>({
+    queryKey: ["admin-own-member", organization?.id, profile?.id],
+    enabled: !!organization?.id && !!profile?.id,
+    queryFn: async () => {
+      const { data: byUserId } = await supabase
+        .from("members")
+        .select("id, full_name, email, phone")
+        .eq("organization_id", organization!.id)
+        .eq("user_id", profile!.id)
+        .maybeSingle();
+      if (byUserId) return byUserId;
+      if (profile?.email) {
+        const { data: byEmail } = await supabase
+          .from("members")
+          .select("id, full_name, email, phone")
+          .eq("organization_id", organization!.id)
+          .ilike("email", profile.email)
+          .maybeSingle();
+        return byEmail || null;
+      }
+      return null;
+    },
+  });
+
+  const { data: myDuesBalances, refetch: refetchMyDues } = useQuery<any[]>({
+    queryKey: ["admin-my-dues", myMemberRecord?.id],
+    enabled: !!myMemberRecord?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("member_dues_balances")
+        .select("*, dues_categories(name)")
+        .eq("member_id", myMemberRecord!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // My Dues Payment Modal State
+  const [myPayModalOpen, setMyPayModalOpen] = useState(false);
+  const [mySelectedDue, setMySelectedDue] = useState<any | null>(null);
+  const [myPayAmount, setMyPayAmount] = useState("");
+  const [myPayPhone, setMyPayPhone] = useState("");
+  const [myPayInitiating, setMyPayInitiating] = useState(false);
+  const [myPayPolling, setMyPayPolling] = useState(false);
+
+  async function handleMyDuesPaymentSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mySelectedDue || !organization || !myMemberRecord) return;
+    const numAmount = parseFloat(myPayAmount);
+    if (isNaN(numAmount) || numAmount < 500) {
+      toast.error("Minimum payment is UGX 500.");
+      return;
+    }
+    if (!myPayPhone) {
+      toast.error("Please enter your phone number for Mobile Money.");
+      return;
+    }
+    setMyPayInitiating(true);
+    try {
+      const res = await fetch("/api/initiate-donation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: organization.id,
+          memberId: myMemberRecord.id,
+          duesCategoryId: mySelectedDue.dues_category_id,
+          fullName: myMemberRecord.full_name,
+          email: myMemberRecord.email,
+          amount: numAmount,
+          currency: "UGX",
+          category: mySelectedDue.dues_categories?.name || "Dues Payment",
+          paymentMethod: "mobile",
+          phone: myPayPhone.replace("+", ""),
+          slug: organization.slug,
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to initiate payment.");
+      setMyPayPolling(true);
+      toast.success("Payment initiated! Please approve the prompt on your phone.");
+    } catch (err: any) {
+      toast.error(err.message || "Payment failed.");
+    } finally {
+      setMyPayInitiating(false);
+    }
+  }
 
   const [buddyGroupsList, setBuddyGroupsList] = useState<string[]>([]);
   const [newGroup, setNewGroup] = useState("");
@@ -175,6 +270,7 @@ export function AdminDashboard() {
 
 
   return (
+    <>
     <AdminLayout
       pageTitle="Dashboard"
       actions={
@@ -510,8 +606,174 @@ export function AdminDashboard() {
               </div>
             </>
           )}
-        </main>
-      </AdminLayout>
+          {/* ── MY DUES SECTION ── */}
+          {myMemberRecord && myDuesBalances && myDuesBalances.length > 0 && (
+            <section className="mt-6 mb-2">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Wallet size={16} style={{ color: NAVY }} />
+                <h2 className="text-sm font-black" style={{ color: NAVY }}>My Dues Statement</h2>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-semibold">
+                {myMemberRecord.full_name}
+              </span>
+            </div>
+
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              {[
+                { label: "Billed", value: myDuesBalances.reduce((s: number, b: any) => s + Number(b.amount_due), 0), color: NAVY },
+                { label: "Paid", value: myDuesBalances.reduce((s: number, b: any) => s + Number(b.amount_paid), 0), color: "#10B981" },
+                { label: "Outstanding", value: Math.max(0, myDuesBalances.reduce((s: number, b: any) => s + Number(b.amount_due) - Number(b.amount_paid), 0)), color: "#E53E3E" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-white rounded-xl p-3 border border-border/60 shadow-sm text-center">
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide">{label}</p>
+                  <p className="text-sm font-black mt-1" style={{ color }}>UGX {value.toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Dues rows */}
+            <div className="rounded-xl border border-border overflow-hidden bg-white shadow-sm">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] text-slate-500 font-black uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left">Category</th>
+                    <th className="px-4 py-3 text-right">Outstanding</th>
+                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="px-4 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {myDuesBalances.map((due: any) => {
+                    const outstanding = Math.max(0, Number(due.amount_due) - Number(due.amount_paid));
+                    const status = due.status as string;
+                    const statusMap: Record<string, { label: string; cls: string }> = {
+                      paid: { label: "Paid", cls: "bg-emerald-100 text-emerald-700" },
+                      partially_paid: { label: "Partial", cls: "bg-blue-100 text-blue-700" },
+                      unpaid: { label: "Unpaid", cls: "bg-slate-100 text-slate-600" },
+                    };
+                    const badge = statusMap[status] ?? { label: status, cls: "bg-slate-100 text-slate-600" };
+                    return (
+                      <tr key={due.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-4 py-3 font-bold text-foreground">
+                          {due.dues_categories?.name || "General Dues"}
+                          {due.due_date && (
+                            <p className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                              Due: {new Date(due.due_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-black text-rose-600">
+                          UGX {outstanding.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {outstanding > 0 ? (
+                            <button
+                              onClick={() => {
+                                setMySelectedDue(due);
+                                setMyPayAmount(outstanding.toString());
+                                setMyPayPhone("");
+                                setMyPayPolling(false);
+                                setMyPayModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-[10px] font-black text-white cursor-pointer hover:brightness-105 transition-all flex items-center gap-1 mx-auto"
+                              style={{ background: NAVY }}
+                            >
+                              <Coins size={11} /> Pay Now
+                            </button>
+                          ) : (
+                            <span className="text-emerald-600 font-black text-[10px] flex items-center gap-1 justify-center">
+                              <CheckCircle2 size={11} /> Settled
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </main>
+    </AdminLayout>
+
+      {/* ── MY DUES PAYMENT MODAL ── */}
+      {myPayModalOpen && mySelectedDue && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl border border-border shadow-2xl p-6 flex flex-col gap-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-black" style={{ color: NAVY }}>Pay My Dues</h2>
+              <button onClick={() => setMyPayModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-500 font-bold text-lg">×</button>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Category</p>
+              <p className="text-sm font-black mt-0.5" style={{ color: NAVY }}>
+                {mySelectedDue.dues_categories?.name || "General Dues"}
+              </p>
+              <div className="flex gap-4 mt-2 text-xs">
+                <span>Billed: <strong>UGX {Number(mySelectedDue.amount_due).toLocaleString()}</strong></span>
+                <span>Outstanding: <strong className="text-rose-600">UGX {Math.max(0, Number(mySelectedDue.amount_due) - Number(mySelectedDue.amount_paid)).toLocaleString()}</strong></span>
+              </div>
+            </div>
+
+            {myPayPolling ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <Loader2 size={32} className="animate-spin text-[#17458F]" />
+                <p className="text-sm font-bold text-muted-foreground">Waiting for Mobile Money confirmation...</p>
+                <p className="text-xs text-muted-foreground text-center">Please approve the prompt on your phone.</p>
+                <button
+                  onClick={() => { setMyPayPolling(false); setMyPayModalOpen(false); refetchMyDues(); }}
+                  className="mt-2 px-4 py-2 rounded-xl text-xs font-bold border border-border hover:bg-slate-50 cursor-pointer"
+                >
+                  Close & Refresh Later
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleMyDuesPaymentSubmit} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Amount to Pay (UGX)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 100000"
+                    value={myPayAmount}
+                    onChange={(e) => setMyPayAmount(e.target.value)}
+                    className="px-4 py-2.5 rounded-xl border border-border bg-slate-50 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile Money Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="0770000000"
+                    value={myPayPhone}
+                    onChange={(e) => setMyPayPhone(e.target.value)}
+                    className="px-4 py-2.5 rounded-xl border border-border bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={myPayInitiating}
+                  className="w-full py-3 text-white font-black text-xs rounded-xl shadow cursor-pointer flex items-center justify-center gap-2 hover:brightness-105 transition-all"
+                  style={{ background: NAVY }}
+                >
+                  {myPayInitiating ? <Loader2 size={16} className="animate-spin" /> : <><Coins size={15} /> Pay via Mobile Money</>}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

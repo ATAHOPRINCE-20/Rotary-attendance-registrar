@@ -337,3 +337,22 @@ export function useCheckIn() {
     },
   });
 }
+
+// ─── Delete a registration (admin) ───────────────────────────────────────────
+export function useDeleteRegistration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
+      const { error } = await supabase
+        .from("registrations")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      return { id, eventId };
+    },
+    onSuccess: ({ eventId }) => {
+      qc.invalidateQueries({ queryKey: ["registrations", eventId] });
+      qc.invalidateQueries({ queryKey: ["org-registrations"] });
+    },
+  });
+}

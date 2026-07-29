@@ -189,7 +189,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let channelSent: 'whatsapp' | 'email' = 'email';
 
-    if (!isEmail && targetPhone) {
+    // Always attempt WhatsApp dispatch first to the registered phone number in database if present
+    if (targetPhone && targetPhone.trim().length >= 9) {
       try {
         const cleanPhone = cleanPhoneForGateway(targetPhone);
         const waMsg = `Hello ${member.full_name},\nYour verification code for the ${org?.name || 'Rotary Club'} member portal is *${otpCodeGenerated}*.\n\nThis code will expire in 10 minutes.`;
@@ -208,6 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw new Error(resJson.error || 'WhatsApp gateway rejected message');
         }
       } catch (err: any) {
+        console.warn(`WhatsApp dispatch to registered number ${targetPhone} failed:`, err.message);
         if (!targetEmail) {
           return res.status(500).json({ error: `Failed to send WhatsApp code: ${err.message}. No email is configured for fallback.` });
         }

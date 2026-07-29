@@ -32,10 +32,14 @@ import {
   Check,
   Share2,
   Download,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
+import { FellowshipReportModal } from "./FellowshipReportModal";
 
 export function EventsPage() {
   const { profile, organization, refreshProfile } = useAuth();
@@ -159,7 +163,6 @@ export function EventsPage() {
               
               setTimeout(function() {
                 window.print();
-                window.close();
               }, 300);
             };
           </script>
@@ -192,7 +195,9 @@ export function EventsPage() {
 
   // Modal / Form state
   const [modalOpen, setModalOpen] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
+  const [reportEvent, setReportEvent] = useState<any | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -294,20 +299,20 @@ export function EventsPage() {
     <AdminLayout
       pageTitle="Events"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <OutlineButton
             onClick={() => setShowAllInOneQR(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold"
+            className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-bold whitespace-nowrap"
           >
-            <QrCode size={13} /> All-in-One QR Code
+            <QrCode size={13} /> <span className="hidden sm:inline">All-in-One QR Code</span><span className="sm:hidden">QR Code</span>
           </OutlineButton>
           {profile?.role !== "staff" && (
             <button
               onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white hover:opacity-90 transition-all cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-white hover:opacity-90 transition-all cursor-pointer whitespace-nowrap"
               style={{ background: NAVY }}
             >
-              <Plus size={14} /> Create Event
+              <Plus size={14} /> <span className="hidden sm:inline">Create Event</span><span className="sm:hidden">Create</span>
             </button>
           )}
         </div>
@@ -333,110 +338,147 @@ export function EventsPage() {
               Create Event
             </GoldButton>
           </PageCard>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((ev) => {
-              const isActive = activeEventId === ev.id;
-              return (
-                <PageCard key={ev.id} className={`flex flex-col justify-between h-full hover:shadow-md transition-shadow ${isActive ? 'ring-2 ring-emerald-500/50' : ''}`}>
-                  <div>
-                    <div className="flex justify-between items-start gap-2 mb-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        <span
-                          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
-                        >
-                          {ev.type || "General"}
-                        </span>
-                        {isActive && (
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" /> Active Site Event
+        ) : (() => {
+          const sortedEvents = [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          const displayedEvents = showAllEvents ? sortedEvents : sortedEvents.slice(0, 3);
+          return (
+            <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {displayedEvents.map((ev) => {
+                  const isActive = activeEventId === ev.id;
+                  return (
+                    <PageCard key={ev.id} className={`flex flex-col justify-between h-full hover:shadow-md transition-shadow ${isActive ? 'ring-2 ring-emerald-500/50' : ''}`}>
+                      <div>
+                        <div className="flex justify-between items-start gap-2 mb-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+                            >
+                              {ev.type || "General"}
+                            </span>
+                            {isActive && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" /> Active Site Event
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              ev.status === "published"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : ev.status === "closed"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-800"
+                            }`}
+                          >
+                            {ev.status}
                           </span>
+                        </div>
+
+                        <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                          {ev.title}
+                        </h3>
+
+                        <p className="text-xs text-muted-foreground mb-1">
+                          <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
+                        </p>
+                        {ev.location && (
+                          <p className="text-xs text-muted-foreground mb-1">
+                            <strong>Venue:</strong> {ev.location}
+                          </p>
+                        )}
+                        {ev.capacity && (
+                          <p className="text-xs text-muted-foreground mb-3">
+                            <strong>Capacity:</strong> {ev.capacity} attendees
+                          </p>
+                        )}
+
+                        {ev.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
+                            {ev.description}
+                          </p>
                         )}
                       </div>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          ev.status === "published"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : ev.status === "closed"
-                            ? "bg-rose-100 text-rose-800"
-                            : "bg-slate-100 text-slate-800"
-                        }`}
-                      >
-                        {ev.status}
-                      </span>
-                    </div>
 
-                    <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                      {ev.title}
-                    </h3>
-
-                    <p className="text-xs text-muted-foreground mb-1">
-                      <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
-                    </p>
-                    {ev.location && (
-                      <p className="text-xs text-muted-foreground mb-1">
-                        <strong>Venue:</strong> {ev.location}
-                      </p>
-                    )}
-                    {ev.capacity && (
-                      <p className="text-xs text-muted-foreground mb-3">
-                        <strong>Capacity:</strong> {ev.capacity} attendees
-                      </p>
-                    )}
-
-                    {ev.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
-                        {ev.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
-                    {profile?.role !== "staff" && (
-                      <button
-                        type="button"
-                        onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
-                        className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
-                          isActive
-                            ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
-                            : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
-                        }`}
-                      >
-                        <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
-                      </button>
-                    )}
-                    {profile?.role !== "staff" ? (
-                      <>
-                        <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
-                          <Edit2 size={12} /> Edit
+                      <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
+                        {profile?.role !== "staff" && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
+                            className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
+                              isActive
+                                ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
+                                : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
+                            }`}
+                          >
+                            <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
+                          </button>
+                        )}
+                        {profile?.role !== "staff" ? (
+                          <>
+                            <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
+                              <Edit2 size={12} /> Edit
+                            </OutlineButton>
+                            <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
+                              <QrCode size={12} /> QR Codes
+                            </OutlineButton>
+                          </>
+                        ) : (
+                          <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
+                            <QrCode size={12} /> QR Codes
+                          </OutlineButton>
+                        )}
+                        <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
+                          <Users size={12} /> Attendees & Check‑In
                         </OutlineButton>
-                        <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
-                          <QrCode size={12} /> QR Codes
-                        </OutlineButton>
-                      </>
+                        <button
+                          type="button"
+                          onClick={() => setReportEvent(ev)}
+                          className="py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold bg-[#001D4A] text-white hover:bg-[#002868] transition-all cursor-pointer shadow-sm"
+                        >
+                          <FileText size={13} className="text-[#F7A81B]" /> Report
+                        </button>
+                        {profile?.role !== "staff" && (
+                          <OutlineButton
+                            onClick={() => handleDelete(ev.id)}
+                            className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
+                          >
+                            <Trash2 size={12} /> Delete Event
+                          </OutlineButton>
+                        )}
+                      </div>
+                    </PageCard>
+                  );
+                })}
+              </div>
+
+              {sortedEvents.length > 3 && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllEvents(!showAllEvents)}
+                    className="px-6 py-2.5 rounded-xl border border-border bg-white hover:bg-slate-50 text-xs font-bold text-[#17458F] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    {showAllEvents ? (
+                      <>Show Less <ChevronUp size={14} /></>
                     ) : (
-                      <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
-                        <QrCode size={12} /> QR Codes
-                      </OutlineButton>
+                      <>Show More Events ({sortedEvents.length - 3} more) <ChevronDown size={14} /></>
                     )}
-                    <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
-                      <Users size={12} /> Attendees & Check‑In
-                    </OutlineButton>
-                    {profile?.role !== "staff" && (
-                      <OutlineButton
-                        onClick={() => handleDelete(ev.id)}
-                        className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
-                      >
-                        <Trash2 size={12} /> Delete Event
-                      </OutlineButton>
-                    )}
-                  </div>
-                </PageCard>
-              );
-            })}
-          </div>
-        )}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+      {/* Fellowship Report Modal */}
+      <FellowshipReportModal
+        isOpen={!!reportEvent}
+        onClose={() => setReportEvent(null)}
+        event={reportEvent}
+        organization={organization}
+      />
 
       {/* Modal */}
       {modalOpen && (

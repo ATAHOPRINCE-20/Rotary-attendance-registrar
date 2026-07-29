@@ -377,7 +377,7 @@ export function DirectoryPage() {
                       <td className="px-6 py-4">
                         {m.buddy_group ? (
                           <span
-                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold border"
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap"
                             style={{ color: NAVY, borderColor: `${NAVY}30`, background: `${NAVY}08` }}
                           >
                             {m.buddy_group}

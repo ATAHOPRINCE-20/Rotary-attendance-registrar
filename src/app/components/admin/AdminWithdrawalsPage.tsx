@@ -78,15 +78,24 @@ export function AdminWithdrawalsPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   // Financial Calculations
-  const totalRaised = donations
-    ?.filter((d) => d.status === "completed")
-    .reduce((sum, d) => sum + Number(d.amount), 0) ?? 0;
+  const completedDonations = donations?.filter((d) => d.status === "completed") ?? [];
+
+  const totalDigitalRaised = completedDonations
+    .filter((d) => d.payment_method !== "cash")
+    .reduce((sum, d) => sum + Number(d.amount), 0);
+
+  const totalCashCollected = completedDonations
+    .filter((d) => d.payment_method === "cash")
+    .reduce((sum, d) => sum + Number(d.amount), 0);
+
+  const totalRaised = totalDigitalRaised + totalCashCollected;
 
   const totalWithdrawn = withdrawals
     ?.filter((w) => w.status === "completed" || w.status === "pending")
     .reduce((sum, w) => sum + Number(w.amount), 0) ?? 0;
 
-  const netBalance = totalRaised - totalWithdrawn;
+  // Electronic withdrawable balance (digital collections minus payouts)
+  const netBalance = Math.max(0, totalDigitalRaised - totalWithdrawn);
 
   // Form submission
   async function handleRequestPayout(e: React.FormEvent) {
@@ -105,7 +114,7 @@ export function AdminWithdrawalsPage() {
     }
 
     if (payoutAmount > netBalance) {
-      setFormError(`Insufficient balance. You can withdraw up to UGX ${netBalance.toLocaleString()}.`);
+      setFormError(`Insufficient electronic balance. You can withdraw up to UGX ${netBalance.toLocaleString()} (physical cash in hand is excluded).`);
       return;
     }
 
@@ -175,13 +184,16 @@ export function AdminWithdrawalsPage() {
                   >
                     <CheckCircle2 size={18} />
                   </div>
-                  <span title="Total completed donations received">
+                  <span title="Total funds collected (Digital + Cash)">
                     <HelpCircle size={14} className="text-muted-foreground cursor-help" />
                   </span>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Total Raised</p>
+                  <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Total Funds Raised</p>
                   <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>UGX {totalRaised.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                    Digital: UGX {totalDigitalRaised.toLocaleString()} • Cash: UGX {totalCashCollected.toLocaleString()}
+                  </p>
                 </div>
               </div>
 
@@ -201,6 +213,7 @@ export function AdminWithdrawalsPage() {
                 <div>
                   <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Total Withdrawn</p>
                   <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>UGX {totalWithdrawn.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Mobile Money payouts</p>
                 </div>
               </div>
 
@@ -213,13 +226,16 @@ export function AdminWithdrawalsPage() {
                   >
                     <Wallet size={18} />
                   </div>
-                  <span title="Funds available to withdraw">
+                  <span title="Electronic funds available to liquidate. Physical cash collections are excluded.">
                     <HelpCircle size={14} className="text-muted-foreground cursor-help" />
                   </span>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">Withdrawable Balance</p>
                   <p className="text-xl font-black mt-0.5" style={{ color: NAVY }}>UGX {netBalance.toLocaleString()}</p>
+                  <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                    Excludes UGX {totalCashCollected.toLocaleString()} cash in hand
+                  </p>
                 </div>
               </div>
             </div>
@@ -309,78 +325,120 @@ export function AdminWithdrawalsPage() {
                     <h3 className="text-sm font-bold" style={{ color: NAVY }}>Payout History</h3>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    {!withdrawals || withdrawals.length === 0 ? (
-                      <div className="text-center py-20 px-4">
-                        <History className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-                        <p className="text-sm font-semibold text-foreground">No withdrawals logged yet</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Payout records will appear here as soon as you request a liquidation.
-                        </p>
-                      </div>
-                    ) : (
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/5 font-bold text-muted-foreground uppercase text-[9px] tracking-wider">
-                            <th className="px-5 py-3">Reference / Date</th>
-                            <th className="px-5 py-3">Recipient</th>
-                            <th className="px-5 py-3 text-right">Amount</th>
-                            <th className="px-5 py-3 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/30">
-                          {withdrawals.map((w) => {
-                            const date = new Date(w.created_at).toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            });
+                  {!withdrawals || withdrawals.length === 0 ? (
+                    <div className="text-center py-20 px-4">
+                      <History className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+                      <p className="text-sm font-semibold text-foreground">No withdrawals logged yet</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Payout records will appear here as soon as you request a liquidation.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* DESKTOP TABLE VIEW */}
+                      <div className="hidden sm:block w-full">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/5 font-bold text-muted-foreground uppercase text-[9px] tracking-wider">
+                              <th className="px-5 py-3">Reference / Date</th>
+                              <th className="px-5 py-3">Recipient</th>
+                              <th className="px-5 py-3 text-right">Amount</th>
+                              <th className="px-5 py-3 text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {withdrawals.map((w) => {
+                              const date = new Date(w.created_at).toLocaleDateString("en-GB", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
 
-                            return (
-                              <tr key={w.id} className="hover:bg-muted/5 transition-colors">
-                                <td className="px-5 py-3.5">
-                                  <p className="font-bold text-foreground">{w.reference}</p>
-                                  <p className="text-[9px] text-muted-foreground mt-0.5">{date}</p>
-                                </td>
-                                <td className="px-5 py-3.5">
-                                  <p className="font-semibold text-foreground flex items-center gap-1">
-                                    <User size={10} className="text-muted-foreground" />
-                                    {w.recipient_name || "Club Wallet"}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                                    <Phone size={10} />
-                                    {w.recipient_phone}
-                                  </p>
-                                </td>
-                                <td className="px-5 py-3.5 text-right font-black text-foreground">
-                                  UGX {Number(w.amount).toLocaleString()}
-                                </td>
-                                <td className="px-5 py-3.5 text-center">
-                                  {w.status === "pending" && (
-                                    <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-amber-100 text-amber-600">
-                                      Pending
-                                    </span>
-                                  )}
-                                  {w.status === "failed" && (
-                                    <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-red-100 text-red-600">
-                                      Failed
-                                    </span>
-                                  )}
-                                  {w.status === "completed" && (
-                                    <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-100 text-emerald-600">
-                                      Success
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                              return (
+                                <tr key={w.id} className="hover:bg-muted/5 transition-colors">
+                                  <td className="px-5 py-3.5">
+                                    <p className="font-bold text-foreground">{w.reference}</p>
+                                    <p className="text-[9px] text-muted-foreground mt-0.5">{date}</p>
+                                  </td>
+                                  <td className="px-5 py-3.5">
+                                    <p className="font-semibold text-foreground flex items-center gap-1">
+                                      <User size={10} className="text-muted-foreground" />
+                                      {w.recipient_name || "Club Wallet"}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                                      <Phone size={10} />
+                                      {w.recipient_phone}
+                                    </p>
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right font-black text-foreground">
+                                    UGX {Number(w.amount).toLocaleString()}
+                                  </td>
+                                  <td className="px-5 py-3.5 text-center">
+                                    {w.status === "pending" && (
+                                      <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-amber-100 text-amber-600">
+                                        Pending
+                                      </span>
+                                    )}
+                                    {w.status === "failed" && (
+                                      <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-red-100 text-red-600">
+                                        Failed
+                                      </span>
+                                    )}
+                                    {w.status === "completed" && (
+                                      <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-100 text-emerald-600">
+                                        Success
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* MOBILE CARD STACK VIEW */}
+                      <div className="block sm:hidden divide-y divide-border/30">
+                        {withdrawals.map((w) => {
+                          const date = new Date(w.created_at).toLocaleDateString("en-GB", {
+                            day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                          });
+
+                          return (
+                            <div key={w.id} className="p-4 flex flex-col gap-2.5 bg-white min-w-0">
+                              <div className="flex items-start justify-between gap-2 min-w-0">
+                                <div className="min-w-0 flex-1 overflow-hidden">
+                                  <h4 className="font-bold text-sm text-foreground truncate">{w.recipient_name || "Club Wallet"}</h4>
+                                  <p className="text-[11px] font-mono text-muted-foreground mt-0.5 truncate">{w.recipient_phone}</p>
+                                </div>
+                                {w.status === "pending" && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-amber-100 text-amber-600 shrink-0">
+                                    Pending
+                                  </span>
+                                )}
+                                {w.status === "failed" && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-red-100 text-red-600 shrink-0">
+                                    Failed
+                                  </span>
+                                )}
+                                {w.status === "completed" && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-100 text-emerald-600 shrink-0">
+                                    Success
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs min-w-0 gap-2">
+                                <span className="text-[10px] text-muted-foreground font-mono truncate min-w-0">Ref: {w.reference} • {date}</span>
+                                <span className="font-black text-rose-600 shrink-0">UGX {Number(w.amount).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </PageCard>
               </div>
 

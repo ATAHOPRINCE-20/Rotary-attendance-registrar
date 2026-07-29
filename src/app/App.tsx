@@ -7,6 +7,7 @@ import { MemberAuthProvider } from "../context/MemberAuthContext";
 import { TenantProvider } from "../context/TenantContext";
 import { getSubdomain } from "../lib/subdomain";
 import { LoadingScreen } from "./components/shared/LoadingScreen";
+import { PWAInstallBanner } from "./components/shared/PWAInstallBanner";
 
 // Helper utility to retry dynamic imports when they fail (e.g. during PWA updates or offline states)
 function lazyWithRetry<T extends ComponentType<any>>(
@@ -290,6 +291,7 @@ export default function App() {
             <AppRoutes />
           </Suspense>
           <Toaster richColors position="top-right" />
+          <PWAInstallBanner />
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>

@@ -25,6 +25,7 @@ import {
   CreditCard,
   Lock,
   Settings,
+  User,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -149,8 +150,15 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               General
             </p>
             <button
+              onClick={() => navigate("/member/dashboard")}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out cursor-pointer"
+            >
+              <User size={16} />
+              My Member Portal
+            </button>
+            <button
               onClick={() => window.open(`/org/${organization?.slug}`, "_blank")}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-md transition-all duration-300 ease-out cursor-pointer"
             >
               <Globe size={16} />
               Public Portal
@@ -213,7 +221,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
         )}
 
         {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-border/40 shrink-0">
+        <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-white border-b border-border/40 shrink-0">
           <div className="flex items-center gap-2">
             {/* Hamburger button */}
             <button
@@ -230,7 +238,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Injected action buttons */}
             {actions}
           </div>
@@ -335,10 +343,20 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
                 </p>
                 <button
                   onClick={() => {
+                    navigate("/member/dashboard");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all cursor-pointer"
+                >
+                  <User size={16} />
+                  My Member Portal
+                </button>
+                <button
+                  onClick={() => {
                     window.open(`/org/${organization?.slug}`, "_blank");
                     setIsMobileMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all cursor-pointer"
                 >
                   <Globe size={16} />
                   Public Portal

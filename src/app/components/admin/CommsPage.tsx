@@ -154,35 +154,57 @@ export function CommsPage() {
         created_by: null,
       });
 
-      // 3. Dispatch messages
+      // 3. Dispatch messages with batching and queue delays (5 emails per batch, 300ms delay)
+      const BATCH_SIZE = 5;
+      const QUEUE_DELAY_MS = 300;
+      let successCount = 0;
+      let failCount = 0;
+
       if (channel === "whatsapp") {
-        toast.success(`Broadcasting WhatsApp campaign to ${validContacts.length} contacts...`);
+        toast.info(`Broadcasting WhatsApp campaign to ${validContacts.length} contacts...`, { id: "comms-progress" });
         
         const GATEWAY_BASE_URL = "http://ugpay.tech:3000";
         const webhookUrl = `${GATEWAY_BASE_URL}/send-whatsapp/${organization!.id}`;
 
-        // Fire off requests concurrently
-        await Promise.all(validContacts.map(async contact => {
-           const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
-           const res = await fetch("/api/send-whatsapp", {
-             method: "POST",
-             headers: { 
-               "Content-Type": "application/json",
-               "Authorization": `Bearer ${token}`
-             },
-             body: JSON.stringify({
-               webhookUrl: webhookUrl,
-               phone: contact.phone,
-               message: customizedMessage
-             })
-           });
-           if (!res.ok) {
-             const errData = await res.json().catch(() => ({}));
-             throw new Error(errData.error || "Failed to send WhatsApp message");
-           }
-        }));
+        for (let i = 0; i < validContacts.length; i += BATCH_SIZE) {
+          const batch = validContacts.slice(i, i + BATCH_SIZE);
+          
+          await Promise.all(
+            batch.map(async (contact) => {
+              try {
+                const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
+                const res = await fetch("/api/send-whatsapp", {
+                  method: "POST",
+                  headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    webhookUrl: webhookUrl,
+                    phone: contact.phone,
+                    message: customizedMessage
+                  })
+                });
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({}));
+                  throw new Error(errData.error || "Failed to send WhatsApp message");
+                }
+                successCount++;
+              } catch (contactErr) {
+                console.error(`WhatsApp dispatch failed for ${contact.phone}:`, contactErr);
+                failCount++;
+              }
+            })
+          );
+
+          toast.info(`Sending WhatsApp ${Math.min(i + BATCH_SIZE, validContacts.length)} of ${validContacts.length}...`, { id: "comms-progress" });
+
+          if (i + BATCH_SIZE < validContacts.length) {
+            await new Promise((resolve) => setTimeout(resolve, QUEUE_DELAY_MS));
+          }
+        }
       } else if (channel === "email") {
-        toast.success(`Broadcasting Email campaign to ${validContacts.length} contacts...`);
+        toast.info(`Broadcasting Email campaign to ${validContacts.length} contacts...`, { id: "comms-progress" });
         
         let genericAttachmentBase64: string | null = null;
         let genericAttachmentName: string = "";
@@ -200,72 +222,92 @@ export function CommsPage() {
           templateBuffer = await attachmentFile.arrayBuffer();
         }
         
-        await Promise.all(validContacts.map(async contact => {
-          const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
-          const htmlMessage = `<div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
-            ${customizedMessage.replace(/\n/g, '<br />')}
-          </div>`;
+        for (let i = 0; i < validContacts.length; i += BATCH_SIZE) {
+          const batch = validContacts.slice(i, i + BATCH_SIZE);
 
-          let currentAttachment = undefined;
+          await Promise.all(
+            batch.map(async (contact) => {
+              try {
+                const customizedMessage = message.trim().replace(/{full_name}/g, contact.full_name);
+                const htmlMessage = `<div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
+                  ${customizedMessage.replace(/\n/g, '<br />')}
+                </div>`;
 
-          if (attachmentType === "generic" && genericAttachmentBase64) {
-            currentAttachment = [
-              { name: genericAttachmentName, content: genericAttachmentBase64 }
-            ];
-          } else if (attachmentType === "personalized_pdf" && templateBuffer) {
-            try {
-              const pdfDoc = await PDFDocument.load(templateBuffer);
-              const pages = pdfDoc.getPages();
-              const firstPage = pages[0];
-              const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-              
-              const text = contact.full_name || "Esteemed Guest";
-              const textWidth = font.widthOfTextAtSize(text, pdfFontSize);
-              const { width, height } = firstPage.getSize();
-              
-              const x = (width - textWidth) / 2;
-              const y = height - pdfYCoord;
+                let currentAttachment = undefined;
 
-              firstPage.drawText(text, { x, y, size: pdfFontSize, font, color: rgb(0, 0, 0) });
+                if (attachmentType === "generic" && genericAttachmentBase64) {
+                  currentAttachment = [
+                    { name: genericAttachmentName, content: genericAttachmentBase64 }
+                  ];
+                } else if (attachmentType === "personalized_pdf" && templateBuffer) {
+                  try {
+                    const pdfDoc = await PDFDocument.load(templateBuffer);
+                    const pages = pdfDoc.getPages();
+                    const firstPage = pages[0];
+                    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+                    
+                    const text = contact.full_name || "Esteemed Guest";
+                    const textWidth = font.widthOfTextAtSize(text, pdfFontSize);
+                    const { width, height } = firstPage.getSize();
+                    
+                    const x = (width - textWidth) / 2;
+                    const y = height - pdfYCoord;
 
-              const pdfBytes = await pdfDoc.saveAsBase64();
-              currentAttachment = [
-                { name: `Certificate_${contact.full_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, content: pdfBytes }
-              ];
-            } catch (err) {
-              console.error("Failed to generate PDF for", contact.full_name, err);
-            }
-          }
+                    firstPage.drawText(text, { x, y, size: pdfFontSize, font, color: rgb(0, 0, 0) });
 
-          const res = await fetch("/api/send-email", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              orgId: organization!.id,
-              toEmail: contact.email,
-              toName: contact.full_name,
-              subject: name.trim(),
-              htmlContent: htmlMessage,
-              ...(currentAttachment ? { attachment: currentAttachment } : {})
+                    const pdfBytes = await pdfDoc.saveAsBase64();
+                    currentAttachment = [
+                      { name: `Certificate_${contact.full_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, content: pdfBytes }
+                    ];
+                  } catch (err) {
+                    console.error("Failed to generate PDF for", contact.full_name, err);
+                  }
+                }
+
+                const res = await fetch("/api/send-email", {
+                  method: "POST",
+                  headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    orgId: organization!.id,
+                    toEmail: contact.email,
+                    toName: contact.full_name,
+                    subject: name.trim(),
+                    htmlContent: htmlMessage,
+                    ...(currentAttachment ? { attachment: currentAttachment } : {})
+                  })
+                });
+                
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({}));
+                  throw new Error(errData.error || `HTTP ${res.status}`);
+                }
+                successCount++;
+              } catch (contactErr) {
+                console.error(`Email dispatch failed for ${contact.email}:`, contactErr);
+                failCount++;
+              }
             })
-          });
-          
-          if (!res.ok) {
-             const errData = await res.json().catch(() => ({}));
-             throw new Error(errData.error || "Failed to send email");
+          );
+
+          toast.info(`Sending email ${Math.min(i + BATCH_SIZE, validContacts.length)} of ${validContacts.length}...`, { id: "comms-progress" });
+
+          if (i + BATCH_SIZE < validContacts.length) {
+            await new Promise((resolve) => setTimeout(resolve, QUEUE_DELAY_MS));
           }
-        }));
+        }
       } else {
         toast.success(`Simulating broadcast for ${channel.toUpperCase()} to ${validContacts.length} contacts...`);
       }
 
-      setTimeout(() => {
-        toast.success(`Campaign "${name}" sent successfully!`);
-        setModalOpen(false);
-      }, 1000);
+      if (failCount > 0) {
+        toast.warning(`Campaign "${name}" completed: ${successCount} sent, ${failCount} failed.`, { id: "comms-progress" });
+      } else {
+        toast.success(`Campaign "${name}" sent successfully to all ${successCount} recipients!`, { id: "comms-progress" });
+      }
+      setModalOpen(false);
 
     } catch (err: any) {
       console.error(err);

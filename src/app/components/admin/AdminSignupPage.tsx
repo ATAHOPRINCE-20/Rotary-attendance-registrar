@@ -108,7 +108,7 @@ export function AdminSignupPage() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSignUp(); }} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Full Name</label>
                 <input
@@ -116,6 +116,7 @@ export function AdminSignupPage() {
                   placeholder="e.g. Kwame Asante"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="name"
                   className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                 />
               </div>
@@ -127,6 +128,7 @@ export function AdminSignupPage() {
                   placeholder="you@rotaryclub.org"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                 />
               </div>
@@ -139,6 +141,7 @@ export function AdminSignupPage() {
                     placeholder="Min 8 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
                     className="w-full px-4 py-3 pr-11 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                   />
                   <button
@@ -160,6 +163,7 @@ export function AdminSignupPage() {
                     placeholder="Repeat password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
+                    autoComplete="new-password"
                     className="w-full px-4 py-3 pr-11 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                   />
                   <button
@@ -181,7 +185,7 @@ export function AdminSignupPage() {
                 </div>
               )}
 
-              <GoldButton onClick={handleSignUp} className="w-full justify-center py-2.5 mt-1" disabled={loading}>
+              <GoldButton type="submit" className="w-full justify-center py-2.5 mt-1" disabled={loading}>
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <><UserPlus size={15} /> Create Account</>}
               </GoldButton>
 
@@ -191,6 +195,7 @@ export function AdminSignupPage() {
               </div>
 
               <button
+                type="button"
                 onClick={() => signInWithGoogle(orgId, role)}
                 disabled={loading}
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border bg-input-background hover:bg-muted transition-all text-sm font-semibold"
@@ -207,12 +212,12 @@ export function AdminSignupPage() {
 
               <p className="text-center text-xs text-muted-foreground mt-2" style={{ fontFamily: "Inter, sans-serif" }}>
                 Already have an account?{" "}
-                <button onClick={() => navigate("/admin")}
+                <button type="button" onClick={() => navigate("/admin")}
                   className="font-semibold hover:underline" style={{ color: NAVY }}>
                   Sign in
                 </button>
               </p>
-            </div>
+            </form>
           )}
         </PageCard>
       </div>

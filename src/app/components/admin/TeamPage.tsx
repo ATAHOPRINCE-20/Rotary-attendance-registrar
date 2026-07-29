@@ -79,7 +79,7 @@ export function TeamPage() {
 
   // Mutation: Update a user's role
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "treasurer" | "staff" | "member" }) => {
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "treasurer" | "staff" }) => {
       const { error } = await supabase
         .from("profiles")
         .update({ role: newRole })
@@ -131,8 +131,15 @@ export function TeamPage() {
 
   async function handleSendInviteEmail(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!inviteEmail.trim() || !inviteEmail.includes("@")) {
-      toast.error("Please enter a valid email address.");
+    const emailsList = Array.from(new Set(
+      inviteEmail
+        .split(/[\s,;\n]+/)
+        .map(e => e.trim())
+        .filter(e => e.length > 0 && e.includes("@"))
+    ));
+
+    if (emailsList.length === 0) {
+      toast.error("Please enter at least one valid email address.");
       return;
     }
 
@@ -141,30 +148,47 @@ export function TeamPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const res = await fetch("/api/team/invite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          email: inviteEmail.trim(),
-          role: inviteRole,
-          inviteUrl: inviteLink
-        })
-      });
+      let successCount = 0;
+      let failCount = 0;
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || data.message || "Failed to send invitation email");
+      for (const emailAddr of emailsList) {
+        try {
+          const res = await fetch("/api/member/invite-member", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              email: emailAddr,
+              role: inviteRole,
+              inviteUrl: inviteLink
+            })
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            console.error(`Team invite failed for ${emailAddr}:`, data);
+            failCount++;
+          } else {
+            successCount++;
+          }
+        } catch (err) {
+          console.error(`Exception inviting ${emailAddr}:`, err);
+          failCount++;
+        }
       }
 
-      toast.success(`Invitation email sent to ${inviteEmail}!`);
-      setInviteEmail("");
-      setInviteModalOpen(false);
+      if (successCount > 0) {
+        toast.success(`Successfully sent ${successCount} team invitation(s)!${failCount > 0 ? ` (${failCount} failed)` : ''}`);
+        setInviteEmail("");
+        setInviteModalOpen(false);
+      } else {
+        toast.error(`Failed to send invitations to ${failCount} email(s).`);
+      }
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.message || "Failed to send invitation email.");
+      toast.error(err?.message || "Failed to send invitation emails.");
     } finally {
       setSendingEmail(false);
     }
@@ -175,14 +199,25 @@ export function TeamPage() {
       toast.error("You cannot change your own role.");
       return;
     }
-    // Cycle: staff → member → treasurer → admin → staff
-    const cycle: Record<string, "admin" | "treasurer" | "staff" | "member"> = {
-      staff: "member",
-      member: "treasurer",
+    // Cycle: staff → treasurer → admin → staff
+    const cycle: Record<string, "admin" | "treasurer" | "staff"> = {
+      staff: "treasurer",
       treasurer: "admin",
       admin: "staff",
     };
     const newRole = cycle[currentRole] ?? "staff";
+
+    // Enforce one-treasurer-per-club rule
+    if (newRole === "treasurer") {
+      const existingTreasurer = team?.find((t) => t.role === "treasurer" && t.id !== userId);
+      if (existingTreasurer) {
+        toast.error(
+          `${existingTreasurer.full_name || "Another member"} is already the club Treasurer. Please demote them first before assigning a new Treasurer.`
+        );
+        return;
+      }
+    }
+
     updateRoleMutation.mutate({ userId, newRole });
   }
 
@@ -413,16 +448,16 @@ export function TeamPage() {
                 return (
                   <div key={m.id} className="p-4 flex flex-col gap-3 hover:bg-muted/5 transition-colors">
                     {/* Header: Avatar, Name & Role Badge */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
                         <div
                           className="w-9 h-9 rounded-full text-white text-[12px] font-black flex items-center justify-center shrink-0"
                           style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
                         >
                           {initials}
                         </div>
-                        <div>
-                          <p className="font-bold text-foreground text-sm leading-tight flex items-center gap-2 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-foreground text-sm leading-tight flex items-center gap-2 flex-wrap truncate">
                             {m.full_name}
                             {isSelf && (
                               <span className="px-1.5 py-0.5 rounded text-[8px] bg-slate-100 border text-slate-600 font-semibold uppercase">
@@ -430,7 +465,7 @@ export function TeamPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                          <p className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">
                             ID: {m.id.substring(0, 8)}
                           </p>
                         </div>
@@ -577,7 +612,7 @@ export function TeamPage() {
                                 </span>
                               </div>
                               {m.buddy_group && (
-                                <span className="text-[9px] bg-[#17458F]/5 text-[#17458F] px-1.5 py-0.5 rounded font-bold shrink-0 ml-2">
+                                <span className="text-[9px] bg-[#17458F]/10 text-[#17458F] px-2 py-0.5 rounded-full font-bold shrink-0 ml-2 whitespace-nowrap inline-flex items-center">
                                   {m.buddy_group}
                                 </span>
                               )}
@@ -591,13 +626,16 @@ export function TeamPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-foreground">Recipient Email Address</label>
-                <input
-                  type="email"
-                  placeholder="co-worker@rotaryclub.org"
+                <label className="text-xs font-semibold text-foreground flex justify-between items-center">
+                  <span>Recipient Email Address(es)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Separate multiple with commas</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. alex@rotary.org, sam@rotary.org"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 font-medium"
+                  className="w-full px-4 py-2 rounded-xl border border-border bg-input-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 font-medium resize-none"
                 />
                 {selectedMemberName && !inviteEmail && (
                   <p className="text-[10px] text-amber-700 font-medium mt-0.5">

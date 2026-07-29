@@ -108,7 +108,7 @@ export function AdminLoginPage() {
         </div>
 
         <PageCard>
-          <div className="flex flex-col gap-5">
+          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Email Address</label>
               <input
@@ -116,7 +116,7 @@ export function AdminLoginPage() {
                 placeholder="you@rotaryclub.org"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                autoComplete="email"
                 className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
               />
             </div>
@@ -143,7 +143,7 @@ export function AdminLoginPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  autoComplete="current-password"
                   className="w-full px-4 py-3 pr-11 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                 />
                 <button
@@ -165,7 +165,7 @@ export function AdminLoginPage() {
               </div>
             )}
 
-            <GoldButton onClick={handleLogin} className="w-full justify-center py-2.5" disabled={loading}>
+            <GoldButton type="submit" className="w-full justify-center py-2.5" disabled={loading}>
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><LogIn size={15} /> Sign In</>}
             </GoldButton>
 
@@ -175,6 +175,7 @@ export function AdminLoginPage() {
             </div>
 
             <button
+              type="button"
               onClick={() => signInWithGoogle()}
               disabled={loading}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border bg-input-background hover:bg-muted transition-all text-sm font-semibold cursor-pointer"
@@ -191,12 +192,12 @@ export function AdminLoginPage() {
 
             <p className="text-center text-xs text-muted-foreground mt-2" style={{ fontFamily: "Inter, sans-serif" }}>
               No account?{" "}
-              <button onClick={() => navigate("/signup")}
+              <button type="button" onClick={() => navigate("/signup")}
                 className="font-semibold hover:underline cursor-pointer" style={{ color: NAVY }}>
                 Create one
               </button>
             </p>
-          </div>
+          </form>
         </PageCard>
       </div>
 

@@ -114,6 +114,29 @@ export interface Event {
   buddy_groups?:   string | null;
   buddy_group_of_the_day?: string | null;
   is_archived?:    boolean | null;
+  fellowship_report?: FellowshipReport | null;
+}
+
+export interface FellowshipReport {
+  presided_by?: string;
+  grace_by?: string;
+  loyal_toast_by?: string;
+  away_toast_by?: string;
+  object_of_rotary_by?: string;
+  final_toast_by?: string;
+  sergeant_at_arms?: string;
+  guest_speaker_name?: string;
+  guest_speaker_contact?: string;
+  guest_speaker_introduced_by?: string;
+  guest_speaker_topic?: string;
+  guest_speaker_thanks_by?: string;
+  polio_plus_collections?: number;
+  rotarians_collections?: number;
+  sergeant_collections?: number;
+  account_redemption_collections?: number;
+  general_collections?: number;
+  secretary_directors_report?: string;
+  secretary_name?: string;
 }
 
 export interface Registration {
@@ -212,6 +235,8 @@ export interface Member {
   created_at:      string;
   updated_at:      string;
   user_id?:        string | null;
+  visits?:         ClubActivity[] | null;
+  makeups?:        ClubActivity[] | null;
 }
 
 export interface DuesCategory {
