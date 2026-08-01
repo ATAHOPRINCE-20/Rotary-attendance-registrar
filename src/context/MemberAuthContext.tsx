@@ -77,14 +77,14 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
         if (userMem) memData = userMem;
       }
 
-      // 3. Fallback: Check by user email
+      // 3. Fallback: Check by user email or phone number
       if (!memData && userId && userId !== "impersonated") {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.email) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser?.email) {
           const { data: emailMem } = await supabase
             .from("members")
             .select("*")
-            .ilike("email", user.email)
+            .ilike("email", currentUser.email.trim())
             .maybeSingle();
 
           if (emailMem) {
@@ -94,6 +94,53 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
               .update({ user_id: userId })
               .eq("id", emailMem.id);
           }
+        }
+
+        if (!memData && currentUser?.phone) {
+          const digits = currentUser.phone.replace(/\D/g, "");
+          if (digits.length >= 9) {
+            const suffix = digits.substring(digits.length - 9);
+            const { data: phoneMem } = await supabase
+              .from("members")
+              .select("*")
+              .like("phone", `%${suffix}`)
+              .maybeSingle();
+
+            if (phoneMem) {
+              memData = phoneMem;
+              await supabase
+                .from("members")
+                .update({ user_id: userId })
+                .eq("id", phoneMem.id);
+            }
+          }
+        }
+      }
+
+      if (!memData && userId && userId !== "impersonated") {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          let fallbackOrgId = currentUser.user_metadata?.organization_id || "";
+          if (!fallbackOrgId) {
+            const { data: firstOrg } = await supabase
+              .from("organizations")
+              .select("id")
+              .limit(1)
+              .maybeSingle();
+            if (firstOrg) fallbackOrgId = firstOrg.id;
+          }
+
+          memData = {
+            id: currentUser.id,
+            organization_id: fallbackOrgId,
+            full_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Club Member",
+            email: currentUser.email || "",
+            phone: currentUser.phone || "",
+            user_id: currentUser.id,
+            status: "active",
+            buddy_group: null,
+            updated_at: currentUser.created_at || new Date().toISOString(),
+          } as unknown as Member;
         }
       }
 
@@ -121,9 +168,7 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[MemberAuthContext] Exception loading member profile:", err);
     } finally {
-      if (loadingUserRef.current === userId) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }
 
@@ -135,7 +180,7 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
     // Safety timer to prevent staying loading forever
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 8000);
+    }, 3000);
 
     // Get current session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -144,6 +189,7 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
       if (session?.user || impersonatedMemberId) {
         loadMember(session?.user?.id || "impersonated", true).finally(() => {
           clearTimeout(safetyTimer);
+          setLoading(false);
         });
       } else {
         clearTimeout(safetyTimer);
@@ -176,6 +222,8 @@ export function MemberAuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("impersonated_member_id");
+      localStorage.removeItem("session_login_time");
+      localStorage.removeItem("last_user_activity");
     }
     setImpersonatedMemberId(null);
     await supabase.auth.signOut();

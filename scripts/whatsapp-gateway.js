@@ -40,7 +40,13 @@ async function connectToWhatsApp(sessionId, phoneNumber = null) {
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
         auth: state,
-        printQRInTerminal: false // We will print it manually and save it for API
+        printQRInTerminal: false,
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
+        keepAliveIntervalMs: 30000,
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        retryRequestDelayMs: 2500,
+        markOnlineOnConnect: true,
     });
 
     if (phoneNumber && !sock.authState.creds.registered) {
@@ -81,17 +87,21 @@ async function connectToWhatsApp(sessionId, phoneNumber = null) {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`[SESSION: ${sessionId}] Connection closed due to: `, lastDisconnect?.error || 'Unknown error');
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const isNormalRestart = statusCode === 515 || statusCode === 408 || statusCode === 428;
+            const shouldReconnect = isNormalRestart || statusCode !== DisconnectReason.loggedOut;
+
+            console.log(`[SESSION: ${sessionId}] Connection closed (code: ${statusCode || 'Unknown'}).`);
             sessions.delete(sessionId);
-            sessionStatuses.set(sessionId, 'disconnected');
-            sessionQRs.delete(sessionId);
-            
+
             if (shouldReconnect) {
-                console.log(`[SESSION: ${sessionId}] Reconnecting to WhatsApp...`);
-                setTimeout(() => connectToWhatsApp(sessionId, phoneNumber), 3000); // Wait 3s before reconnecting
+                console.log(`[SESSION: ${sessionId}] Reconnecting to WhatsApp in 3s...`);
+                sessionStatuses.set(sessionId, 'initializing');
+                setTimeout(() => connectToWhatsApp(sessionId, phoneNumber), 3000);
             } else {
                 console.log(`[SESSION: ${sessionId}] Logged out or conflicting session. Automatically clearing credentials.`);
+                sessionStatuses.set(sessionId, 'disconnected');
+                sessionQRs.delete(sessionId);
                 if (fs.existsSync(authFolder)) {
                     fs.rmSync(authFolder, { recursive: true, force: true });
                 }
@@ -104,11 +114,10 @@ async function connectToWhatsApp(sessionId, phoneNumber = null) {
             
             sessions.set(sessionId, sock);
             sessionStatuses.set(sessionId, 'connected');
-            sessionQRs.delete(sessionId); // QR no longer needed
+            sessionQRs.delete(sessionId);
         }
     });
 
-    // Store the socket in the map immediately so we can reference it
     sessions.set(sessionId, sock);
 }
 
@@ -152,30 +161,53 @@ app.post('/send-whatsapp/:sessionId', async (req, res) => {
         return res.status(400).json({ error: 'Missing sessionId, phone, or message parameter' });
     }
 
-    const sock = sessions.get(sessionId);
+    let sock = sessions.get(sessionId);
+
+    // If session is currently reconnecting (e.g. 515 post-pairing restart), wait up to 3s for connection to return
+    if (!sock || sessionStatuses.get(sessionId) !== 'connected') {
+        for (let i = 0; i < 6; i++) {
+            await delay(500);
+            sock = sessions.get(sessionId);
+            if (sock && sessionStatuses.get(sessionId) === 'connected') break;
+        }
+    }
 
     if (!sock || sessionStatuses.get(sessionId) !== 'connected') {
         return res.status(404).json({ error: `WhatsApp client for session [${sessionId}] is not initialized or not connected. Call /session/start/${sessionId} first.` });
     }
 
     try {
-        // Sanitize phone: keep only numbers
         let cleanPhone = phone.replace(/\D/g, '');
         
-        // Auto-format Ugandan numbers if they start with 0 (e.g. 075... -> 25675...)
         if (cleanPhone.startsWith('0')) {
             cleanPhone = '256' + cleanPhone.substring(1);
-        }
-        // Fallback for missing country code (if they typed 757... instead of 0757...)
-        else if (cleanPhone.length === 9) {
+        } else if (cleanPhone.length === 9) {
             cleanPhone = '256' + cleanPhone;
         }
         
-        // Target format for Baileys JID is: country_code + number + @s.whatsapp.net
         const jid = `${cleanPhone}@s.whatsapp.net`;
+        const { pdfBase64, fileName } = req.body || {};
 
-        // Send the text message
-        await sock.sendMessage(jid, { text: message });
+        if (pdfBase64) {
+            const tempFileName = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.pdf`;
+            const tempFilePath = path.join(__dirname, tempFileName);
+            fs.writeFileSync(tempFilePath, Buffer.from(pdfBase64, 'base64'));
+
+            try {
+                await sock.sendMessage(jid, {
+                    document: { url: tempFilePath },
+                    mimetype: 'application/pdf',
+                    fileName: fileName || 'Fellowship_Card.pdf',
+                    caption: message
+                });
+            } finally {
+                if (fs.existsSync(tempFilePath)) {
+                    fs.unlinkSync(tempFilePath);
+                }
+            }
+        } else {
+            await sock.sendMessage(jid, { text: message });
+        }
         console.log(`[SESSION: ${sessionId}] Successfully sent message to ${phone}`);
         return res.status(200).json({ success: true, messageId: jid });
     } catch (err) {
@@ -206,7 +238,6 @@ app.post('/session/delete/:sessionId', async (req, res) => {
         sessionStatuses.set(sessionId, 'not_started');
         sessionQRs.delete(sessionId);
         
-        // Delete the credentials folder
         const authFolder = path.join(__dirname, 'baileys_auth_info', sessionId);
         if (fs.existsSync(authFolder)) {
             fs.rmSync(authFolder, { recursive: true, force: true });
@@ -226,7 +257,6 @@ app.listen(PORT, () => {
     console.log(`\nUsage:\n1. POST to http://localhost:${PORT}/session/start/your-club-id to generate a QR Code in this terminal.`);
     console.log(`2. POST to http://localhost:${PORT}/send-whatsapp/your-club-id with { "phone": "...", "message": "..." } to send messages.\n`);
     
-    // Automatically connect existing sessions based on folders
     const authBasePath = path.join(__dirname, 'baileys_auth_info');
     if (fs.existsSync(authBasePath)) {
         const existingSessions = fs.readdirSync(authBasePath).filter(file => {

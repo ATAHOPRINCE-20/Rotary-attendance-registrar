@@ -7,7 +7,7 @@ import { useOrgMembers } from "../../../hooks/useMembers";
 import { AdminLayout } from "../shared/AdminLayout";
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { OutlineButton } from "../shared/Buttons";
-import { NAVY, GOLD, sanitizeRequiredInput, isSyntheticEmail } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeRequiredInput, isSyntheticEmail, parseBuddyGroups } from "../../../lib/constants";
 import { supabase } from "../../../lib/supabase";
 import {
   FolderArchive,
@@ -235,10 +235,8 @@ export function ReportsPage() {
 
       // 5. Calculate buddy group attendance breakdown
       const configuredGroups = event?.buddy_groups
-        ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-        : organization?.buddy_groups
-        ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-        : [];
+        ? parseBuddyGroups(event.buddy_groups)
+        : parseBuddyGroups(organization?.buddy_groups);
 
       // Gather any additional buddy groups from registrations
       const presentGroups = new Set<string>();
@@ -645,10 +643,8 @@ export function ReportsPage() {
               const isExpanded = expandedEventId === ev.id;
 
               const eventBuddyGroups = ev.buddy_groups
-                ? ev.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-                : organization?.buddy_groups
-                ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-                : [];
+                ? parseBuddyGroups(ev.buddy_groups)
+                : parseBuddyGroups(organization?.buddy_groups);
 
               const allEventGroups = Array.from(new Set([
                 ...eventBuddyGroups,

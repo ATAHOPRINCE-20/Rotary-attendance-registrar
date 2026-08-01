@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { NAVY, sanitizeInput } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
 import { QRCodeSVG } from "qrcode.react";
-import { Upload, X, Settings, Eye, EyeOff } from "lucide-react";
+import { Upload, X, Settings, Eye, EyeOff, FileText, UserCheck, ShieldCheck } from "lucide-react";
 
 export default function SettingsPage() {
   const { organization, refreshProfile } = useAuth();
@@ -21,6 +21,25 @@ export default function SettingsPage() {
   
   const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
   const [isEditingBrevo, setIsEditingBrevo] = useState(false);
+
+  // Leadership & Signatures state
+  const [presidentName, setPresidentName] = useState("");
+  const [presidentTitle, setPresidentTitle] = useState("Impact President");
+  const [presidentSignaturePreview, setPresidentSignaturePreview] = useState<string | null>(null);
+  const [presidentSigFile, setPresidentSigFile] = useState<File | null>(null);
+
+  const [secretaryName, setSecretaryName] = useState("");
+  const [secretaryTitle, setSecretaryTitle] = useState("Impact Secretary");
+  const [secretarySignaturePreview, setSecretarySignaturePreview] = useState<string | null>(null);
+  const [secretarySigFile, setSecretarySigFile] = useState<File | null>(null);
+
+  const [savingLeadership, setSavingLeadership] = useState(false);
+
+  // Monthly Theme & Focus states
+  const [monthlyTheme, setMonthlyTheme] = useState("");
+  const [monthlyThemeDesc, setMonthlyThemeDesc] = useState("");
+  const [monthlyMessage, setMonthlyMessage] = useState("");
+  const [savingMonthlyTheme, setSavingMonthlyTheme] = useState(false);
 
   // Logo upload states
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -118,7 +137,7 @@ export default function SettingsPage() {
 
       interval = setInterval(async () => {
         try {
-          const res = await fetchWithAuth(`/api/whatsapp-proxy?action=status&sessionId=${sessionId}&gatewayUrl=${encodeURIComponent(gatewayBaseUrl)}`);
+          const res = await fetchWithAuth(`/api/send-whatsapp?proxy=true&action=status&sessionId=${sessionId}&gatewayUrl=${encodeURIComponent(gatewayBaseUrl)}`);
           const data = await res.json();
           if (data.status) setQrStatus(data.status);
           if (data.qr) setQrCodeData(data.qr);
@@ -143,12 +162,24 @@ export default function SettingsPage() {
       setBrevoApiKey(organization.brevo_api_key || "");
       setBrevoSenderEmail(organization.brevo_sender_email || "");
       setBrevoSenderName(organization.brevo_sender_name || "");
+
+      setPresidentName(organization.president_name || "");
+      setPresidentTitle(organization.president_title || "Impact President");
+      setPresidentSignaturePreview(organization.president_signature_url || null);
+
+      setSecretaryName(organization.secretary_name || "");
+      setSecretaryTitle(organization.secretary_title || "Impact Secretary");
+      setSecretarySignaturePreview(organization.secretary_signature_url || null);
+
+      setMonthlyTheme(organization.monthly_theme || "");
+      setMonthlyThemeDesc(organization.monthly_theme_description || "");
+      setMonthlyMessage(organization.monthly_message || "");
       
       setIsEditingWhatsApp(!organization.whatsapp_welcome_template);
       setIsEditingBrevo(!organization.brevo_api_key);
       
       // Check initial WhatsApp connection status
-      fetchWithAuth(`/api/whatsapp-proxy?action=status&sessionId=${organization.id}&gatewayUrl=${encodeURIComponent("http://ugpay.tech:3000")}`)
+      fetchWithAuth(`/api/send-whatsapp?proxy=true&action=status&sessionId=${organization.id}&gatewayUrl=${encodeURIComponent("http://ugpay.tech:3000")}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === "connected") setIsWhatsAppConnected(true);
@@ -156,6 +187,166 @@ export default function SettingsPage() {
         .catch(console.error);
     }
   }, [organization]);
+
+  function handlePresidentSigChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Signature image must be under 2MB");
+      return;
+    }
+    setPresidentSigFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPresidentSignaturePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleSecretarySigChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Signature image must be under 2MB");
+      return;
+    }
+    setSecretarySigFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setSecretarySignaturePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveLeadershipSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!organization) return;
+    setSavingLeadership(true);
+
+    try {
+      let presSigUrl = organization.president_signature_url || presidentSignaturePreview;
+      let secSigUrl = organization.secretary_signature_url || secretarySignaturePreview;
+
+      // Handle President Signature Upload
+      if (presidentSigFile) {
+        try {
+          const fileExt = presidentSigFile.name.split(".").pop();
+          const fileName = `pres-sig-${organization.id}-${Date.now()}.${fileExt}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(fileName, presidentSigFile, { upsert: true, contentType: presidentSigFile.type });
+
+          if (uploadErr) throw uploadErr;
+          const { data } = supabase.storage.from("logos").getPublicUrl(fileName);
+          presSigUrl = data.publicUrl;
+        } catch (err) {
+          console.warn("Storage upload failed, using data URL for president signature", err);
+          presSigUrl = presidentSignaturePreview;
+        }
+      }
+
+      // Handle Secretary Signature Upload
+      if (secretarySigFile) {
+        try {
+          const fileExt = secretarySigFile.name.split(".").pop();
+          const fileName = `sec-sig-${organization.id}-${Date.now()}.${fileExt}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(fileName, secretarySigFile, { upsert: true, contentType: secretarySigFile.type });
+
+          if (uploadErr) throw uploadErr;
+          const { data } = supabase.storage.from("logos").getPublicUrl(fileName);
+          secSigUrl = data.publicUrl;
+        } catch (err) {
+          console.warn("Storage upload failed, using data URL for secretary signature", err);
+          secSigUrl = secretarySignaturePreview;
+        }
+      }
+
+      const { error } = await supabase
+        .from("organizations")
+        .update({
+          president_name: presidentName.trim() || null,
+          president_title: presidentTitle.trim() || "Impact President",
+          president_signature_url: presSigUrl,
+          secretary_name: secretaryName.trim() || null,
+          secretary_title: secretaryTitle.trim() || "Impact Secretary",
+          secretary_signature_url: secSigUrl,
+        })
+        .eq("id", organization.id);
+
+      if (error) throw error;
+
+      toast.success("Club Leadership & Signatures updated successfully!");
+      setPresidentSigFile(null);
+      setSecretarySigFile(null);
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to update leadership settings.");
+    } finally {
+      setSavingLeadership(false);
+    }
+  }
+
+  async function handleSaveMonthlyThemeSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!organization) return;
+    setSavingMonthlyTheme(true);
+
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({
+          monthly_theme: monthlyTheme.trim() || null,
+          monthly_theme_description: monthlyThemeDesc.trim() || null,
+          monthly_message: monthlyMessage.trim() || null,
+        })
+        .eq("id", organization.id);
+
+      if (error) throw error;
+
+      toast.success("Monthly Program Theme & Focus updated successfully!");
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      if (err?.message?.includes("schema cache") || err?.message?.includes("monthly_message")) {
+        toast.error("Database table missing columns! Please run the SQL migration in Supabase SQL Editor.", {
+          duration: 6000
+        });
+      } else {
+        toast.error(err?.message || "Failed to update monthly theme settings.");
+      }
+    } finally {
+      setSavingMonthlyTheme(false);
+    }
+  }
+
+  async function handleSaveBrevoSettings(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!organization) return;
+    
+    const trimmedKey = brevoApiKey.trim();
+
+    setSavingBrevo(true);
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({
+          brevo_api_key: trimmedKey || null,
+          brevo_sender_email: brevoSenderEmail.trim() || null,
+          brevo_sender_name: brevoSenderName.trim() || null,
+        })
+        .eq("id", organization.id);
+
+      if (error) throw error;
+
+      toast.success("Email Sender Integration (Brevo) saved!");
+      setIsEditingBrevo(false);
+      await refreshProfile();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to save Email settings.");
+    } finally {
+      setSavingBrevo(false);
+    }
+  }
 
   async function handleLinkWhatsApp(phone?: string) {
     if (!organization) return;
@@ -178,7 +369,7 @@ export default function SettingsPage() {
         payload.phone = phone;
       }
 
-      await fetchWithAuth('/api/whatsapp-proxy', {
+      await fetchWithAuth('/api/send-whatsapp?proxy=true', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -196,7 +387,7 @@ export default function SettingsPage() {
     setQrCodeData(null);
     
     if (organization) {
-      fetchWithAuth('/api/whatsapp-proxy', {
+      fetchWithAuth('/api/send-whatsapp?proxy=true', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,7 +407,7 @@ export default function SettingsPage() {
       const gatewayBaseUrl = "http://ugpay.tech:3000";
       const sessionId = organization.id;
       
-      await fetchWithAuth('/api/whatsapp-proxy', {
+      await fetchWithAuth('/api/send-whatsapp?proxy=true', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -254,32 +445,6 @@ export default function SettingsPage() {
       toast.error(err?.message || "Failed to update WhatsApp settings.");
     } finally {
       setSavingSettings(false);
-    }
-  }
-
-  async function handleSaveBrevoSettings(e: React.FormEvent) {
-    e.preventDefault();
-    if (!organization) return;
-    setSavingBrevo(true);
-    try {
-      const { error } = await supabase
-        .from("organizations")
-        .update({
-          brevo_api_key: brevoApiKey.trim() || null,
-          brevo_sender_email: brevoSenderEmail.trim() || null,
-          brevo_sender_name: brevoSenderName.trim() || null,
-        })
-        .eq("id", organization.id);
-
-      if (error) throw error;
-      toast.success("Email Integration Settings updated successfully!");
-      setIsEditingBrevo(false);
-      await refreshProfile();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || "Failed to update Email settings.");
-    } finally {
-      setSavingBrevo(false);
     }
   }
 
@@ -364,6 +529,207 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Club Leadership & Signatures Card */}
+        <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4 lg:col-span-2">
+          <div>
+            <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+              Club Leadership & Official Signatures
+            </h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Set your President & Secretary names, titles, and signature images. These appear on official Fellowship Cards issued to visiting Rotarians.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveLeadershipSettings} className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            {/* President Section */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col gap-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                <ShieldCheck size={16} className="text-[#17458F]" />
+                <h4 className="text-xs font-bold uppercase text-slate-800 tracking-wider">Club President</h4>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">President Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Fred Kafeero"
+                  value={presidentName}
+                  onChange={(e) => setPresidentName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Title / Role</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Impact President / Club President"
+                  value={presidentTitle}
+                  onChange={(e) => setPresidentTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">President Signature Image</label>
+                <div className="flex items-center gap-4 mt-1">
+                  <div className="w-32 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
+                    {presidentSignaturePreview ? (
+                      <img src={presidentSignaturePreview} alt="President Signature" className="max-h-full max-w-full object-contain p-1" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No signature</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePresidentSigChange}
+                      className="hidden"
+                      id="president-signature-input"
+                    />
+                    <label
+                      htmlFor="president-signature-input"
+                      className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 cursor-pointer transition-all inline-flex items-center gap-1 shadow-xs"
+                    >
+                      <Upload size={12} /> Upload Signature
+                    </label>
+                    <span className="text-[9px] text-slate-400">Transparent PNG recommended</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Secretary Section */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col gap-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                <FileText size={16} className="text-[#17458F]" />
+                <h4 className="text-xs font-bold uppercase text-slate-800 tracking-wider">Club Secretary</h4>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Secretary Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Emmanuel Ssemwanga"
+                  value={secretaryName}
+                  onChange={(e) => setSecretaryName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Title / Role</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Impact Secretary / Club Secretary"
+                  value={secretaryTitle}
+                  onChange={(e) => setSecretaryTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Secretary Signature Image</label>
+                <div className="flex items-center gap-4 mt-1">
+                  <div className="w-32 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
+                    {secretarySignaturePreview ? (
+                      <img src={secretarySignaturePreview} alt="Secretary Signature" className="max-h-full max-w-full object-contain p-1" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No signature</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSecretarySigChange}
+                      className="hidden"
+                      id="secretary-signature-input"
+                    />
+                    <label
+                      htmlFor="secretary-signature-input"
+                      className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 cursor-pointer transition-all inline-flex items-center gap-1 shadow-xs"
+                    >
+                      <Upload size={12} /> Upload Signature
+                    </label>
+                    <span className="text-[9px] text-slate-400">Transparent PNG recommended</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={savingLeadership}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
+                style={{ background: NAVY }}
+              >
+                {savingLeadership ? "Saving Leadership Details..." : "Save Leadership & Signatures"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Monthly Program Theme & Focus Card */}
+        <div className="bg-white rounded-2xl p-6 border border-border/40 shadow-sm flex flex-col gap-4 lg:col-span-2">
+          <div>
+            <h3 className="text-base font-bold text-foreground" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+              Club Monthly Program Theme & Message
+            </h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Customize the monthly theme title, description, and President's Message shown to attendees on the Monthly Program roster page.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveMonthlyThemeSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1 md:col-span-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Monthly Theme Title</label>
+              <input
+                type="text"
+                placeholder="e.g. Basic Education & Literacy Month (Leave empty to use official Rotary theme)"
+                value={monthlyTheme}
+                onChange={(e) => setMonthlyTheme(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Theme Description</label>
+              <textarea
+                placeholder="Brief summary of the monthly theme focus"
+                value={monthlyThemeDesc}
+                onChange={(e) => setMonthlyThemeDesc(e.target.value)}
+                rows={3}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 resize-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">President's Monthly Quote / Message</label>
+              <textarea
+                placeholder="e.g. 'Together we nurture minds and transform futures...'"
+                value={monthlyMessage}
+                onChange={(e) => setMonthlyMessage(e.target.value)}
+                rows={3}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 resize-none"
+              />
+            </div>
+
+            <div className="md:col-span-2 flex justify-end mt-1">
+              <button
+                type="submit"
+                disabled={savingMonthlyTheme}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
+                style={{ background: NAVY }}
+              >
+                {savingMonthlyTheme ? "Saving Theme..." : "Save Monthly Theme & Focus"}
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* WhatsApp Settings Card */}

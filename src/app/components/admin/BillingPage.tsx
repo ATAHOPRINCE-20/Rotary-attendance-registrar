@@ -74,9 +74,16 @@ export function BillingPage() {
         }),
       });
 
-      const res = await response.json();
-      if (!response.ok) {
-        throw new Error(res.error || "Failed to initiate payment");
+      let res: any;
+      try {
+        res = await response.json();
+      } catch (parseErr) {
+        console.error("Failed to parse JSON response from initiate-donation:", parseErr);
+        throw new Error(`Server returned an error (${response.status}). Please try again later.`);
+      }
+
+      if (!response.ok || !res.success) {
+        throw new Error(res?.error || "Failed to initiate payment");
       }
 
       setPaymentRef(res.reference);

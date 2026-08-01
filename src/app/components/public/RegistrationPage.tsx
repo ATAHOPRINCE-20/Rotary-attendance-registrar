@@ -6,7 +6,7 @@ import { useSubmitRegistration, useUpdateRegistration, useRegistrationByQR } fro
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { NavBar } from "../shared/NavBar";
-import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone } from "../../../lib/constants";
+import { NAVY, GOLD, parseOrgWebsite, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone, parseBuddyGroups } from "../../../lib/constants";
 import { AlertCircle, ChevronLeft, Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -16,6 +16,8 @@ import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
 import { getTenantBase } from "../../../lib/subdomain";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
+
+import { BoardMeetingRegisterPage } from "./BoardMeetingRegisterPage";
 
 export function RegistrationPage() {
   const { slug, id } = useParams<{ slug?: string; id?: string }>();
@@ -127,6 +129,24 @@ export function RegistrationPage() {
           </GoldButton>
         </PageCard>
       </div>
+    );
+  }
+
+  const isBoardMeeting = event.type === "Board Meeting" || event.title?.toLowerCase().includes("board meeting");
+
+  if (isBoardMeeting) {
+    return (
+      <BoardMeetingRegisterPage
+        key={event.id}
+        event={event}
+        organization={organization}
+        slug={slug}
+        base={base}
+        mutation={mutation}
+        updateMutation={updateMutation}
+        existingReg={existingReg}
+        editQrRef={editQrRef}
+      />
     );
   }
 
@@ -480,13 +500,11 @@ function RegistrationForm({ event, organization, slug, base, mutation, updateMut
       .map(c => ({ value: c.name, label: `${c.name}${c.area ? ` (${c.area})` : ''}` }));
   }, [dbClubs, regType]);
 
-  const buddyGroupsList = Array.from(new Set<string>(
-    event?.buddy_groups
-      ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-      : organization?.buddy_groups
-      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-      : []
-  ));
+  const buddyGroupsList = useMemo(() => {
+    return event?.buddy_groups
+      ? parseBuddyGroups(event.buddy_groups)
+      : parseBuddyGroups(organization?.buddy_groups);
+  }, [event?.buddy_groups, organization?.buddy_groups]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

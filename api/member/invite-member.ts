@@ -1,11 +1,28 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from '../../src/lib/rate-limit.js';
+import { rateLimit } from '../_rate-limit.js';
 import { getMemberInviteEmailTemplate, getTeamInviteEmailTemplate } from '../../src/lib/email-templates.js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://phczqgytpbisjngwttnb.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_609eAQBA8OgntscxwHoQhg_71QHHAvL';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const DEFAULT_SUPABASE_URL = 'https://phczqgytpbisjngwttnb.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoY3pxZ3l0cGJpc2puZ3d0dG5iIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTYyNjI1MiwiZXhwIjoyMDk3MjAyMjUyfQ.pbldO9-Z-JYzO4O5yatXFerltXwxnm3vXnAwBc0GL9Y';
+
+function getSupabase() {
+  const supabaseUrl = 
+    process.env.VITE_SUPABASE_URL || 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL || 
+    DEFAULT_SUPABASE_URL;
+
+  const supabaseKey = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    DEFAULT_SUPABASE_KEY;
+
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+const supabase = getSupabase();
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.resend || '';
 const RESEND_SENDER_EMAIL = process.env.RESEND_SENDER_EMAIL || 'onboarding@resend.dev';
@@ -14,6 +31,43 @@ const RESEND_SENDER_NAME = process.env.RESEND_SENDER_NAME || 'agoroll';
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'support@agoroll.com';
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'agoroll';
+
+async function fetchBrevo(apiKey: string, payload: any): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  const proxyEndpoint = process.env.BREVO_PROXY_URL || 'http://ugpay.tech:3001/proxy-brevo';
+
+  try {
+    const proxyRes = await fetch(proxyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await proxyRes.json().catch(() => ({}));
+    if (proxyRes.ok || proxyRes.status < 500) {
+      return {
+        ok: proxyRes.ok && (proxyRes.status >= 200 && proxyRes.status < 300),
+        status: proxyRes.status,
+        json: async () => data
+      };
+    }
+  } catch (proxyErr: any) {
+    console.warn('VPS Brevo Proxy call failed, attempting direct connection:', proxyErr.message);
+  }
+
+  return await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+}
 
 function decodeJwtUser(token: string) {
   try {
@@ -80,9 +134,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Fallback 1: Scoped client getUser
-  if (!user && supabaseUrl && supabaseKey) {
+  const currentSupabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const currentSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_KEY;
+
+  if (!user && currentSupabaseUrl && currentSupabaseKey) {
     try {
-      const scopedClient = createClient(supabaseUrl, supabaseKey, {
+      const scopedClient = createClient(currentSupabaseUrl, currentSupabaseKey, {
         auth: { persistSession: false },
         global: { headers: { Authorization: `Bearer ${token}` } }
       });
@@ -266,15 +323,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let sent = false;
       if (apiKeyToUse) {
         try {
-          const brevoRes = await fetch('http://ugpay.tech:3001/proxy-brevo', {
-            method: 'POST',
-            headers: { 'api-key': apiKeyToUse, 'content-type': 'application/json' },
-            body: JSON.stringify({
-              sender: { name: senderNameToUse, email: senderEmailToUse },
-              to: [{ email: cleanEmail }],
-              subject: emailSubject,
-              htmlContent
-            })
+          const brevoRes = await fetchBrevo(apiKeyToUse, {
+            sender: { name: senderNameToUse, email: senderEmailToUse },
+            to: [{ email: cleanEmail }],
+            subject: emailSubject,
+            htmlContent
           });
           if (brevoRes.ok) sent = true;
         } catch (e) {
@@ -375,15 +428,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let sent = false;
       if (apiKeyToUse) {
         try {
-          const emailRes = await fetch('http://ugpay.tech:3001/proxy-brevo', {
-            method: 'POST',
-            headers: { 'api-key': apiKeyToUse, 'content-type': 'application/json' },
-            body: JSON.stringify({
-              sender: { name: senderNameToUse, email: senderEmailToUse },
-              to: [{ email: cleanEmail, name: member.full_name }],
-              subject: emailSubject,
-              htmlContent
-            })
+          const emailRes = await fetchBrevo(apiKeyToUse, {
+            sender: { name: senderNameToUse, email: senderEmailToUse },
+            to: [{ email: cleanEmail, name: member.full_name }],
+            subject: emailSubject,
+            htmlContent
           });
           if (emailRes.ok) sent = true;
         } catch (e) {
@@ -488,15 +537,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let emailSent = false;
         if (apiKeyToUse) {
           try {
-            const emailResponse = await fetch('http://ugpay.tech:3001/proxy-brevo', {
-              method: 'POST',
-              headers: { 'api-key': apiKeyToUse, 'content-type': 'application/json' },
-              body: JSON.stringify({
-                sender: { name: senderNameToUse, email: senderEmailToUse },
-                to: [{ email: cleanEmail, name: member.full_name }],
-                subject: emailSubject,
-                htmlContent
-              })
+            const emailResponse = await fetchBrevo(apiKeyToUse, {
+              sender: { name: senderNameToUse, email: senderEmailToUse },
+              to: [{ email: cleanEmail, name: member.full_name }],
+              subject: emailSubject,
+              htmlContent
             });
             if (emailResponse.ok) emailSent = true;
           } catch (e) {

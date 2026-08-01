@@ -6,7 +6,7 @@ import { useEventRegistrations, useCheckIn, useSubmitRegistration, useUpdateRegi
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone, isSyntheticEmail } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, formatUgandanPhone, isSyntheticEmail, parseBuddyGroups } from "../../../lib/constants";
 import {
   ChevronLeft,
   Users,
@@ -20,6 +20,7 @@ import {
   ChevronUp,
   Trash2,
   FileText,
+  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -27,6 +28,7 @@ import { supabase } from "../../../lib/supabase";
 import type { ClubActivity } from "../../../types/database";
 import { useCreateMember, useOrgMembers } from "../../../hooks/useMembers";
 import { FellowshipReportModal } from "./FellowshipReportModal";
+import { FellowshipCardModal, VisitorCardItem } from "../shared/FellowshipCardModal";
 
 
 export function CheckInPage() {
@@ -82,6 +84,52 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   const checkInMutation = useCheckIn();
   const deleteRegistrationMutation = useDeleteRegistration();
   const [isFellowshipModalOpen, setIsFellowshipModalOpen] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [cardVisitors, setCardVisitors] = useState<VisitorCardItem[]>([]);
+
+  const handleOpenCardsFromCheckIn = (singleReg?: any) => {
+    if (singleReg) {
+      setCardVisitors([
+        {
+          id: singleReg.id,
+          visitorName: singleReg.full_name,
+          visitorClub: singleReg.club_name || singleReg.organization_name || "Visiting Club",
+          email: singleReg.email,
+          phone: singleReg.phone,
+          eventTitle: event.title,
+          eventDate: event.date,
+        },
+      ]);
+      setShowCardModal(true);
+      return;
+    }
+
+    const visitors = registrations.filter((r) => !r.is_member || (r.club_name && r.club_name.trim() !== ""));
+    if (visitors.length === 0) {
+      toast.info("No visiting Rotarians or guests checked in for this event yet.");
+      setCardVisitors([
+        {
+          visitorName: "Visiting Rotarian",
+          visitorClub: "Visiting Club",
+          eventTitle: event.title,
+          eventDate: event.date,
+        },
+      ]);
+    } else {
+      setCardVisitors(
+        visitors.map((v) => ({
+          id: v.id,
+          visitorName: v.full_name,
+          visitorClub: v.club_name || v.organization_name || "Visiting Club",
+          email: v.email,
+          phone: v.phone,
+          eventTitle: event.title,
+          eventDate: event.date,
+        }))
+      );
+    }
+    setShowCardModal(true);
+  };
 
   const handleDeleteRegistration = async (id: string, name: string) => {
     if (!window.confirm(`Are you sure you want to delete the registration for "${name}"? This action cannot be undone.`)) {
@@ -274,8 +322,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
     const apologyCount = registrations.filter(r => r.status === "apology").length;
 
     // Filter registrations into groups (excluding apologies from present tables)
-    const clubMembers = registrations.filter(r => r.status !== "apology" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id));
-    const visitingRotarians = registrations.filter(r => r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name);
+    const clubMembers = registrations.filter(r => r.status !== "apology" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id || r.board_role));
+    const visitingRotarians = registrations.filter(r => r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && !r.board_role && r.club_name && r.club_name !== organization?.name);
     const guests = registrations.filter(r => r.status !== "apology" && !r.is_member);
     const apologies = registrations.filter(r => r.status === "apology");
 
@@ -590,9 +638,9 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
   const buddyGroupsList = Array.from(new Set<string>(
     event?.buddy_groups
-      ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      ? parseBuddyGroups(event.buddy_groups)
       : organization?.buddy_groups
-      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      ? parseBuddyGroups(organization.buddy_groups)
       : ["Group A", "Group B", "Group C", "Group D"]
   ));
 
@@ -749,7 +797,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
 
   // ─── Statistics calculations ──────────────────────────────────────────────
   const checkedInMembersCount = registrations?.filter(
-    r => r.status === "checked-in" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)
+    r => r.status === "checked-in" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id || r.board_role)
   ).length ?? 0;
   const totalRosterCount = members?.length ?? 0;
   const memberAttendancePct = totalRosterCount > 0 ? (checkedInMembersCount / totalRosterCount) * 100 : 0;
@@ -759,10 +807,10 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
   registrations?.forEach(r => {
     const role = !r.is_member
       ? "guest"
-      : r.buddy_group && r.buddy_group.trim() !== ""
+      : (r.buddy_group && r.buddy_group.trim() !== "") || r.board_role || r.member_id
       ? "club member"
       : "rotarian";
-    if (role === "rotarian" && r.club_name && r.club_name.trim() !== "") {
+    if (role === "rotarian" && r.club_name && r.club_name.trim() !== "" && r.club_name !== organization?.name) {
       const club = r.club_name.trim();
       visitingClubsMap[club] = (visitingClubsMap[club] || 0) + 1;
     }
@@ -776,6 +824,13 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
       pageTitle={event.title}
       actions={
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            onClick={() => handleOpenCardsFromCheckIn()}
+            className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition-all cursor-pointer shadow-sm whitespace-nowrap"
+            title="Generate & Send Fellowship Cards for visiting Rotarians"
+          >
+            <Award size={14} /> <span>Fellowship Cards</span>
+          </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition-all cursor-pointer whitespace-nowrap"
@@ -817,6 +872,8 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           )}
         </div>
       </div>
+
+
 
       {/* Statistics and Breakdown Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -1504,6 +1561,15 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         onClose={() => setIsFellowshipModalOpen(false)}
         event={event}
         organization={organization}
+      />
+
+      {/* Fellowship Card Modal */}
+      <FellowshipCardModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        visitors={cardVisitors}
+        organization={organization}
+        event={event}
       />
     </AdminLayout>
   );

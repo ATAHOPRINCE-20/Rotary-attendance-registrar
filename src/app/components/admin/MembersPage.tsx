@@ -12,7 +12,7 @@ import {
 import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { AdminLayout } from "../shared/AdminLayout";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, parseBuddyGroups } from "../../../lib/constants";
 import {
   Users,
   Plus,
@@ -103,7 +103,7 @@ export function MembersPage() {
   // Options for Buddy Groups from organization setting
   const buddyGroupsList = Array.from(new Set<string>(
     organization?.buddy_groups
-      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
+      ? parseBuddyGroups(organization.buddy_groups)
       : ["Group A", "Group B", "Group C", "Group D"]
   ));
 

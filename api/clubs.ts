@@ -1,18 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from '../src/lib/rate-limit.js';
+import { rateLimit } from './_rate-limit.js';
 import { Redis } from '@upstash/redis';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const DEFAULT_SUPABASE_URL = 'https://phczqgytpbisjngwttnb.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoY3pxZ3l0cGJpc2puZ3d0dG5iIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTYyNjI1MiwiZXhwIjoyMDk3MjAyMjUyfQ.pbldO9-Z-JYzO4O5yatXFerltXwxnm3vXnAwBc0GL9Y';
 
-let supabase: ReturnType<typeof createClient> | null = null;
-try {
-  if (supabaseUrl && supabaseKey) {
-    supabase = createClient(supabaseUrl, supabaseKey);
-  }
-} catch (e) {
-  console.warn("Supabase client init failed:", e);
+function getSupabase() {
+  const supabaseUrl = 
+    process.env.VITE_SUPABASE_URL || 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL || 
+    DEFAULT_SUPABASE_URL;
+
+  const supabaseKey = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    DEFAULT_SUPABASE_KEY;
+
+  return createClient(supabaseUrl, supabaseKey);
 }
 
 // Only initialize Redis if credentials are provided in env
@@ -58,9 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Fetch from Supabase
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase configuration is missing or invalid' });
-    }
+    const supabase = getSupabase();
 
     const { data: clubs, error } = await supabase
       .from('rotary_clubs')

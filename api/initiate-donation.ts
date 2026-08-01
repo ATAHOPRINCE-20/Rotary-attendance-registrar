@@ -1,21 +1,35 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from '../src/lib/rate-limit.js';
+import { rateLimit } from './_rate-limit.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const DEFAULT_SUPABASE_URL = 'https://phczqgytpbisjngwttnb.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoY3pxZ3l0cGJpc2puZ3d0dG5iIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTYyNjI1MiwiZXhwIjoyMDk3MjAyMjUyfQ.pbldO9-Z-JYzO4O5yatXFerltXwxnm3vXnAwBc0GL9Y';
 
-function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+function getSupabase() {
+  const supabaseUrl = 
+    process.env.VITE_SUPABASE_URL || 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL || 
+    DEFAULT_SUPABASE_URL;
+
+  const supabaseKey = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    DEFAULT_SUPABASE_KEY;
+
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+function makeRelworxRequest(urlStr: string, options: any, useProxy: boolean): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
-    // 8 second strict timeout to beat Vercel's 10 second limit
     const timeoutId = setTimeout(() => {
-      reject(new Error('Proxy connection timed out. The proxy server is not responding correctly.'));
+      reject(new Error(useProxy ? 'Proxy connection timed out.' : 'Direct connection timed out.'));
     }, 8000);
 
-    const proxyUrl = process.env.HTTPS_PROXY || process.env.FIXIE_URL || '';
+    const proxyUrl = useProxy ? (process.env.HTTPS_PROXY || process.env.FIXIE_URL || '') : '';
     const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     const reqOptions: https.RequestOptions = {
@@ -24,10 +38,9 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
       agent: agent as any,
     };
 
-    if (options.body) {
-      const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    const bodyStr = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : null;
+    if (bodyStr) {
       (reqOptions.headers as Record<string, any>)['Content-Length'] = Buffer.byteLength(bodyStr);
-      options._bodyStr = bodyStr; // store for later
     }
 
     const req = https.request(urlStr, reqOptions, (res) => {
@@ -56,11 +69,47 @@ function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean;
       reject(err);
     });
 
-    if (options._bodyStr) {
-      req.write(options._bodyStr);
+    if (bodyStr) {
+      req.write(bodyStr);
     }
     req.end();
   });
+}
+
+async function fetchRelworx(urlStr: string, options: any = {}): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  const method = options.method || 'GET';
+  const proxyEndpoint = process.env.RELWORX_PROXY_URL || 'http://ugpay.tech:3001/proxy-relworx';
+
+  // 1. Primary: Route request through VPS Proxy (ugpay.tech static IP)
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-target-url': urlStr,
+      ...(options.headers || {})
+    };
+
+    const proxyRes = await fetch(proxyEndpoint, {
+      method: method,
+      headers: headers,
+      body: method !== 'GET' && options.body 
+        ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body))
+        : undefined
+    });
+
+    const data = await proxyRes.json().catch(() => ({}));
+    if (proxyRes.ok || proxyRes.status < 500) {
+      return {
+        ok: proxyRes.ok && (proxyRes.status >= 200 && proxyRes.status < 300),
+        status: proxyRes.status,
+        json: async () => data
+      };
+    }
+  } catch (proxyErr: any) {
+    console.warn('VPS Relworx Proxy call failed, attempting direct connection:', proxyErr.message);
+  }
+
+  // 2. Secondary fallback: Direct HTTPS call to Relworx API
+  return await makeRelworxRequest(urlStr, options, false);
 }
 
 function formatMsisdn(phone: string): string {
@@ -80,183 +129,359 @@ function formatMsisdn(phone: string): string {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Rate Limiting (10 requests per minute per IP)
-  const rateLimitResult = await rateLimit(req, 'initiate-donation', 10, 60);
-  if (!rateLimitResult.success) {
-    return res.status(429).json({ error: rateLimitResult.error });
-  }
-
-  const {
-    organizationId,
-    eventId,
-    registrationId,
-    amount,
-    currency = 'UGX',
-    fullName,
-    email,
-    category,
-    paymentMethod,
-    phone,
-    slug, // Used for constructing local sandbox redirects
-    campaignId,
-    memberId,
-    duesCategoryId
-  } = req.body;
-
-  if (!organizationId || !amount || !fullName || !paymentMethod) {
-    return res.status(400).json({ error: 'Missing required parameters: organizationId, amount, fullName, paymentMethod' });
-  }
-
-  if (Number(amount) < 500) {
-    return res.status(400).json({ error: 'Minimum donation amount is UGX 500' });
-  }
-
-  if (paymentMethod === 'mobile' && !phone) {
-    return res.status(400).json({ error: 'Phone number is required for Mobile Money payments' });
-  }
-
-  // 1. Resolve Credentials (using global platform environment variables only)
-  const apiKey = process.env.RELWORX_API_KEY || '';
-  const accountNo = process.env.RELWORX_ACCOUNT_NO || '';
-  const isSandbox = process.env.RELWORX_SANDBOX === 'true' || !apiKey || !accountNo;
-
-  // 2. Generate a unique reference
-  const refPrefix = isSandbox ? 'DON-SIM-' : 'DON-';
-  const reference = `${refPrefix}${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-
   try {
-    // 3. Insert PENDING donation record in Database
-    const { error: dbError } = await supabase
-      .from('donations')
-      .insert({
-        organization_id: organizationId,
-        event_id: eventId || null,
-        registration_id: registrationId || null,
-        campaign_id: campaignId || null,
-        full_name: fullName.trim() || 'Anonymous',
-        email: email ? email.trim() : null,
-        amount: Number(amount),
-        currency: currency,
-        category: category || 'general',
-        payment_method: paymentMethod,
-        status: 'pending',
-        phone_number: phone ? phone.trim() : null,
-        receipt_number: reference,
-        member_id: memberId || null,
-        dues_category_id: duesCategoryId || null
-      });
+    const supabase = getSupabase();
 
-    if (dbError) {
-      throw new Error(`Database record creation failed: ${dbError.message}`);
-    }
+    // --------------------------------------------------------------------------
+    // GET: Check Donation Payment Status
+    // --------------------------------------------------------------------------
+    if (req.method === 'GET') {
+      const rateLimitResult = await rateLimit(req, 'check-donation', 60, 60);
+      if (!rateLimitResult.success) {
+        return res.status(429).json({ error: rateLimitResult.error });
+      }
 
-    // 4. Handle Sandbox Mode (Simulated Payment)
-    if (isSandbox) {
-      if (paymentMethod === 'card') {
-        const redirectUrl = `/org/${slug}/donate?reference=${reference}&status=success`;
+      const reference = req.query.reference as string;
+      const organizationId = req.query.organizationId as string;
+
+      if (!reference || !organizationId) {
+        return res.status(400).json({ error: 'Missing query parameters: reference, organizationId' });
+      }
+
+      try {
+        const { data: donation } = await supabase
+          .from('donations')
+          .select('*')
+          .eq('receipt_number', reference)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+        if (!donation) {
+          return res.status(404).json({ error: 'Donation record not found' });
+        }
+
+        if (donation.status === 'completed' || donation.status === 'failed') {
+          return res.status(200).json({ success: true, status: donation.status, donation });
+        }
+
+        const apiKey = process.env.RELWORX_API_KEY || '83b9807b3ea2ea.8UtP0JFHUqMu_MsooK9kAA';
+        const accountNo = process.env.RELWORX_ACCOUNT_NO || 'RELB91D9643B2';
+        const isSandbox = process.env.RELWORX_SANDBOX === 'true' || reference.startsWith('DON-SIM-');
+
+        let finalStatus: 'pending' | 'completed' | 'failed' = 'pending';
+
+        if (isSandbox) {
+          const createdAt = new Date(donation.created_at).getTime();
+          const now = Date.now();
+          const elapsedSeconds = (now - createdAt) / 1000;
+          finalStatus = elapsedSeconds >= 5 ? 'completed' : 'pending';
+        } else {
+          const response = await fetchRelworx(`https://payments.relworx.com/api/mobile-money/check-request-status?internal_reference=${reference}&account_no=${accountNo}`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/vnd.relworx.v2',
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            }
+          });
+
+          const result: any = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(result.message || result.error || 'Failed to check status with Relworx');
+          }
+
+          const gatewayStatus = (
+            result.status || 
+            result.request_status || 
+            result.data?.status || 
+            result.data?.request_status || 
+            'pending'
+          ).toLowerCase();
+
+          if (gatewayStatus === 'success' || gatewayStatus === 'completed') {
+            finalStatus = 'completed';
+          } else if (gatewayStatus === 'failed' || gatewayStatus === 'cancelled') {
+            finalStatus = 'failed';
+          } else {
+            finalStatus = 'pending';
+          }
+        }
+
+        if (finalStatus !== donation.status) {
+          const { data: updatedDonation } = await supabase
+            .from('donations')
+            .update({ status: finalStatus })
+            .eq('id', donation.id)
+            .select()
+            .single();
+
+          return res.status(200).json({
+            success: true,
+            status: finalStatus,
+            donation: updatedDonation,
+            isSimulated: isSandbox
+          });
+        }
+
         return res.status(200).json({
           success: true,
-          reference,
-          payment_url: redirectUrl,
-          isSimulated: true,
-          message: 'Simulated Card session initiated'
+          status: donation.status,
+          donation,
+          isSimulated: isSandbox
         });
-      } else {
-        return res.status(200).json({
-          success: true,
-          reference,
-          isSimulated: true,
-          message: 'Simulated Mobile Money prompt initiated'
-        });
+
+      } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to verify donation status' });
       }
     }
 
-    // 5. Handle Live Mode (Call Relworx API)
-    const msisdn = formatMsisdn(phone || '');
-    const description = `Donation to Rotary Club - ${fullName}`;
+    // --------------------------------------------------------------------------
+    // POST: Initiate Donation Payment
+    // --------------------------------------------------------------------------
+    if (req.method === 'POST') {
+      const rateLimitResult = await rateLimit(req, 'initiate-donation', 10, 60);
+      if (!rateLimitResult.success) {
+        return res.status(429).json({ error: rateLimitResult.error });
+      }
 
-    if (paymentMethod === 'mobile') {
-      const response = await fetchRelworx('https://payments.relworx.com/api/mobile-money/request-payment', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/vnd.relworx.v2',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          account_no: accountNo,
-          reference: reference,
-          msisdn: msisdn,
-          currency: currency,
+      let body = req.body;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = {};
+        }
+      }
+      body = body || {};
+
+      const {
+        organizationId,
+        eventId,
+        registrationId,
+        amount,
+        currency = 'UGX',
+        fullName,
+        email,
+        category,
+        paymentMethod,
+        phone,
+        slug,
+        campaignId,
+        memberId,
+        duesCategoryId
+      } = body;
+
+      if (!organizationId || !amount || !fullName || !paymentMethod) {
+        return res.status(400).json({ error: 'Missing required parameters: organizationId, amount, fullName, paymentMethod' });
+      }
+
+      if (Number(amount) < 500) {
+        return res.status(400).json({ error: 'Minimum donation amount is UGX 500' });
+      }
+
+      if (paymentMethod === 'mobile' && !phone) {
+        return res.status(400).json({ error: 'Phone number is required for Mobile Money payments' });
+      }
+
+      const apiKey = process.env.RELWORX_API_KEY || '83b9807b3ea2ea.8UtP0JFHUqMu_MsooK9kAA';
+      const accountNo = process.env.RELWORX_ACCOUNT_NO || 'RELB91D9643B2';
+      const isSandbox = process.env.RELWORX_SANDBOX === 'true';
+
+      const refPrefix = isSandbox ? 'DON-SIM-' : 'DON-';
+      const reference = `${refPrefix}${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+      try {
+        const primaryPayload: any = {
+          organization_id: organizationId,
+          event_id: eventId || null,
+          registration_id: registrationId || null,
+          campaign_id: campaignId || null,
+          full_name: (fullName || 'Anonymous').trim(),
+          email: email ? email.trim() : null,
           amount: Number(amount),
-          description: description
-        })
-      });
-
-      const result: any = await response.json().catch(() => ({}));
-      
-      if (!response.ok) {
-        throw new Error(result.message || result.error || 'Relworx Mobile Money request failed');
-      }
-
-      return res.status(200).json({
-        success: true,
-        reference,
-        gatewayResponse: result
-      });
-
-    } else if (paymentMethod === 'card') {
-      const response = await fetchRelworx('https://payments.relworx.com/api/visa/request-session', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/vnd.relworx.v2',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          account_no: accountNo,
-          reference: reference,
           currency: currency,
-          amount: Number(amount),
-          description: description
-        })
-      });
+          category: category || 'general',
+          payment_method: paymentMethod,
+          status: 'pending',
+          phone_number: phone ? phone.trim() : null,
+          receipt_number: reference,
+          member_id: memberId || null,
+          dues_category_id: duesCategoryId || null
+        };
 
-      const result: any = await response.json().catch(() => ({}));
+        const primaryInsert = await supabase
+          .from('donations')
+          .insert(primaryPayload);
 
-      if (!response.ok) {
-        throw new Error(result.message || result.error || 'Relworx Card session request failed');
+        if (primaryInsert.error) {
+          console.warn('Primary donation insert failed, attempting fallback insert:', primaryInsert.error.message);
+          const fallbackPayload = {
+            organization_id: organizationId,
+            event_id: eventId || null,
+            registration_id: registrationId || null,
+            full_name: (fullName || 'Anonymous').trim(),
+            email: email ? email.trim() : null,
+            amount: Number(amount),
+            currency: currency,
+            category: category || 'general',
+            payment_method: paymentMethod,
+            status: 'pending',
+            phone_number: phone ? phone.trim() : null,
+            receipt_number: reference
+          };
+          const fallbackInsert = await supabase
+            .from('donations')
+            .insert(fallbackPayload);
+
+          if (fallbackInsert.error) {
+            throw new Error(`Database record creation failed: ${fallbackInsert.error.message}`);
+          }
+        }
+
+        if (isSandbox) {
+          if (paymentMethod === 'card') {
+            const redirectUrl = `/org/${slug}/donate?reference=${reference}&status=success`;
+            return res.status(200).json({
+              success: true,
+              reference,
+              payment_url: redirectUrl,
+              isSimulated: true,
+              message: 'Simulated Card session initiated'
+            });
+          } else {
+            return res.status(200).json({
+              success: true,
+              reference,
+              isSimulated: true,
+              message: 'Simulated Mobile Money prompt initiated'
+            });
+          }
+        }
+
+        const msisdn = formatMsisdn(phone || '');
+        const description = `Donation to Rotary Club - ${fullName}`;
+
+        if (paymentMethod === 'mobile') {
+          const response = await fetchRelworx('https://payments.relworx.com/api/mobile-money/request-payment', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/vnd.relworx.v2',
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              account_no: accountNo,
+              reference: reference,
+              msisdn: msisdn,
+              currency: currency,
+              amount: Number(amount),
+              description: description
+            })
+          });
+
+          const result: any = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(result.message || result.error || 'Relworx Mobile Money request failed');
+          }
+
+          return res.status(200).json({
+            success: true,
+            reference,
+            gatewayResponse: result
+          });
+
+        } else if (paymentMethod === 'card') {
+          let paymentUrl: string | null = null;
+
+          try {
+            const response = await fetchRelworx('https://payments.relworx.com/api/visa/request-session', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/vnd.relworx.v2',
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              body: JSON.stringify({
+                account_no: accountNo,
+                reference: reference,
+                currency: currency,
+                amount: Number(amount),
+                description: description
+              })
+            });
+
+            const result: any = await response.json().catch(() => ({}));
+            if (response.ok && (result.payment_url || result.data?.payment_url)) {
+              paymentUrl = result.payment_url || result.data?.payment_url;
+            } else {
+              const relworxErrMsg = result.message || result.error || '';
+              console.warn('[Relworx Card Session Warning]:', relworxErrMsg);
+
+              // If Relworx card processing is disabled on the merchant account, try Stripe fallback if configured
+              if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.endsWith('...')) {
+                try {
+                  const Stripe = (await import('stripe')).default;
+                  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-02-24.acacia' as any });
+                  const host = req.headers.host ? `https://${req.headers.host}` : 'http://localhost:5173';
+                  
+                  const stripeSession = await stripe.checkout.sessions.create({
+                    payment_method_types: ['card'],
+                    line_items: [{
+                      price_data: {
+                        currency: (currency || 'UGX').toLowerCase(),
+                        product_data: { name: category || 'Contribution' },
+                        unit_amount: Math.round(Number(amount) * 100),
+                      },
+                      quantity: 1,
+                    }],
+                    mode: 'payment',
+                    customer_email: email || undefined,
+                    success_url: `${host}/member/dashboard?payment=success`,
+                    cancel_url: `${host}/member/dashboard?payment=cancelled`,
+                  });
+                  paymentUrl = stripeSession.url;
+                } catch (stripeErr: any) {
+                  console.error('[Stripe Fallback Error]:', stripeErr.message);
+                }
+              }
+
+              if (!paymentUrl) {
+                if (relworxErrMsg.toLowerCase().includes('disabled')) {
+                  throw new Error('Card payments are disabled on your Relworx merchant account. Please enable Visa/Mastercard processing in your Relworx dashboard or use Mobile Money.');
+                }
+                throw new Error(relworxErrMsg || 'Relworx Card session request failed');
+              }
+            }
+          } catch (cardErr: any) {
+            throw cardErr;
+          }
+
+          return res.status(200).json({
+            success: true,
+            reference,
+            payment_url: paymentUrl,
+          });
+        }
+
+        return res.status(400).json({ error: 'Unsupported payment method' });
+
+      } catch (error: any) {
+        console.error('Initiate donation error:', error);
+        return res.status(500).json({ error: error.message || 'Failed to initiate donation payment' });
       }
-
-      const paymentUrl = result.payment_url;
-      if (!paymentUrl) {
-        throw new Error('Relworx did not return a payment checkout URL');
-      }
-
-      return res.status(200).json({
-        success: true,
-        reference,
-        payment_url: paymentUrl,
-        gatewayResponse: result
-      });
     }
 
-    return res.status(400).json({ error: 'Unsupported payment method' });
-
-  } catch (error: any) {
-    console.error('Initiate donation error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to initiate donation payment' });
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (fatalErr: any) {
+    console.error('Fatal unhandled error in initiate-donation handler:', fatalErr);
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(500).json({ error: fatalErr?.message || 'Internal Server Error' });
   }
 }

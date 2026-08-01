@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, Navigate } from "react-router";
 import { useMemberAuth } from "../../../context/MemberAuthContext";
 import { supabase } from "../../../lib/supabase";
 import type { MemberDuesBalance, Donation, ClubActivity } from "../../../types/database";
@@ -7,11 +7,11 @@ import { RotaryLogo } from "../shared/RotaryLogo";
 import { GoldButton, OutlineButton } from "../shared/Buttons";
 import { PageCard } from "../shared/PageCard";
 import { 
-  LogOut, Wallet, ShieldCheck, Smartphone, 
+  LogOut, Wallet, ShieldCheck, Smartphone, CreditCard,
   Sparkles, RefreshCw, CheckCircle2, AlertCircle,
   HelpCircle, Calendar, Coins, Loader2,
   Clock, MapPin, ArrowRight, Menu, X, Receipt, Printer, FileText,
-  Plus, Trash2, Building2, Save, Award, ChevronDown, ChevronUp
+  Plus, Trash2, Building2, Save, Award, ChevronDown, ChevronUp, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
@@ -22,9 +22,13 @@ import type { Event } from "../../../types/database";
 // @ts-ignore
 import confetti from "canvas-confetti";
 
+import { getTenantBase } from "../../../lib/subdomain";
+import { MonthlyProgramView } from "./MonthlyProgramView";
+
 export function MemberDuesDashboard() {
-  const { member, organization, loading: authLoading, impersonatedMemberId, impersonateMember, signOut } = useMemberAuth();
+  const { user, member, organization, loading: authLoading, impersonatedMemberId, impersonateMember, signOut } = useMemberAuth();
   const navigate = useNavigate();
+  const base = getTenantBase(organization?.slug);
 
   const [dues, setDues] = useState<MemberDuesBalance[]>([]);
   const [loadingDues, setLoadingDues] = useState(true);
@@ -43,6 +47,7 @@ export function MemberDuesDashboard() {
   const [payAmount, setPayAmount] = useState<string>("");
   const [phone, setPhone] = useState("");
   const [initiating, setInitiating] = useState(false);
+  const [paymentChannel, setPaymentChannel] = useState<"mobile" | "card">("mobile");
   
   // Polling states
   const [isPolling, setIsPolling] = useState(false);
@@ -57,7 +62,7 @@ export function MemberDuesDashboard() {
   const [showAllMemberEvents, setShowAllMemberEvents] = useState(false);
 
   // Tab & Mobile Menu layout states
-  const [activeTab, setActiveTab] = useState<"dues" | "events" | "history" | "activities">("dues");
+  const [activeTab, setActiveTab] = useState<"dues" | "program" | "history" | "activities">("dues");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Member Activities state (Visits & Make-ups)
@@ -112,12 +117,22 @@ export function MemberDuesDashboard() {
     if (!member || !organization) return;
     setLoadingHistory(true);
     try {
-      const { data, error: err } = await supabase
+      let query = supabase
         .from("donations")
         .select("*")
-        .eq("organization_id", organization.id)
-        .or(`email.eq.${member.email},phone.eq.${member.phone || ""}`)
-        .order("created_at", { ascending: false });
+        .eq("organization_id", organization.id);
+
+      if (member.email && member.email.trim()) {
+        query = query.ilike("email", member.email.trim());
+      } else if (member.full_name && member.full_name.trim()) {
+        query = query.ilike("full_name", member.full_name.trim());
+      } else {
+        setHistory([]);
+        setLoadingHistory(false);
+        return;
+      }
+
+      const { data, error: err } = await query.order("created_at", { ascending: false });
 
       if (err) throw err;
       setHistory(data || []);
@@ -210,8 +225,36 @@ export function MemberDuesDashboard() {
     };
   }, [isPolling, pollingRef, organization]);
 
-  if (authLoading || !member) {
-    return <LoadingScreen variant="dark" />;
+  if (authLoading) {
+    return <LoadingScreen variant="blue" />;
+  }
+
+  // If unauthenticated, redirect to member login page
+  if (!user && !impersonatedMemberId) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If user is authenticated but not linked to a member record
+  if (!member) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-900 text-white">
+        <div className="bg-slate-800/80 backdrop-blur-md rounded-2xl p-8 max-w-sm w-full border border-slate-700 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-400/20 flex items-center justify-center mx-auto mb-4 text-[#F7A81B]">
+            <AlertCircle size={28} />
+          </div>
+          <h2 className="font-black text-lg mb-2 text-white">Member Profile Not Found</h2>
+          <p className="text-slate-300 text-xs leading-relaxed mb-6">
+            We couldn't find a Rotary member profile matching your account ({user?.email || "your login"}). Please contact your club administrator to verify your registration.
+          </p>
+          <button
+            onClick={() => signOut()}
+            className="w-full py-3 bg-[#F7A81B] hover:bg-[#e09412] text-slate-950 font-extrabold rounded-xl transition-all shadow-lg cursor-pointer text-xs uppercase tracking-wider"
+          >
+            Return to Member Login
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Calculate totals
@@ -233,6 +276,49 @@ export function MemberDuesDashboard() {
     const numAmount = parseFloat(payAmount);
     if (isNaN(numAmount) || numAmount < 500) {
       toast.error("Minimum payment amount is UGX 500.");
+      return;
+    }
+
+    if (paymentChannel === "card") {
+      setInitiating(true);
+      try {
+        const payload = {
+          organizationId: organization.id,
+          memberId: member.id,
+          duesCategoryId: selectedDue.dues_category_id,
+          fullName: member.full_name,
+          email: member.email,
+          amount: numAmount,
+          currency: "UGX",
+          category: selectedDue.dues_category?.name || "Dues Payment",
+          paymentMethod: "card",
+          slug: organization.slug
+        };
+
+        const response = await fetch("/api/initiate-donation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        let resData: any;
+        try {
+          resData = await response.json();
+        } catch (parseErr) {
+          throw new Error(`Server error (${response.status}). Please try again.`);
+        }
+
+        if (!response.ok || !resData.payment_url) {
+          throw new Error(resData.error || "Failed to launch Relworx Card Checkout.");
+        }
+
+        window.location.href = resData.payment_url;
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || "Failed to launch Card Checkout.");
+      } finally {
+        setInitiating(false);
+      }
       return;
     }
 
@@ -263,9 +349,16 @@ export function MemberDuesDashboard() {
         body: JSON.stringify(payload)
       });
 
-      const res = await response.json();
+      let res: any;
+      try {
+        res = await response.json();
+      } catch (parseErr) {
+        console.error("Failed to parse JSON response from initiate-donation:", parseErr);
+        throw new Error(`Server returned an error (${response.status}). Please try again later.`);
+      }
+
       if (!response.ok || !res.success) {
-        throw new Error(res.error || "Failed to initiate payment.");
+        throw new Error(res?.error || "Failed to initiate payment.");
       }
 
       setPollingRef(res.reference);
@@ -367,15 +460,15 @@ export function MemberDuesDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveTab("events")}
+            onClick={() => setActiveTab("program")}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 ease-out relative cursor-pointer ${
-              activeTab === "events"
+              activeTab === "program"
                 ? "font-extrabold text-[#001D4A] bg-muted/30"
                 : "font-semibold text-muted-foreground hover:bg-slate-100 hover:text-[#001D4A] hover:scale-105 hover:translate-x-1 hover:shadow-sm"
             }`}
           >
             <Calendar size={16} />
-            <span className="flex-1 text-left">Club Events</span>
+            <span className="flex-1 text-left">Monthly Program</span>
           </button>
 
           <div className="mt-6 border-t border-border/40 pt-4">
@@ -421,7 +514,7 @@ export function MemberDuesDashboard() {
               <Menu size={18} />
             </button>
             <h2 className="text-sm font-extrabold uppercase tracking-wider animate-in fade-in max-w-[280px] truncate" style={{ color: NAVY }}>
-              {activeTab === "dues" ? (organization?.name || "Member Portal") : activeTab === "history" ? "Payment History & Receipts" : activeTab === "activities" ? "My Make-ups & Visits" : "Upcoming Club Events"}
+              {activeTab === "dues" ? (organization?.name || "Member Portal") : activeTab === "history" ? "Payment History & Receipts" : activeTab === "activities" ? "My Make-ups & Visits" : "Club Monthly Program"}
             </h2>
           </div>
 
@@ -996,6 +1089,10 @@ export function MemberDuesDashboard() {
                 </div>
               </form>
             </div>
+          ) : activeTab === "program" ? (
+            <div className="flex flex-col gap-6 max-w-5xl">
+              <MonthlyProgramView hideHeaderNav={true} organization={organization} />
+            </div>
           ) : (
             <div className="flex flex-col gap-6 max-w-6xl">
               {/* Welcome Section for events */}
@@ -1135,6 +1232,17 @@ export function MemberDuesDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab("program")}
+            className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 cursor-pointer"
+            style={{
+              color: activeTab === "program" ? NAVY : "#64748B",
+            }}
+          >
+            <BookOpen size={18} style={{ strokeWidth: activeTab === "program" ? 2.5 : 2 }} />
+            <span className="text-[9px] font-bold">Program</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("history")}
             className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 cursor-pointer"
             style={{
@@ -1145,17 +1253,6 @@ export function MemberDuesDashboard() {
             <span className="text-[9px] font-bold">History</span>
           </button>
           
-          <button
-            onClick={() => setActiveTab("events")}
-            className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 cursor-pointer"
-            style={{
-              color: activeTab === "events" ? NAVY : "#64748B",
-            }}
-          >
-            <Calendar size={18} style={{ strokeWidth: activeTab === "events" ? 2.5 : 2 }} />
-            <span className="text-[9px] font-bold">Events</span>
-          </button>
-
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[#64748B] hover:text-foreground transition-all duration-200 cursor-pointer"
@@ -1224,17 +1321,17 @@ export function MemberDuesDashboard() {
               
               <button
                 onClick={() => {
-                  setActiveTab("events");
+                  setActiveTab("program");
                   setIsMobileMenuOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 relative cursor-pointer ${
-                  activeTab === "events"
+                  activeTab === "program"
                     ? "bg-muted text-primary shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <Calendar size={16} />
-                <span className="flex-1 text-left">Upcoming Events</span>
+                <span className="flex-1 text-left">Monthly Program</span>
               </button>
 
               <div className="mt-6 border-t border-border/40 pt-4">
@@ -1343,27 +1440,76 @@ export function MemberDuesDashboard() {
                   </p>
                 </div>
 
+                {/* Payment Method Selector */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile Money Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 0772123456"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 transition-all font-mono"
-                    required
-                  />
-                  <p className="text-[10px] text-slate-400">
-                    This phone will receive the mobile money authorization PIN request.
-                  </p>
+                  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment Method</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentChannel("mobile")}
+                      className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        paymentChannel === "mobile"
+                          ? "border-[#17458F] bg-[#17458F]/10 text-[#17458F] shadow-xs"
+                          : "border-border bg-input-background text-slate-500 hover:bg-muted"
+                      }`}
+                    >
+                      <Smartphone size={18} />
+                      <span>Mobile Money</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentChannel("card")}
+                      className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        paymentChannel === "card"
+                          ? "border-[#17458F] bg-[#17458F]/10 text-[#17458F] shadow-xs"
+                          : "border-border bg-input-background text-slate-500 hover:bg-muted"
+                      }`}
+                    >
+                      <CreditCard size={18} />
+                      <span>Credit / Debit Card</span>
+                    </button>
+                  </div>
                 </div>
+
+                {paymentChannel === "mobile" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile Money Phone Number</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. 0772123456"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="px-4 py-3 rounded-xl border border-border bg-input-background text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 transition-all font-mono"
+                      required={paymentChannel === "mobile"}
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      This phone will receive the mobile money authorization PIN request.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-900 flex items-start gap-2.5">
+                    <CreditCard size={18} className="text-[#17458F] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">Secure Card Checkout (Relworx Gateway)</span>
+                      <span className="text-[11px] text-blue-700 leading-relaxed">
+                        Visa & Mastercard card payments in Uganda Shillings (UGX).
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <GoldButton
                   type="submit"
                   disabled={initiating}
                   className="w-full justify-center py-3 text-slate-900 mt-2 hover:brightness-110"
                 >
-                  {initiating ? <Loader2 size={18} className="animate-spin" /> : <>Request Mobile Money Prompt</>}
+                  {initiating ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : paymentChannel === "mobile" ? (
+                    <>Request Mobile Money Prompt</>
+                  ) : (
+                    <>Pay with Credit / Debit Card</>
+                  )}
                 </GoldButton>
               </form>
             )}

@@ -35,11 +35,14 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Award,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
 import { FellowshipReportModal } from "./FellowshipReportModal";
+import { FellowshipCardModal, VisitorCardItem } from "../shared/FellowshipCardModal";
 
 export function EventsPage() {
   const { profile, organization, refreshProfile } = useAuth();
@@ -198,8 +201,61 @@ export function EventsPage() {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
   const [reportEvent, setReportEvent] = useState<any | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const [cardEvent, setCardEvent] = useState<any | null>(null);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [cardVisitors, setCardVisitors] = useState<VisitorCardItem[]>([]);
+  const [loadingCards, setLoadingCards] = useState(false);
+
+  const handleOpenCardsForEvent = async (ev: any) => {
+    setLoadingCards(true);
+    try {
+      const { data, error } = await supabase
+        .from("registrations")
+        .select("*")
+        .eq("event_id", ev.id);
+
+      if (error) throw error;
+
+      const checkedInList = (data || []).filter((r: any) => r.status !== "apology");
+      const visitors = checkedInList.filter((r: any) => !r.is_member || (r.club_name && r.club_name.trim() !== ""));
+
+      if (visitors.length === 0) {
+        toast.info("No visiting Rotarians or guests found for this event yet.");
+        setCardVisitors([
+          {
+            visitorName: "Visiting Rotarian",
+            visitorClub: "Visiting Club",
+            eventTitle: ev.title,
+            eventDate: ev.date,
+          },
+        ]);
+      } else {
+        setCardVisitors(
+          visitors.map((v: any) => ({
+            id: v.id,
+            visitorName: v.full_name,
+            visitorClub: v.club_name || v.organization_name || "Visiting Club",
+            email: v.email,
+            phone: v.phone,
+            eventTitle: ev.title,
+            eventDate: ev.date,
+          }))
+        );
+      }
+      setCardEvent(ev);
+      setShowCardModal(true);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to load visitor cards.");
+    } finally {
+      setLoadingCards(false);
+    }
+  };
 
   const [title, setTitle] = useState("");
+  const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [location, setLocation] = useState("");
@@ -213,6 +269,7 @@ export function EventsPage() {
   function openCreate() {
     setEditingEvent(null);
     setTitle("");
+    setTopic("");
     setDescription("");
     setDate("");
     setLocation("");
@@ -224,12 +281,21 @@ export function EventsPage() {
     setModalOpen(true);
   }
 
+  function toDatetimeLocal(dateString?: string | null): string {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   function openEdit(ev: any) {
     setEditingEvent(ev);
     setTitle(ev.title);
+    setTopic(ev.fellowship_report?.guest_speaker_topic || ev.topic || "");
     setDescription(ev.description || "");
-    // Convert timestamp to datetime-local compatible format (YYYY-MM-DDThh:mm)
-    const formattedDate = ev.date ? new Date(ev.date).toISOString().slice(0, 16) : "";
+    // Convert timestamp to local datetime-local compatible format (YYYY-MM-DDThh:mm)
+    const formattedDate = toDatetimeLocal(ev.date);
     setDate(formattedDate);
     setLocation(ev.location || "");
     setCapacity(ev.capacity?.toString() || "");
@@ -249,6 +315,11 @@ export function EventsPage() {
       return;
     }
 
+    const fellowshipReport = {
+      ...(editingEvent?.fellowship_report || {}),
+      guest_speaker_topic: topic.trim() || title.trim(),
+    };
+
     const payload = {
       organization_id: organization?.id || "",
       title: title.trim(),
@@ -262,6 +333,7 @@ export function EventsPage() {
       cover_image_url: coverUrl.trim() || null,
       created_by: null,
       buddy_groups: null,
+      fellowship_report: fellowshipReport,
     };
 
     try {
@@ -339,121 +411,201 @@ export function EventsPage() {
             </GoldButton>
           </PageCard>
         ) : (() => {
-          const sortedEvents = [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          const displayedEvents = showAllEvents ? sortedEvents : sortedEvents.slice(0, 3);
+          const now = Date.now();
+          // Filter active & upcoming events (not closed, date is today or future), sorted chronologically (nearest date first)
+          const activeUpcomingEvents = events
+            .filter((ev) => ev.status !== "closed" && new Date(ev.date).getTime() >= now - 24 * 60 * 60 * 1000)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          // Closed or past events are archived
+          const archivedEvents = events
+            .filter((ev) => ev.status === "closed" || new Date(ev.date).getTime() < now - 24 * 60 * 60 * 1000)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          const displayedEvents = showAllEvents ? activeUpcomingEvents : activeUpcomingEvents.slice(0, 6);
+
           return (
             <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {displayedEvents.map((ev) => {
-                  const isActive = activeEventId === ev.id;
-                  return (
-                    <PageCard key={ev.id} className={`flex flex-col justify-between h-full hover:shadow-md transition-shadow ${isActive ? 'ring-2 ring-emerald-500/50' : ''}`}>
-                      <div>
-                        <div className="flex justify-between items-start gap-2 mb-4">
-                          <div className="flex flex-wrap gap-1.5">
-                            <span
-                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                              style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
-                            >
-                              {ev.type || "General"}
-                            </span>
-                            {isActive && (
-                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" /> Active Site Event
+              {activeUpcomingEvents.length === 0 ? (
+                <PageCard className="text-center py-8">
+                  <h3 className="text-base font-bold text-slate-700">No Active Upcoming Events</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    All previous events have been archived or closed. Click "Create Event" to schedule your next gathering.
+                  </p>
+                </PageCard>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {displayedEvents.map((ev) => {
+                    const isActive = activeEventId === ev.id;
+                    return (
+                      <PageCard key={ev.id} className={`flex flex-col justify-between h-full hover:shadow-md transition-shadow ${isActive ? 'ring-2 ring-emerald-500/50' : ''}`}>
+                        <div>
+                          <div className="flex justify-between items-start gap-2 mb-4">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                                style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+                              >
+                                {ev.type || "General"}
                               </span>
-                            )}
+                              <span
+                                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                  ev.status === "published"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : ev.status === "closed"
+                                    ? "bg-rose-100 text-rose-800"
+                                    : "bg-slate-100 text-slate-800"
+                                }`}
+                              >
+                                {ev.status}
+                              </span>
+                            </div>
+
+                            {/* Quick Actions & Menu */}
+                            <div className="flex items-center gap-1.5">
+                              {profile?.role !== "staff" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                    isActive
+                                      ? "bg-emerald-500 text-white shadow-xs"
+                                      : "bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"
+                                  }`}
+                                  title={isActive ? "Active Event for Public QR" : "Set as Active Event"}
+                                >
+                                  <CheckCircle size={10} />
+                                  <span>{isActive ? "Active" : "Set Active"}</span>
+                                </button>
+                              )}
+
+                              {/* Dropdown Options */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuId(openMenuId === ev.id ? null : ev.id);
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                                  title="Event Options"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                                
+                                {openMenuId === ev.id && (
+                                  <>
+                                    <div 
+                                      className="fixed inset-0 z-20" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenMenuId(null);
+                                      }} 
+                                    />
+                                    <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-30 animate-in fade-in duration-100">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          navigate(`/admin/events/${ev.id}/qr`);
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <QrCode size={13} className="text-slate-400" /> QR Codes & Posters
+                                      </button>
+                                      {profile?.role !== "staff" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              openEdit(ev);
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                          >
+                                            <Edit2 size={13} className="text-slate-400" /> Edit Event
+                                          </button>
+                                          <div className="border-t border-slate-100 my-1" />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOpenMenuId(null);
+                                              handleDelete(ev.id);
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                                          >
+                                            <Trash2 size={13} className="text-rose-500" /> Delete Event
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <span
-                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                              ev.status === "published"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : ev.status === "closed"
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-slate-100 text-slate-800"
-                            }`}
-                          >
-                            {ev.status}
-                          </span>
+
+                          <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                            {ev.title}
+                          </h3>
+
+                          <p className="text-xs text-muted-foreground mb-1">
+                            <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
+                          </p>
+                          {ev.location && (
+                            <p className="text-xs text-muted-foreground mb-1">
+                              <strong>Venue:</strong> {ev.location}
+                            </p>
+                          )}
+                          {ev.capacity && (
+                            <p className="text-xs text-muted-foreground mb-3">
+                              <strong>Capacity:</strong> {ev.capacity} attendees
+                            </p>
+                          )}
+
+                          {ev.description && (
+                            <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
+                              {ev.description}
+                            </p>
+                          )}
                         </div>
 
-                        <h3 className="text-lg font-black mb-2 leading-snug" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-                          {ev.title}
-                        </h3>
-
-                        <p className="text-xs text-muted-foreground mb-1">
-                          <strong>Date:</strong> {new Date(ev.date).toLocaleString()}
-                        </p>
-                        {ev.location && (
-                          <p className="text-xs text-muted-foreground mb-1">
-                            <strong>Venue:</strong> {ev.location}
-                          </p>
-                        )}
-                        {ev.capacity && (
-                          <p className="text-xs text-muted-foreground mb-3">
-                            <strong>Capacity:</strong> {ev.capacity} attendees
-                          </p>
-                        )}
-
-                        {ev.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-3 mt-3 pt-3 border-t border-border/50">
-                            {ev.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-6 pt-4 border-t border-border">
-                        {profile?.role !== "staff" && (
+                        {/* Streamlined Card Actions */}
+                        <div className="flex flex-col gap-2 mt-6 pt-4 border-t border-border">
                           <button
                             type="button"
-                            onClick={() => handleSetActiveEvent(isActive ? null : ev.id)}
-                            className={`py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold border transition-all ${
-                              isActive
-                                ? "bg-emerald-500 border-emerald-500 text-white shadow-sm hover:opacity-90 cursor-pointer"
-                                : "bg-white border-border text-foreground hover:bg-muted cursor-pointer"
-                            }`}
+                            onClick={() => navigate(`/admin/checkin/${ev.id}`)}
+                            className="w-full py-2.5 px-4 rounded-xl font-bold text-xs text-white bg-[#17458F] hover:bg-[#0f2e60] transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                           >
-                            <CheckCircle size={12} /> {isActive ? "Active Event (Set for Site)" : "Set as Active Event"}
+                            <Users size={14} /> <span>Attendees & Check‑In</span>
                           </button>
-                        )}
-                        {profile?.role !== "staff" ? (
-                          <>
-                            <OutlineButton onClick={() => openEdit(ev)} className="py-2 text-xs flex justify-center items-center gap-1">
-                              <Edit2 size={12} /> Edit
-                            </OutlineButton>
-                            <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1">
-                              <QrCode size={12} /> QR Codes
-                            </OutlineButton>
-                          </>
-                        ) : (
-                          <OutlineButton onClick={() => navigate(`/admin/events/${ev.id}/qr`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
-                            <QrCode size={12} /> QR Codes
-                          </OutlineButton>
-                        )}
-                        <OutlineButton onClick={() => navigate(`/admin/checkin/${ev.id}`)} className="py-2 text-xs flex justify-center items-center gap-1 col-span-2">
-                          <Users size={12} /> Attendees & Check‑In
-                        </OutlineButton>
-                        <button
-                          type="button"
-                          onClick={() => setReportEvent(ev)}
-                          className="py-2 text-xs flex justify-center items-center gap-1.5 col-span-2 rounded-xl font-bold bg-[#001D4A] text-white hover:bg-[#002868] transition-all cursor-pointer shadow-sm"
-                        >
-                          <FileText size={13} className="text-[#F7A81B]" /> Report
-                        </button>
-                        {profile?.role !== "staff" && (
-                          <OutlineButton
-                            onClick={() => handleDelete(ev.id)}
-                            className="py-2 text-xs flex justify-center items-center gap-1 col-span-2 text-destructive hover:bg-destructive/10 border-destructive/20"
-                          >
-                            <Trash2 size={12} /> Delete Event
-                          </OutlineButton>
-                        )}
-                      </div>
-                    </PageCard>
-                  );
-                })}
-              </div>
 
-              {sortedEvents.length > 3 && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setReportEvent(ev)}
+                              className="py-2 text-xs flex justify-center items-center gap-1.5 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition-all cursor-pointer border border-slate-200"
+                            >
+                              <FileText size={13} className="text-[#17458F]" /> Report
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCardsForEvent(ev)}
+                              disabled={loadingCards}
+                              className="py-2 text-xs flex justify-center items-center gap-1.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                            >
+                              <Award size={13} /> <span>Fellowship Cards</span>
+                            </button>
+                          </div>
+                        </div>
+                      </PageCard>
+                    );
+                  })}
+                </div>
+              )}
+
+              {activeUpcomingEvents.length > 6 && (
                 <div className="flex justify-center mt-4">
                   <button
                     type="button"
@@ -463,9 +615,61 @@ export function EventsPage() {
                     {showAllEvents ? (
                       <>Show Less <ChevronUp size={14} /></>
                     ) : (
-                      <>Show More Events ({sortedEvents.length - 3} more) <ChevronDown size={14} /></>
+                      <>Show More Upcoming Events ({activeUpcomingEvents.length - 6} more) <ChevronDown size={14} /></>
                     )}
                   </button>
+                </div>
+              )}
+
+              {/* Archived & Closed Past Events Section */}
+              {archivedEvents.length > 0 && (
+                <div className="mt-10 pt-8 border-t border-border">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-500">
+                        Archived / Closed Events ({archivedEvents.length})
+                      </h3>
+                      <p className="text-xs text-muted-foreground">Past and completed club events</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-80">
+                    {archivedEvents.map((ev) => {
+                      const eventDate = new Date(ev.date);
+                      return (
+                        <div key={ev.id} className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col justify-between gap-3">
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-200 text-slate-700">
+                                Archived
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                {eventDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-800">{ev.title}</h4>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/admin/checkin/${ev.id}`)}
+                              className="text-xs font-bold text-[#17458F] hover:underline"
+                            >
+                              Check-in Log
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(ev)}
+                              className="text-xs text-slate-600 hover:text-slate-900 font-semibold"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -496,10 +700,17 @@ export function EventsPage() {
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
               <TextInput
                 label="Event Title"
-                placeholder="e.g. Annual Charity Ball 2026"
+                placeholder="e.g. Weekly Fellowship Meeting"
                 value={title}
                 onChange={setTitle}
                 required
+              />
+
+              <TextInput
+                label="Fellowship Topic / Guest Speaker Topic"
+                placeholder="e.g. Strategic Water Harvesting & Environmental Sustainability"
+                value={topic}
+                onChange={setTopic}
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -674,6 +885,15 @@ export function EventsPage() {
           </div>
         </div>
       )}
+
+      {/* Fellowship Card Modal */}
+      <FellowshipCardModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        visitors={cardVisitors}
+        organization={organization}
+        event={cardEvent}
+      />
     </AdminLayout>
   );
 }

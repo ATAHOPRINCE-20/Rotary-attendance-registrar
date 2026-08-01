@@ -28,6 +28,7 @@ export function NavBar({ organization, currentPath = "" }: NavBarProps) {
     ? [
         { label: "Home",   to: base || "/" },
         { label: "Events", to: `${base}/events` },
+        { label: "Monthly Program", to: `${base}/monthly-program` },
       ]
     : [];
 

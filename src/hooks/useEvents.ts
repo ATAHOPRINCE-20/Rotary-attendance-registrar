@@ -14,7 +14,7 @@ export function useAdminEvents(organizationId: string | undefined) {
         .select("*")
         .eq("organization_id", organizationId!)
         .or("is_archived.is.null,is_archived.eq.false")
-        .order("date", { ascending: false });
+        .order("date", { ascending: true });
       if (error) throw error;
       return data as Event[];
     },
@@ -50,7 +50,7 @@ export function usePublicEvents(organizationId: string | undefined) {
         .eq("organization_id", organizationId!)
         .eq("status", "published")
         .or("is_archived.is.null,is_archived.eq.false")
-        .order("date", { ascending: false });
+        .order("date", { ascending: true });
       if (error) throw error;
       return data as Event[];
     },

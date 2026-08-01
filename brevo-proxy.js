@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// The proxy endpoint
+// The Brevo proxy endpoint
 app.post('/proxy-brevo', async (req, res) => {
     try {
         const apiKey = req.headers['api-key'];
@@ -40,8 +40,39 @@ app.post('/proxy-brevo', async (req, res) => {
     }
 });
 
+// The Relworx proxy endpoint (for forwarding payment requests via static VPS IP ugpay.tech)
+app.all('/proxy-relworx', async (req, res) => {
+    try {
+        const targetUrl = req.headers['x-target-url'] || req.query.targetUrl;
+        if (!targetUrl) {
+            return res.status(400).json({ error: 'Missing x-target-url header or targetUrl query parameter' });
+        }
+
+        const authHeader = req.headers['authorization'];
+        console.log(`[Relworx Proxy] Forwarding ${req.method} request to ${targetUrl}...`);
+
+        const response = await axios({
+            method: req.method,
+            url: targetUrl,
+            data: req.method !== 'GET' ? req.body : undefined,
+            headers: {
+                'accept': req.headers['accept'] || 'application/vnd.relworx.v2',
+                'content-type': 'application/json',
+                ...(authHeader ? { 'authorization': authHeader } : {})
+            },
+            validateStatus: () => true
+        });
+
+        console.log(`[Relworx Proxy] Relworx returned status ${response.status}`);
+        return res.status(response.status).json(response.data);
+    } catch (error) {
+        console.error('[Relworx Proxy] Internal Server Error:', error.message);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 // Start the server on port 3001 (since 3000 is used by WhatsApp)
 const PORT = 3001;
 app.listen(PORT, () => {
-    console.log(`Brevo Proxy Server running on http://localhost:${PORT}`);
+    console.log(`Proxy Server (Brevo & Relworx) running on http://localhost:${PORT}`);
 });

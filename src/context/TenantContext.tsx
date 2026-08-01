@@ -37,12 +37,24 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setNotFound(false);
 
-    supabase
-      .from("organizations")
-      .select("*")
-      .eq("slug", activeSlug)
-      .single()
-      .then(({ data, error }) => {
+    // Safety net timer: Never stay in loading state longer than 4 seconds
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
+    let isMounted = true;
+
+    async function fetchTenant() {
+      try {
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("slug", activeSlug)
+          .single();
+
+        if (!isMounted) return;
+        clearTimeout(safetyTimer);
+
         if (error || !data) {
           setNotFound(true);
         } else {
@@ -52,8 +64,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           }
           setOrg(orgData);
         }
-        setLoading(false);
-      });
+      } catch (err: any) {
+        console.error("[TenantContext] Error fetching tenant:", err);
+        if (isMounted) setNotFound(true);
+      } finally {
+        if (isMounted) {
+          clearTimeout(safetyTimer);
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchTenant();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
   }, [activeSlug]);
 
   return (

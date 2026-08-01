@@ -21,25 +21,17 @@ export function PWAInstallBanner() {
   }
 
   useEffect(() => {
-    // 1. Check if already running in standalone PWA mode
+    // 1. Check if already running in standalone PWA mode or already installed
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as any).standalone === true;
 
-    if (isStandalone) return;
-
-    // 2. Check first time visit status
-    const hasVisited = localStorage.getItem("pwa-has-visited") === "true";
-    if (!hasVisited) {
-      setIsFirstTime(true);
-      localStorage.setItem("pwa-has-visited", "true");
-    }
-
-    // 3. Check if dismissed recently
+    const isInstalled = localStorage.getItem("pwa-installed") === "true";
     const isDismissed = localStorage.getItem("pwa-install-dismissed") === "true";
-    if (isDismissed) return;
 
-    // 4. Detect Platform
+    if (isStandalone || isInstalled || isDismissed) return;
+
+    // 2. Detect Platform
     const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
     const isIOS =
       /iPad|iPhone|iPod/.test(userAgent) ||
@@ -48,16 +40,10 @@ export function PWAInstallBanner() {
 
     if (isIOS) {
       setPlatform("ios");
-      const timer = setTimeout(() => setShowBanner(true), 1500);
-      return () => clearTimeout(timer);
     } else if (isAndroid) {
       setPlatform("android");
     } else {
       setPlatform("desktop");
-    }
-
-    if ((window as any).deferredPrompt) {
-      setCanPrompt(true);
     }
 
     const handlePrompt = () => {
@@ -65,15 +51,23 @@ export function PWAInstallBanner() {
       setShowBanner(true);
     };
 
-    window.addEventListener("pwa-beforeinstallprompt", handlePrompt);
+    const handleAppInstalled = () => {
+      localStorage.setItem("pwa-installed", "true");
+      localStorage.setItem("pwa-install-dismissed", "true");
+      setShowBanner(false);
+    };
 
-    const timer = setTimeout(() => {
+    window.addEventListener("pwa-beforeinstallprompt", handlePrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    if ((window as any).deferredPrompt) {
+      setCanPrompt(true);
       setShowBanner(true);
-    }, 2000);
+    }
 
     return () => {
       window.removeEventListener("pwa-beforeinstallprompt", handlePrompt);
-      clearTimeout(timer);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 

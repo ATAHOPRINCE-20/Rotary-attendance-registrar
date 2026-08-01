@@ -10,8 +10,27 @@ export const APP_NAME    = "agoroll";
 export const APP_URL     = import.meta.env.VITE_APP_URL ?? window.location.origin;
 
 // ─── Event Types ─────────────────────────────────────────────────────────────
-export const EVENT_TYPES = ["Gala", "Conference", "Service", "Fellowship", "General"] as const;
+export const EVENT_TYPES = ["Board Meeting", "Gala", "Conference", "Service", "Fellowship", "General"] as const;
 export type EventType = typeof EVENT_TYPES[number];
+
+// ─── Rotary Board Roles / Capacity ───────────────────────────────────────────
+export const BOARD_ROLES = [
+  "President",
+  "Vice President",
+  "Club Secretary",
+  "Treasurer",
+  "Immediate Past President (IPP)",
+  "President Elect (PE)",
+  "Director - Service Projects",
+  "Director - Membership",
+  "Director - Rotary Foundation",
+  "Director - Public Relations & Media",
+  "Director - Club Administration",
+  "Director - Youth Service",
+  "Sergeant at Arms",
+  "Committee Chair",
+  "Visiting Rotarian / Guest Observer"
+] as const;
 
 // ─── Donation Categories ─────────────────────────────────────────────────────
 export const DONATION_CATEGORIES = [
@@ -126,5 +145,16 @@ export function isSyntheticEmail(email?: string | null): boolean {
   if (cleaned.includes("member-") && (cleaned.endsWith(".org") || cleaned.endsWith(".com"))) return true;
   if (cleaned.match(/^(member|attendee)-/i)) return true;
   return false;
+}
+
+export function parseBuddyGroups(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return Array.from(new Set(val.map(g => String(g).trim()).filter(Boolean)));
+  }
+  if (typeof val === "string") {
+    return Array.from(new Set(val.split(",").map(g => g.trim()).filter(Boolean)));
+  }
+  return [];
 }
 

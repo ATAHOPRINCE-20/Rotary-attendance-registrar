@@ -84,6 +84,15 @@ export interface Organization {
   brevo_api_key?: string | null;
   brevo_sender_email?: string | null;
   brevo_sender_name?: string | null;
+  president_name?: string | null;
+  president_title?: string | null;
+  president_signature_url?: string | null;
+  secretary_name?: string | null;
+  secretary_title?: string | null;
+  secretary_signature_url?: string | null;
+  monthly_theme?: string | null;
+  monthly_theme_description?: string | null;
+  monthly_message?: string | null;
 }
 
 export interface Profile {
@@ -114,6 +123,7 @@ export interface Event {
   buddy_groups?:   string | null;
   buddy_group_of_the_day?: string | null;
   is_archived?:    boolean | null;
+  topic?:          string | null;
   fellowship_report?: FellowshipReport | null;
 }
 
@@ -158,6 +168,7 @@ export interface Registration {
   checked_in_at:     string | null;
   created_at:        string;
   member_id?:        string | null;
+  board_role?:       string | null;
   visits?:           ClubActivity[] | null;
   makeups?:          ClubActivity[] | null;
 }
@@ -196,16 +207,22 @@ export interface OrganizationPayments {
 }
 
 export interface Withdrawal {
-  id:              string;
-  organization_id: string;
-  amount:          number;
-  currency:        string;
-  recipient_phone: string;
-  recipient_name:  string | null;
-  status:          "pending" | "completed" | "failed";
-  reference:       string;
-  created_at:      string;
-  updated_at:      string;
+  id:                    string;
+  organization_id:       string;
+  amount:                number;
+  currency:              string;
+  recipient_phone:       string;
+  recipient_name:        string | null;
+  payout_method?:        "mobile_money" | "bank_transfer" | null;
+  bank_code?:            string | null;
+  bank_name?:            string | null;
+  account_number?:       string | null;
+  validation_reference?: string | null;
+  charge_amount?:        number | null;
+  status:                "pending" | "completed" | "failed";
+  reference:             string;
+  created_at:            string;
+  updated_at:            string;
 }
 
 export interface Campaign {

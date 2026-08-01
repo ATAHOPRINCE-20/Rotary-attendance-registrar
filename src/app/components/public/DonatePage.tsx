@@ -30,7 +30,7 @@ export function DonatePage() {
   const [amount, setAmount] = useState<number>(25000);
   const [customAmount, setCustomAmount] = useState("");
   const [category, setCategory] = useState("community");
-  const paymentMethod: "mobile" | "card" = "mobile";
+  const [paymentMethod, setPaymentMethod] = useState<"mobile" | "card">("mobile");
   const [phone, setPhone] = useState("");
 
   const { data: campaigns, isLoading: campaignsLoading } = useActiveDonationCampaigns(organization?.id);
@@ -49,6 +49,20 @@ export function DonatePage() {
       }
     }
   }, [campaigns, campaignIdParam]);
+
+  // Handle URL callback from Stripe Card return
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+      toast.success("Thank you! Your card donation has been completed.");
+    } else if (searchParams.get("payment") === "cancelled") {
+      toast.info("Card checkout was cancelled.");
+    }
+  }, [searchParams]);
   
   // Payment progress states
   const [initiating, setInitiating] = useState(false);
@@ -66,8 +80,6 @@ export function DonatePage() {
     { value: 50000, label: "50k" },
     { value: 100000, label: "100k" },
   ];
-
-  // 1. Check for card redirects is bypassed since card payments are disabled.
 
   // 2. Mobile money status polling loop
   useEffect(() => {
@@ -115,6 +127,50 @@ export function DonatePage() {
       return;
     }
 
+    if (paymentMethod === "card") {
+      setInitiating(true);
+      try {
+        const payload = {
+          organizationId: organization?.id || "",
+          eventId: null,
+          registrationId: regId || null,
+          campaignId: selectedCampaign ? selectedCampaign.id : null,
+          fullName: fullName.trim() || "Anonymous",
+          email: email.trim() || null,
+          amount: selectedAmount,
+          currency: "UGX",
+          category: selectedCampaign ? selectedCampaign.title : category,
+          paymentMethod: "card",
+          slug: slug
+        };
+
+        const response = await fetch("/api/initiate-donation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        let resData: any;
+        try {
+          resData = await response.json();
+        } catch (pErr) {
+          throw new Error(`Server returned status ${response.status}`);
+        }
+
+        if (!response.ok || !resData.payment_url) {
+          throw new Error(resData.error || "Failed to launch Relworx Card Checkout.");
+        }
+
+        window.location.href = resData.payment_url;
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || "Failed to launch card payment.");
+      } finally {
+        setInitiating(false);
+      }
+      return;
+    }
+
     if (paymentMethod === "mobile" && !phone) {
       toast.error("Please enter a valid phone number for Mobile Money.");
       return;
@@ -138,20 +194,16 @@ export function DonatePage() {
         slug: slug
       };
 
-      console.log("Sending request to /api/initiate-donation...", payload);
       const response = await fetch("/api/initiate-donation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      console.log("Received response with status:", response.status);
 
       let res: any;
       try {
         res = await response.json();
-        console.log("Parsed response json:", res);
       } catch (parseError) {
-        console.error("Failed to parse JSON response. Status:", response.status);
         throw new Error(`Server returned invalid response (Status ${response.status})`);
       }
 
@@ -161,18 +213,8 @@ export function DonatePage() {
         throw new Error(errorMsg);
       }
 
-      if (paymentMethod === "card") {
-        // Card redirects to Relworx session page
-        if (res.payment_url) {
-          window.location.href = res.payment_url;
-        } else {
-          throw new Error("No card checkout payment URL returned");
-        }
-      } else {
-        // Mobile Money triggers status polling dialog
-        setPollingReference(res.reference);
-        setIsPolling(true);
-      }
+      setPollingReference(res.reference);
+      setIsPolling(true);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Donation failed. Please try again.");
@@ -361,37 +403,75 @@ export function DonatePage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SelectInput
-                label="Direct Donation Contribution To"
-                value={category}
-                onChange={setCategory}
-                options={donationOptions}
-                disabled={isDirectCampaignLink}
-              />
+            <SelectInput
+              label="Direct Donation Contribution To"
+              value={category}
+              onChange={setCategory}
+              options={donationOptions}
+              disabled={isDirectCampaignLink}
+            />
 
-              {/* Phone Number Input */}
+            {/* Payment Method Selector */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("mobile")}
+                  className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    paymentMethod === "mobile"
+                      ? "border-[#F7A81B] bg-[#F7A81B]/10 text-[#F7A81B] shadow-xs"
+                      : "border-border bg-input-background text-slate-500 hover:bg-muted"
+                  }`}
+                >
+                  <Smartphone size={18} />
+                  <span>Mobile Money</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("card")}
+                  className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    paymentMethod === "card"
+                      ? "border-[#F7A81B] bg-[#F7A81B]/10 text-[#F7A81B] shadow-xs"
+                      : "border-border bg-input-background text-slate-500 hover:bg-muted"
+                  }`}
+                >
+                  <CreditCard size={18} />
+                  <span>Credit / Debit Card</span>
+                </button>
+              </div>
+            </div>
+
+            {paymentMethod === "mobile" ? (
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
-                  Mobile Money Phone Number
-                </label>
+                <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile Money Phone Number</label>
                 <input
                   type="tel"
                   placeholder="e.g. 0772123456"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[#F7A81B] transition-all"
-                  required
+                  required={paymentMethod === "mobile"}
                 />
               </div>
-            </div>
+            ) : (
+              <div className="p-3.5 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-900 flex items-start gap-2.5">
+                <CreditCard size={18} className="text-[#17458F] shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Secure Card Checkout (Relworx Gateway)</span>
+                  <span className="text-[11px] text-blue-700 leading-relaxed">
+                    Visa & Mastercard card payments in Uganda Shillings (UGX).
+                  </span>
+                </div>
+              </div>
+            )}
 
             <GoldButton
               type="submit"
               disabled={initiating}
               className="w-full justify-center py-3 text-xs uppercase font-extrabold tracking-wider shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 mt-4 cursor-pointer"
             >
-              {initiating ? "Initiating checkout..." : `Donate UGX ${selectedAmount.toLocaleString()}`}
+              {initiating ? "Launching checkout..." : paymentMethod === "card" ? `Pay UGX ${selectedAmount.toLocaleString()} with Card` : `Donate UGX ${selectedAmount.toLocaleString()}`}
             </GoldButton>
 
             <p className="text-[10px] text-center text-muted-foreground mt-2 leading-relaxed">

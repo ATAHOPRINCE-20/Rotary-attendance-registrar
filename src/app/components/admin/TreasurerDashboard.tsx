@@ -293,8 +293,16 @@ export function TreasurerDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || "Failed to initiate payment.");
+
+      let resData: any;
+      try {
+        resData = await res.json();
+      } catch (parseErr) {
+        console.error("Failed to parse JSON response from initiate-donation:", parseErr);
+        throw new Error(`Server returned an error (${res.status}). Please try again later.`);
+      }
+
+      if (!res.ok || !resData.success) throw new Error(resData?.error || "Failed to initiate payment.");
       setMyPayPollingRef(resData.reference || "");
       setMyPayPolling(true);
       toast.success("Payment initiated! Please approve the prompt on your phone.");

@@ -15,8 +15,11 @@ import {
   Filter,
   Download,
   ChevronDown,
+  Award,
 } from "lucide-react";
 import { LoadingScreen } from "../shared/LoadingScreen";
+import { FellowshipCardModal, VisitorCardItem } from "../shared/FellowshipCardModal";
+import { toast } from "sonner";
 
 type Tab = "members" | "rotarians" | "visitors";
 
@@ -61,6 +64,46 @@ export function DirectoryPage() {
 
   const [tab, setTab] = useState<Tab>("members");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [selectedVisitorsForCards, setSelectedVisitorsForCards] = useState<VisitorCardItem[]>([]);
+
+  const handleOpenCard = (visitor: { id?: string; full_name: string; club_name?: string | null; email?: string; phone?: string }) => {
+    setSelectedVisitorsForCards([
+      {
+        id: visitor.id,
+        visitorName: visitor.full_name,
+        visitorClub: visitor.club_name || "Visiting Club",
+        email: visitor.email,
+        phone: visitor.phone,
+      },
+    ]);
+    setShowCardModal(true);
+  };
+
+  const handleOpenAllVisitorCards = () => {
+    const list = (registrations || [])
+      .filter(r => !r.is_member || (r.club_name && r.club_name.trim() !== ""))
+      .map(r => ({
+        id: r.id,
+        visitorName: r.full_name,
+        visitorClub: r.club_name || r.organization_name || "Visiting Club",
+        email: r.email,
+        phone: r.phone,
+      }));
+
+    if (list.length === 0) {
+      toast.info("No visiting Rotarians or guests found in directory yet.");
+      setSelectedVisitorsForCards([
+        {
+          visitorName: "Florence Tinkamanyire",
+          visitorClub: "RC Ntinda",
+        },
+      ]);
+    } else {
+      setSelectedVisitorsForCards(list);
+    }
+    setShowCardModal(true);
+  };
 
   const loading = membersLoading || regsLoading;
 
@@ -297,8 +340,19 @@ export function DirectoryPage() {
             ))}
           </div>
 
-          {/* Search row */}
-          <div className="flex gap-2 sm:ml-auto pb-3">
+          {/* Search row & Batch actions */}
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto pb-3">
+            {tab !== "members" && (
+              <button
+                onClick={handleOpenAllVisitorCards}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-sm"
+                title="Generate & Send Fellowship Cards to all visitors"
+              >
+                <Award size={13} />
+                <span>Send All Visitor Cards</span>
+              </button>
+            )}
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={13} />
               <input
@@ -444,6 +498,7 @@ export function DirectoryPage() {
                     <th className="px-6 py-4">Club / District</th>
                     <th className="px-6 py-4">Visits</th>
                     <th className="px-6 py-4">Last Seen</th>
+                    <th className="px-6 py-4 text-right">Fellowship Card</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
@@ -507,6 +562,21 @@ export function DirectoryPage() {
                         {new Date(v.lastVisit).toLocaleDateString("en-GB", {
                           day: "numeric", month: "short", year: "numeric",
                         })}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleOpenCard({
+                            id: v.key,
+                            full_name: v.full_name,
+                            club_name: v.club_name,
+                            email: v.email ?? undefined,
+                            phone: v.phone ?? undefined,
+                          })}
+                          className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                          title="Generate Fellowship Card"
+                        >
+                          <Award size={12} /> Card
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -670,6 +740,14 @@ export function DirectoryPage() {
           </div>
         )}
       </div>
+
+      {/* Fellowship Card Modal */}
+      <FellowshipCardModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        visitors={selectedVisitorsForCards}
+        organization={organization}
+      />
     </AdminLayout>
   );
 }

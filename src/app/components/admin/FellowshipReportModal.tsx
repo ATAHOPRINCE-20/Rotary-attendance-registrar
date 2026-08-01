@@ -4,8 +4,9 @@ import { supabase } from "../../../lib/supabase";
 import type { Event, Organization, Registration, FellowshipReport } from "../../../types/database";
 import { X, Printer, Save, Loader2, FileText, CheckCircle2, UserCheck, DollarSign, Users, Award } from "lucide-react";
 import { toast } from "sonner";
-import { NAVY, GOLD } from "../../../lib/constants";
+import { NAVY, GOLD, parseBuddyGroups } from "../../../lib/constants";
 import { RotaryLogo } from "../shared/RotaryLogo";
+import { FellowshipCardModal, VisitorCardItem } from "../shared/FellowshipCardModal";
 
 interface FellowshipReportModalProps {
   isOpen: boolean;
@@ -21,6 +22,9 @@ export function FellowshipReportModal({
   organization,
 }: FellowshipReportModalProps) {
   const queryClient = useQueryClient();
+
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [selectedVisitorsForCards, setSelectedVisitorsForCards] = useState<VisitorCardItem[]>([]);
 
   // Form State
   const [report, setReport] = useState<FellowshipReport>({
@@ -150,8 +154,8 @@ export function FellowshipReportModal({
   // Extract all distinct buddy groups configured for the event/club or assigned to members
   const rawBuddyGroupsList = Array.from(
     new Set<string>([
-      ...(event?.buddy_groups ? event.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean) : []),
-      ...(organization?.buddy_groups ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean) : []),
+      ...(event?.buddy_groups ? parseBuddyGroups(event.buddy_groups) : []),
+      ...(organization?.buddy_groups ? parseBuddyGroups(organization.buddy_groups) : []),
       ...orgMembers.map((m) => m.buddy_group?.trim()).filter(Boolean),
       ...registrations.map((r) => r.buddy_group?.trim()).filter(Boolean),
     ])
@@ -216,6 +220,35 @@ export function FellowshipReportModal({
       toast.error(err.message || "Failed to save fellowship report");
     },
   });
+
+  const handleOpenCardsForAllVisitors = () => {
+    if (nonClubMembers.length === 0) {
+      toast.info("No visiting Rotarians or guests checked in for this event.");
+      return;
+    }
+    const items: VisitorCardItem[] = nonClubMembers.map((v) => ({
+      id: v.id,
+      visitorName: v.full_name,
+      visitorClub: v.club_name || v.organization_name || "Visiting Club",
+      eventTitle: event?.title,
+      eventDate: event?.date,
+    }));
+    setSelectedVisitorsForCards(items);
+    setShowCardModal(true);
+  };
+
+  const handleOpenCardForSingleVisitor = (v: Registration) => {
+    setSelectedVisitorsForCards([
+      {
+        id: v.id,
+        visitorName: v.full_name,
+        visitorClub: v.club_name || v.organization_name || "Visiting Club",
+        eventTitle: event?.title,
+        eventDate: event?.date,
+      },
+    ]);
+    setShowCardModal(true);
+  };
 
   // Print Utility using a dedicated clean pop-up window
   const handlePrint = () => {
@@ -547,6 +580,15 @@ export function FellowshipReportModal({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Fellowship Cards Action */}
+              <button
+                onClick={handleOpenCardsForAllVisitors}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                title="Generate Fellowship Cards for visiting Rotarians"
+              >
+                <Award size={13} /> <span className="hidden sm:inline">Fellowship Cards</span><span className="sm:hidden">Cards</span>
+              </button>
+
               {/* Print Action */}
               <button
                 onClick={handlePrint}
@@ -1020,9 +1062,19 @@ export function FellowshipReportModal({
 
               {/* Visitors Register Table */}
               <div className="mb-6">
-                <h3 className="font-black text-xs uppercase tracking-wider text-[#001D4A] mb-2 border-b border-slate-200 pb-1">
-                  VISITORS REGISTER ({nonClubMembers.length})
-                </h3>
+                <div className="flex items-center justify-between mb-2 border-b border-slate-200 pb-1">
+                  <h3 className="font-black text-xs uppercase tracking-wider text-[#001D4A]">
+                    VISITORS REGISTER ({nonClubMembers.length})
+                  </h3>
+                  {nonClubMembers.length > 0 && (
+                    <button
+                      onClick={handleOpenCardsForAllVisitors}
+                      className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Award size={12} /> Issue All Fellowship Cards ({nonClubMembers.length})
+                    </button>
+                  )}
+                </div>
                 {nonClubMembers.length === 0 ? (
                   <p className="text-xs text-slate-400 italic">No visiting Rotarians or guests checked in for this fellowship.</p>
                 ) : (
@@ -1033,6 +1085,7 @@ export function FellowshipReportModal({
                         <th className="p-2 border-b border-slate-200">Visitor Name</th>
                         <th className="p-2 border-b border-slate-200">Contact / Phone</th>
                         <th className="p-2 border-b border-slate-200">Club / Organization</th>
+                        <th className="p-2 border-b border-slate-200 text-right">Card</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1042,6 +1095,15 @@ export function FellowshipReportModal({
                           <td className="p-2 font-bold text-slate-900">{v.full_name}</td>
                           <td className="p-2 text-slate-600">{v.phone || v.email || "—"}</td>
                           <td className="p-2 text-slate-700">{v.club_name || v.organization_name || "Guest"}</td>
+                          <td className="p-2 text-right">
+                            <button
+                              onClick={() => handleOpenCardForSingleVisitor(v)}
+                              className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded text-[10px] font-bold inline-flex items-center gap-1 transition-all cursor-pointer"
+                              title="Generate Fellowship Card"
+                            >
+                              <Award size={10} /> Card
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1076,6 +1138,15 @@ export function FellowshipReportModal({
         </div>
 
       </div>
+
+      {/* Fellowship Card Modal */}
+      <FellowshipCardModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        visitors={selectedVisitorsForCards}
+        organization={organization}
+        event={event}
+      />
     </div>
   );
 }

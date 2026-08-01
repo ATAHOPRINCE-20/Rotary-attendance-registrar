@@ -31,14 +31,14 @@ export function AdminLoginPage() {
   useEffect(() => {
     if (!authLoading && !profileLoading && user) {
       if (profile) {
-        const dest = profile.role === "member"
-          ? "/member/dashboard"
+        const dest = (profile.role === "admin" || profile.role === "super_admin")
+          ? "/admin/dashboard"
           : profile.role === "treasurer"
           ? "/treasurer/dashboard"
-          : "/admin/dashboard";
+          : "/member/dashboard";
         navigate(dest, { replace: true });
       } else {
-        navigate("/org-setup", { replace: true });
+        navigate("/member/dashboard", { replace: true });
       }
     }
   }, [authLoading, profileLoading, user, profile, navigate]);
@@ -55,13 +55,6 @@ export function AdminLoginPage() {
     const { error: err } = await signIn(email, password);
     setLoading(false);
     if (err) { setError(getFriendlyErrorMessage(err)); return; }
-    if (profile?.role === "member") {
-      navigate("/member/dashboard");
-    } else if (profile?.role === "treasurer") {
-      navigate("/treasurer/dashboard");
-    } else {
-      navigate("/admin/dashboard");
-    }
   }
 
   async function handleSendResetEmail(e?: React.FormEvent) {
@@ -100,10 +93,10 @@ export function AdminLoginPage() {
         <div className="flex flex-col items-center mb-8">
           <RotaryLogo size={56} />
           <h1 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
-            Agoroll Portal
+            Rotary Club Portal
           </h1>
           <p className="text-sm text-muted-foreground text-center" style={{ fontFamily: "Inter, sans-serif" }}>
-            Sign in to access your Agoroll account
+            Sign in to access member dues, event portal, or admin controls
           </p>
         </div>
 

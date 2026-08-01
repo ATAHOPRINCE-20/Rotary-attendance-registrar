@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    { "source": "/api/bank-products", "destination": "/api/validate-bank-transfer" },
+    { "source": "/api/check-withdrawal", "destination": "/api/withdraw" },
+    { "source": "/api/check-donation", "destination": "/api/initiate-donation" },
+    { "source": "/api/whatsapp-proxy", "destination": "/api/send-whatsapp?proxy=true" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/event/:id", "destination": "/api/serve-html?type=event&eventId=$id" },
     { "source": "/donate", "destination": "/api/serve-html?type=donate" },

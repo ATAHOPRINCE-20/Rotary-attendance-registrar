@@ -8,7 +8,7 @@ import { useOrgDonations } from "../../../hooks/useDonations";
 import { supabase } from "../../../lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput } from "../../../lib/constants";
+import { NAVY, GOLD, sanitizeInput, sanitizeRequiredInput, parseBuddyGroups } from "../../../lib/constants";
 import { AdminLayout } from "../shared/AdminLayout";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -31,9 +31,14 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-
 import { LoadingScreen } from "../shared/LoadingScreen";
-import { getLicenseStatus } from "../../../lib/licensing";
+
+const DONATION_CATEGORIES = [
+  { id: "community",    label: "Community Service Projects" },
+  { id: "sponsorship",  label: "Event Sponsorship" },
+  { id: "development",  label: "Club Development" },
+  { id: "general",      label: "General Contribution" },
+];
 
 export function AdminDashboard() {
   const { profile, organization, signOut, refreshProfile } = useAuth();
@@ -156,10 +161,7 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (organization) {
-      const list = organization.buddy_groups
-        ? Array.from(new Set<string>(organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)))
-        : [];
-      setBuddyGroupsList(list);
+      setBuddyGroupsList(parseBuddyGroups(organization.buddy_groups));
     }
   }, [organization]);
 
@@ -244,13 +246,9 @@ export function AdminDashboard() {
   const selectedEvent = events?.find(e => e.id === selectedEventId);
 
   // Parse buddy groups for the selected event
-  const selectedEventBuddyGroups = Array.from(new Set<string>(
-    selectedEvent?.buddy_groups
-      ? selectedEvent.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-      : organization?.buddy_groups
-      ? organization.buddy_groups.split(",").map((g: string) => g.trim()).filter(Boolean)
-      : []
-  ));
+  const selectedEventBuddyGroups = selectedEvent?.buddy_groups
+    ? parseBuddyGroups(selectedEvent.buddy_groups)
+    : parseBuddyGroups(organization?.buddy_groups);
 
   // Filter registrations for this event
   const eventRegsList = eventRegs ?? [];
@@ -298,7 +296,18 @@ export function AdminDashboard() {
 
           {/* ── STAT CARDS ── */}
           {loading ? (
-            <LoadingScreen variant="light" fullScreen={false} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white border border-slate-200 p-5 rounded-2xl animate-pulse h-32 flex flex-col justify-between shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 bg-slate-200 rounded w-28" />
+                    <div className="w-9 h-9 rounded-xl bg-slate-100" />
+                  </div>
+                  <div className="h-8 bg-slate-200 rounded w-36" />
+                  <div className="h-3 bg-slate-100 rounded w-24" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -776,10 +785,3 @@ export function AdminDashboard() {
     </>
   );
 }
-
-const DONATION_CATEGORIES = [
-  { id: "community",    label: "Community Service Projects" },
-  { id: "sponsorship",  label: "Event Sponsorship" },
-  { id: "development",  label: "Club Development" },
-  { id: "general",      label: "General Contribution" },
-];

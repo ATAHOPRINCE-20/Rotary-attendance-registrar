@@ -138,6 +138,8 @@ export function TenantLandingPage() {
                 <img
                   src="/assets/landing/volunteer_leader.png"
                   alt="Volunteer Leader"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
@@ -148,6 +150,8 @@ export function TenantLandingPage() {
                 <img
                   src="/assets/landing/team_sunset.png"
                   alt="Team Sunset"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
@@ -161,6 +165,8 @@ export function TenantLandingPage() {
                 <img
                   src="/assets/landing/community_gathering.png"
                   alt="Community Gathering"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
@@ -171,6 +177,8 @@ export function TenantLandingPage() {
                 <img
                   src="/assets/landing/make_a_change.png"
                   alt="Make a Change"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>

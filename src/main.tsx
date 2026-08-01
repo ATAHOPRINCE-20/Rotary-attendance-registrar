@@ -33,11 +33,38 @@ window.addEventListener("beforeinstallprompt", (e) => {
 });
 
 
-// Register service worker for PWA support
-if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
-      console.warn("[PWA Service Worker] Registration failed:", err);
-    });
-  });
+// Auto-recover from stale dynamic chunk imports on deployment updates
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason?.toString() || "";
+  if (
+    reason.includes("Failed to fetch dynamically imported module") ||
+    reason.includes("Loading chunk") ||
+    reason.includes("Importing a module script failed")
+  ) {
+    console.warn("Stale chunk detected, refreshing page automatically...");
+    const lastChunkReload = sessionStorage.getItem("chunk-reload-timestamp");
+    const now = Date.now();
+    if (!lastChunkReload || now - parseInt(lastChunkReload, 10) > 10000) {
+      sessionStorage.setItem("chunk-reload-timestamp", now.toString());
+      window.location.reload();
+    }
+  }
+});
+
+// Unregister legacy or stale service workers and clear caches immediately to prevent stale bundle hangs
+if (typeof window !== "undefined") {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister().catch(() => {});
+      }
+    }).catch(() => {});
+  }
+  if ("caches" in window) {
+    caches.keys().then((names) => {
+      for (const name of names) {
+        caches.delete(name).catch(() => {});
+      }
+    }).catch(() => {});
+  }
 }

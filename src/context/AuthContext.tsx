@@ -3,6 +3,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { Profile, Organization } from "../types/database";
 import { sanitizeRequiredInput } from "../lib/constants";
+import { toast } from "sonner";
 
 interface AuthContextValue {
   session:        Session | null;
@@ -76,50 +77,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!prof) {
           const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-          // 1. Check if user is a registered Club Member in the members table
-          if (currentUser?.email) {
-            const { data: memberRecord } = await supabase
+          let memberRecord: any = null;
+
+          // 1. Search members table by user_id
+          const { data: byUserId } = await supabase
+            .from("members")
+            .select("*")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (byUserId) {
+            memberRecord = byUserId;
+          } else if (currentUser?.email) {
+            // 2. Search members table by email
+            const { data: byEmail } = await supabase
               .from("members")
               .select("*")
-              .or(`user_id.eq.${userId},email.ilike.${currentUser.email}`)
+              .ilike("email", currentUser.email.trim())
+              .maybeSingle();
+            if (byEmail) memberRecord = byEmail;
+          }
+
+          if (!memberRecord && currentUser?.phone) {
+            // 3. Search members table by phone suffix
+            const digits = currentUser.phone.replace(/\D/g, "");
+            if (digits.length >= 9) {
+              const suffix = digits.substring(digits.length - 9);
+              const { data: byPhone } = await supabase
+                .from("members")
+                .select("*")
+                .like("phone", `%${suffix}`)
+                .maybeSingle();
+              if (byPhone) memberRecord = byPhone;
+            }
+          }
+
+          if (memberRecord) {
+            // Auto-link user_id to members table for seamless RLS & future logins
+            if (!memberRecord.user_id) {
+              await supabase
+                .from("members")
+                .update({ user_id: userId })
+                .eq("id", memberRecord.id);
+            }
+
+            const memberProfile: Profile = {
+              id: userId,
+              organization_id: memberRecord.organization_id,
+              full_name: memberRecord.full_name,
+              role: "member",
+              avatar_url: null,
+              created_at: memberRecord.created_at,
+            };
+
+            setProfileError(false);
+            setProfile(memberProfile);
+
+            const { data: org } = await supabase
+              .from("organizations")
+              .select("*")
+              .eq("id", memberRecord.organization_id)
               .maybeSingle();
 
-            if (memberRecord) {
-              // Auto-link user_id to members table for seamless RLS & future logins
-              if (!memberRecord.user_id) {
-                await supabase
-                  .from("members")
-                  .update({ user_id: userId })
-                  .eq("id", memberRecord.id);
-              }
-
-              const memberProfile: Profile = {
-                id: userId,
-                organization_id: memberRecord.organization_id,
-                full_name: memberRecord.full_name,
-                role: "member",
-                avatar_url: null,
-                created_at: memberRecord.created_at,
-              };
-
-              setProfileError(false);
-              setProfile(memberProfile);
-
-              const { data: org } = await supabase
-                .from("organizations")
-                .select("*")
-                .eq("id", memberRecord.organization_id)
-                .maybeSingle();
-
-              if (org) {
-                const orgData = { ...org };
-                if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
-                setOrg(orgData);
-              } else {
-                setOrg(null);
-              }
-              return;
+            if (org) {
+              const orgData = { ...org };
+              if (!orgData.logo_url) orgData.logo_url = "/assets/rotary_gold_logo.png";
+              setOrg(orgData);
+            } else {
+              setOrg(null);
             }
+            return;
           }
 
           // 2. Check for pending organization invite
@@ -161,6 +188,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.error("[AuthContext] Auto-insert profile error:", insertErr);
             }
           }
+
+          // 3. Fallback for member metadata logins
+          if (isMember) {
+            const memberProfile: Profile = {
+              id: userId,
+              organization_id: currentUser?.user_metadata?.organization_id || "",
+              full_name: currentUser?.user_metadata?.full_name || currentUser?.email || "Member",
+              role: "member",
+              avatar_url: null,
+              created_at: new Date().toISOString(),
+            };
+            setProfileError(false);
+            setProfile(memberProfile);
+            return;
+          }
+
           setProfile(null);
           setOrg(null);
           setProfileError(false);
@@ -189,10 +232,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         console.error("[AuthContext] loadProfile exception:", e);
       } finally {
-        if (loadingUserRef.current === userId) {
-          setProfileLoading(false);
-          setLoading(false);
-        }
+        setProfileLoading(false);
+        setLoading(false);
       }
     })();
 
@@ -205,10 +246,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Safety net: never stay in loading state longer than 8 seconds
+    // Safety net: never stay in loading state longer than 4 seconds
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 8000);
+      setProfileLoading(false);
+    }, 4000);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -216,15 +258,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         loadProfile(session.user.id).finally(() => {
           clearTimeout(safetyTimer);
+          setLoading(false);
+          setProfileLoading(false);
         });
       } else {
         clearTimeout(safetyTimer);
         setLoading(false);
+        setProfileLoading(false);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        if (event === "SIGNED_IN") {
+          localStorage.setItem("session_login_time", Date.now().toString());
+          localStorage.setItem("last_user_activity", Date.now().toString());
+        }
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
@@ -236,6 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           setImpersonatedOrgId(null);
           sessionStorage.removeItem("impersonated_org_id");
+          localStorage.removeItem("session_login_time");
+          localStorage.removeItem("last_user_activity");
           loadingUserRef.current = null;
           loadPromiseRef.current = null;
         }
@@ -248,40 +299,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Automatic JWT Token Refreshment
+  // Automatic Session Expiration & Activity Tracker (4 Hours Idle / 24 Hours Max)
   useEffect(() => {
-    async function checkAndRefreshJWT() {
+    const IDLE_TIMEOUT = 4 * 60 * 60 * 1000; // 4 Hours
+    const MAX_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 Hours
+
+    const updateActivity = () => {
+      localStorage.setItem("last_user_activity", Date.now().toString());
+    };
+
+    // Track user interaction
+    window.addEventListener("mousemove", updateActivity, { passive: true });
+    window.addEventListener("keydown", updateActivity, { passive: true });
+    window.addEventListener("click", updateActivity, { passive: true });
+    window.addEventListener("touchstart", updateActivity, { passive: true });
+
+    async function checkSessionExpiration() {
+      const { data: { session: activeSession } } = await supabase.auth.getSession();
+      if (!activeSession) return;
+
+      const now = Date.now();
+      const lastActivity = Number(localStorage.getItem("last_user_activity") || now);
+      const loginTime = Number(localStorage.getItem("session_login_time") || now);
+
+      // 1. Check Idle Timeout
+      if (now - lastActivity > IDLE_TIMEOUT) {
+        console.warn("[AuthContext] Session expired due to 4 hours of inactivity.");
+        toast.error("Your session has expired due to inactivity. Please sign in again.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // 2. Check Maximum Session Duration
+      if (now - loginTime > MAX_SESSION_DURATION) {
+        console.warn("[AuthContext] Session expired after 24 hours max duration.");
+        toast.error("Your session has reached its 24-hour limit. Please sign in again.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // 3. JWT Refresh check if token expires within 10 minutes (600s)
       try {
-        const { data: { session: activeSession } } = await supabase.auth.getSession();
-        if (activeSession) {
-          const expiresAt = activeSession.expires_at || 0;
-          const nowInSec = Math.floor(Date.now() / 1000);
-          // If token expires within 10 minutes (600s), refresh silently
-          if (expiresAt - nowInSec < 600) {
-            const { data: refreshed } = await supabase.auth.refreshSession();
-            if (refreshed.session) {
-              setSession(refreshed.session);
-              setUser(refreshed.session.user);
-            }
+        const expiresAt = activeSession.expires_at || 0;
+        const nowInSec = Math.floor(now / 1000);
+        if (expiresAt - nowInSec < 600) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (refreshed.session) {
+            setSession(refreshed.session);
+            setUser(refreshed.session.user);
           }
         }
       } catch (e) {
-        console.warn("[AuthContext] Silent token refresh check failed:", e);
+        console.warn("[AuthContext] Token refresh error:", e);
       }
     }
 
-    // Refresh check every 4 minutes
-    const interval = setInterval(checkAndRefreshJWT, 4 * 60 * 1000);
+    // Check expiration every 60 seconds
+    const interval = setInterval(checkSessionExpiration, 60 * 1000);
 
-    // Refresh check whenever tab is focused
     const handleFocus = () => {
-      checkAndRefreshJWT();
+      checkSessionExpiration();
     };
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      clearInterval(interval);
+      window.removeEventListener("mousemove", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("touchstart", updateActivity);
       window.removeEventListener("focus", handleFocus);
+      clearInterval(interval);
     };
   }, []);
 
