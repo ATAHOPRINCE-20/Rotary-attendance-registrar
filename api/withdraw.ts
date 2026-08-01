@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit } from './_rate-limit.js';
+import { logSystemEvent } from './lib/logger.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
@@ -252,6 +253,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
     } catch (error: any) {
+      await logSystemEvent({
+        level: 'error',
+        source: 'api/withdraw/verify-status',
+        message: `Status check failure: ${error.message || 'Unknown error'}`,
+        details: { reference, organizationId, stack: error.stack },
+        organizationId: organizationId as string
+      });
       return res.status(500).json({ error: error.message || 'Failed to verify withdrawal status' });
     }
   }
@@ -412,6 +420,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (dbError || !withdrawal) {
+        await logSystemEvent({
+          level: 'error',
+          source: 'api/withdraw/db-insert',
+          message: `Database insert failed: ${dbError?.message || 'Failed to create withdrawal record'}`,
+          details: { insertPayload, dbError },
+          organizationId,
+          userId: user.id
+        });
         return res.status(500).json({ error: `Failed to create withdrawal record: ${dbError?.message}` });
       }
 
@@ -444,6 +460,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!response.ok || result.success === false) {
           await supabase.from('withdrawals').update({ status: 'failed' }).eq('id', withdrawal.id);
+          await logSystemEvent({
+            level: 'error',
+            source: 'api/withdraw/bank-transfer',
+            message: `Bank transfer purchase failed: ${result.message || result.error || 'Gateway purchase error'}`,
+            details: { relworxError: result, validationReference, accountNumber, bankName, amount: payoutAmount },
+            organizationId,
+            userId: user.id
+          });
           return res.status(response.status || 400).json({
             error: result.message || result.error || 'Bank transfer product purchase failed.',
             relworxError: result
@@ -482,6 +506,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!response.ok) {
           await supabase.from('withdrawals').update({ status: 'failed' }).eq('id', withdrawal.id);
+          await logSystemEvent({
+            level: 'error',
+            source: 'api/withdraw/mobile-money',
+            message: `Mobile money send-payment failed: ${result.message || result.error || 'Payment gateway error'}`,
+            details: { relworxError: result, phone: formattedPhone, amount: payoutAmount },
+            organizationId,
+            userId: user.id
+          });
           return res.status(response.status || 400).json({
             error: result.message || result.error || 'Failed to send payment request to Relworx',
             relworxError: result
@@ -499,6 +531,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } catch (error: any) {
       console.error('Withdrawal API error:', error);
+      await logSystemEvent({
+        level: 'error',
+        source: 'api/withdraw/uncaught',
+        message: `Withdrawal execution error: ${error.message || 'Unknown error'}`,
+        details: { body: req.body, stack: error.stack },
+        organizationId: req.body?.organizationId || null
+      });
       return res.status(500).json({ error: error.message || 'Failed to process withdrawal request' });
     }
   }

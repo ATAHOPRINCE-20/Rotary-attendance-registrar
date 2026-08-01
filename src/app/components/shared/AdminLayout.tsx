@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router";
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import { supabase } from "../../../lib/supabase";
 import { getLicenseStatus } from "../../../lib/licensing";
 import { RotaryLogo } from "./RotaryLogo";
 import { NAVY, GOLD } from "../../../lib/constants";
@@ -26,6 +27,7 @@ import {
   Lock,
   Settings,
   User,
+  Terminal,
 } from "lucide-react";
 
 const SupportIcon = ({ size = 16 }: { size?: number }) => (
@@ -63,7 +65,39 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
   const navigate  = useNavigate();
   const location  = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
   const license = getLicenseStatus(organization);
+
+  useEffect(() => {
+    if (profile?.role !== "super_admin") return;
+
+    async function loadUnresolvedCount() {
+      try {
+        const { count } = await supabase
+          .from("system_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "unresolved");
+        if (count !== null) setUnresolvedCount(count);
+      } catch (err) {
+        // Silent fallback if table not yet created
+      }
+    }
+
+    loadUnresolvedCount();
+
+    const channel = supabase
+      .channel("admin_layout_logs_badge")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "system_logs" },
+        () => loadUnresolvedCount()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.role]);
 
   const menuItems = (() => {
     const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
@@ -74,6 +108,7 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
       { label: "Dashboard",       to: dashboardPath,           icon: LayoutDashboard },
       ...(profile?.role === "super_admin" ? [
         { label: "Tenants Directory", to: "/admin/tenants",    icon: Building        },
+        { label: "System Monitoring", to: "/admin/logs",       icon: Terminal        },
       ] : []),
       ...(isAdmin ? [
         { label: "Events",          to: "/admin/events",       icon: Calendar        },
@@ -140,6 +175,11 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
               >
                 <Icon size={16} />
                 <span className="flex-1 text-left">{label}</span>
+                {to === "/admin/logs" && unresolvedCount > 0 && (
+                  <span className="bg-rose-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse shadow-xs">
+                    {unresolvedCount > 99 ? "99+" : unresolvedCount}
+                  </span>
+                )}
                 {restricted && <Lock size={12} className="text-slate-400 absolute right-3" />}
               </button>
             );
@@ -332,6 +372,11 @@ export function AdminLayout({ children, pageTitle, actions }: AdminLayoutProps) 
                   >
                     <Icon size={16} />
                     <span className="flex-1 text-left">{label}</span>
+                    {to === "/admin/logs" && unresolvedCount > 0 && (
+                      <span className="bg-rose-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse shadow-xs">
+                        {unresolvedCount > 99 ? "99+" : unresolvedCount}
+                      </span>
+                    )}
                     {restricted && <Lock size={12} className="text-slate-400 absolute right-3" />}
                   </button>
                 );

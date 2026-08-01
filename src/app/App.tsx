@@ -8,6 +8,7 @@ import { TenantProvider } from "../context/TenantContext";
 import { getSubdomain } from "../lib/subdomain";
 import { LoadingScreen } from "./components/shared/LoadingScreen";
 import { PWAInstallBanner } from "./components/shared/PWAInstallBanner";
+import { logClientError } from "../lib/logger";
 
 // Helper utility to retry dynamic imports when they fail (e.g. during PWA updates or server deployments)
 function lazyWithRetry<T extends ComponentType<any>>(
@@ -109,6 +110,7 @@ const DirectoryPage = lazyWithRetry(() => import("./components/admin/DirectoryPa
 const TeamPage = lazyWithRetry(() => import("./components/admin/TeamPage"), "TeamPage");
 const DonationCampaignsPage = lazyWithRetry(() => import("./components/admin/DonationCampaignsPage"), "DonationCampaignsPage");
 const TenantsPage = lazyWithRetry(() => import("./components/admin/TenantsPage"), "TenantsPage");
+const SystemLogsPage = lazyWithRetry(() => import("./components/admin/SystemLogsPage"), "SystemLogsPage");
 const BillingPage = lazyWithRetry(() => import("./components/admin/BillingPage"), "BillingPage");
 const SettingsPage = lazyWithRetry(() => import("./components/admin/SettingsPage"), "default");
 
@@ -227,6 +229,7 @@ function AppRoutes() {
           <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
           <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DonationCampaignsPage /></ProtectedRoute>} />
           <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
+          <Route path="/admin/logs"               element={<ProtectedRoute allowedRoles={["super_admin"]}><SystemLogsPage /></ProtectedRoute>} />
           <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
           <Route path="/admin/settings"           element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><SettingsPage /></ProtectedRoute>} />
           <Route path="/treasurer/dashboard"      element={<ProtectedRoute allowedRoles={["treasurer", "admin", "super_admin"]}><TreasurerDashboard /></ProtectedRoute>} />
@@ -271,6 +274,7 @@ function AppRoutes() {
       <Route path="/admin/team"               element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><TeamPage /></ProtectedRoute>} />
       <Route path="/admin/donation-campaigns" element={<ProtectedRoute allowedRoles={["admin", "super_admin", "treasurer"]}><DonationCampaignsPage /></ProtectedRoute>} />
       <Route path="/admin/tenants"            element={<ProtectedRoute allowedRoles={["super_admin"]}><TenantsPage /></ProtectedRoute>} />
+      <Route path="/admin/logs"               element={<ProtectedRoute allowedRoles={["super_admin"]}><SystemLogsPage /></ProtectedRoute>} />
       <Route path="/admin/billing"            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><BillingPage /></ProtectedRoute>} />
       <Route path="/admin/settings"           element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><SettingsPage /></ProtectedRoute>} />
       <Route path="/treasurer/dashboard"      element={<ProtectedRoute allowedRoles={["treasurer", "admin", "super_admin"]}><TreasurerDashboard /></ProtectedRoute>} />
@@ -317,6 +321,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught React Error:", error, errorInfo);
+    logClientError({
+      level: "error",
+      source: "ErrorBoundary",
+      message: error.message || "Uncaught React component error",
+      details: {
+        componentStack: errorInfo.componentStack,
+        stack: error.stack
+      }
+    });
   }
 
   public render() {
