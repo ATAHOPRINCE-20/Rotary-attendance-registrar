@@ -168,7 +168,7 @@ export function MemberLoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/member/otp", {
+      const response = await fetch("/api/member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "request", identifier: identifier.trim() })
@@ -199,7 +199,7 @@ export function MemberLoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/member/otp", {
+      const response = await fetch("/api/member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

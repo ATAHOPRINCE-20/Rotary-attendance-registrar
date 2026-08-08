@@ -37,10 +37,14 @@ import {
   Calendar,
   Building2,
   Download,
+  ShieldCheck,
+  Wallet,
+  UserCheck,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
-import type { Member } from "../../../types/database";
+import type { Member, Profile } from "../../../types/database";
 import { getFriendlyErrorMessage } from "../../../lib/errors";
 
 export function MembersPage() {
@@ -118,29 +122,140 @@ export function MembersPage() {
     );
   }) ?? [];
 
-  // Active profiles list to confirm true logged-in member activation state
+  // Active profiles list & map to confirm activation & manage system roles
   const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set());
+  const [profilesMap, setProfilesMap] = useState<Map<string, Profile>>(new Map());
+
+  // Role Management Modal State
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [roleTargetMember, setRoleTargetMember] = useState<Member | null>(null);
+  const [selectedRole, setSelectedRole] = useState<"admin" | "treasurer" | "staff" | "member">("admin");
+  const [updatingRole, setUpdatingRole] = useState(false);
+
+  async function fetchActiveProfiles() {
+    if (!organization?.id) return;
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("organization_id", organization.id);
+      if (data) {
+        setActiveUserIds(new Set(data.map((p) => p.id)));
+        const map = new Map<string, Profile>();
+        data.forEach((p) => {
+          map.set(p.id, p as Profile);
+          if (p.email) {
+            map.set(p.email.trim().toLowerCase(), p as Profile);
+          }
+        });
+        setProfilesMap(map);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch active profiles:", e);
+    }
+  }
 
   useEffect(() => {
-    async function fetchActiveProfiles() {
-      if (!organization?.id) return;
-      try {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("organization_id", organization.id);
-        if (data) {
-          setActiveUserIds(new Set(data.map((p) => p.id)));
-        }
-      } catch (e) {
-        console.warn("Failed to fetch active profiles:", e);
-      }
-    }
     fetchActiveProfiles();
   }, [organization?.id, members]);
 
   // Helper to determine if a member has truly activated and logged in
   const isActivated = (m: Member) => Boolean(m.user_id && activeUserIds.has(m.user_id));
+
+  // Helper to retrieve effective role for a member
+  const getMemberRole = (m: Member): "super_admin" | "admin" | "treasurer" | "staff" | "member" => {
+    if (m.user_id && profilesMap.has(m.user_id)) {
+      return profilesMap.get(m.user_id)!.role;
+    }
+    if (m.email && profilesMap.has(m.email.trim().toLowerCase())) {
+      return profilesMap.get(m.email.trim().toLowerCase())!.role;
+    }
+    return "member";
+  };
+
+  function openRoleModal(member: Member, initialRole?: "admin" | "treasurer" | "staff" | "member") {
+    const currentRole = getMemberRole(member);
+    setRoleTargetMember(member);
+    setSelectedRole(initialRole || (currentRole === "super_admin" ? "admin" : currentRole));
+    setRoleModalOpen(true);
+  }
+
+  async function handleUpgradeOrChangeRole(member: Member, targetRole: "admin" | "treasurer" | "staff" | "member") {
+    if (!organization?.id) return;
+
+    if (targetRole === "treasurer") {
+      const existingTreasurers = Array.from(profilesMap.values()).filter(
+        (p) => p.role === "treasurer" && p.id !== member.user_id
+      );
+      if (existingTreasurers.length > 0) {
+        toast.error("Another member is already assigned as Treasurer. Please demote them first.");
+        return;
+      }
+    }
+
+    const existingProfile =
+      (member.user_id && profilesMap.get(member.user_id)) ||
+      (member.email && profilesMap.get(member.email.trim().toLowerCase()));
+
+    setUpdatingRole(true);
+    try {
+      if (existingProfile) {
+        // Update existing profile role directly
+        const { error } = await supabase
+          .from("profiles")
+          .update({ role: targetRole })
+          .eq("id", existingProfile.id);
+
+        if (error) throw error;
+
+        toast.success(`${member.full_name} has been updated to ${targetRole === "admin" ? "Admin level" : targetRole}!`);
+        await fetchActiveProfiles();
+        setRoleModalOpen(false);
+      } else {
+        // No profile exists yet
+        if (!member.email || !member.email.trim()) {
+          toast.error(`Please assign an email address to ${member.full_name} before granting ${targetRole} access.`);
+          setRoleModalOpen(false);
+          openEditModal(member);
+          return;
+        }
+
+        const token = await getFreshAccessToken();
+        if (!token) {
+          toast.error("Authentication session expired. Please sign in again.");
+          return;
+        }
+
+        const response = await fetch("/api/member", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: "team",
+            email: member.email.trim(),
+            role: targetRole,
+            organizationId: organization.id,
+          }),
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to grant role invitation");
+        }
+
+        toast.success(`${member.full_name} has been upgraded to ${targetRole === "admin" ? "Admin level" : targetRole}! Invitation email sent.`);
+        await fetchActiveProfiles();
+        setRoleModalOpen(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to update role");
+    } finally {
+      setUpdatingRole(false);
+    }
+  }
 
   // Eligible members with emails
   const membersWithEmail = members?.filter(m => m.email && m.email.trim().length > 0) ?? [];
@@ -262,7 +377,7 @@ export function MembersPage() {
 
       toast.promise(
         (async () => {
-          const response = await fetch("/api/member/invite-member", {
+          const response = await fetch("/api/member", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -298,7 +413,7 @@ export function MembersPage() {
       }
 
       setInvitingBatch(true);
-      const response = await fetch("/api/member/invite-member", {
+      const response = await fetch("/api/member", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -773,6 +888,7 @@ export function MembersPage() {
                     <th className="px-6 py-4">Contact Info</th>
                     <th className="px-6 py-4">Buddy Group</th>
                     <th className="px-6 py-4">Portal Status</th>
+                    <th className="px-6 py-4">System Role</th>
                     {profile?.role !== "staff" && <th className="px-6 py-4 text-right">Actions</th>}
                   </tr>
                 </thead>
@@ -780,6 +896,7 @@ export function MembersPage() {
                   {filteredMembers.map((m) => {
                     const isSelected = selectedMemberIds.includes(m.id);
                     const hasEmail = Boolean(m.email && m.email.trim());
+                    const currentRole = getMemberRole(m);
 
                     return (
                       <tr key={m.id} className={`hover:bg-muted/10 transition-colors ${isSelected ? "bg-[#17458F]/5" : ""}`}>
@@ -861,6 +978,63 @@ export function MembersPage() {
                             <span className="text-[10px] text-muted-foreground/50 italic">No email address</span>
                           )}
                         </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            if (currentRole === "super_admin") {
+                              return (
+                                <button
+                                  onClick={() => openRoleModal(m)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-100 text-purple-800 border border-purple-200 cursor-pointer hover:bg-purple-200 transition-all"
+                                  title="Super Admin — Click to manage role"
+                                >
+                                  <ShieldCheck size={11} /> Super Admin
+                                </button>
+                              );
+                            }
+                            if (currentRole === "admin") {
+                              return (
+                                <button
+                                  onClick={() => openRoleModal(m)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer hover:bg-emerald-200 transition-all"
+                                  title="Admin — Click to manage role"
+                                >
+                                  <ShieldCheck size={11} /> Admin
+                                </button>
+                              );
+                            }
+                            if (currentRole === "treasurer") {
+                              return (
+                                <button
+                                  onClick={() => openRoleModal(m)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-sky-100 text-sky-800 border border-sky-200 cursor-pointer hover:bg-sky-200 transition-all"
+                                  title="Treasurer — Click to manage role"
+                                >
+                                  <Wallet size={11} /> Treasurer
+                                </button>
+                              );
+                            }
+                            if (currentRole === "staff") {
+                              return (
+                                <button
+                                  onClick={() => openRoleModal(m)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-slate-100 text-slate-800 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-all"
+                                  title="Staff — Click to manage role"
+                                >
+                                  <UserCheck size={11} /> Staff
+                                </button>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => openRoleModal(m, "admin")}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer"
+                                title="Member — Click to upgrade to Admin"
+                              >
+                                <Users size={11} /> Member
+                              </button>
+                            );
+                          })()}
+                        </td>
                         {profile?.role !== "staff" && (
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-1.5">
@@ -906,6 +1080,17 @@ export function MembersPage() {
                                 title={`Impersonate ${m.full_name}'s Portal`}
                               >
                                 <Eye size={13} />
+                              </button>
+                              <button
+                                onClick={() => openRoleModal(m)}
+                                className={`p-2 rounded-xl transition-all cursor-pointer ${
+                                  currentRole === "admin" || currentRole === "super_admin"
+                                    ? "text-emerald-600 hover:bg-emerald-50"
+                                    : "text-[#17458F] hover:bg-[#17458F]/10"
+                                }`}
+                                title={currentRole === "admin" || currentRole === "super_admin" ? "Manage Admin Access & Role" : "Upgrade Member to Admin Level"}
+                              >
+                                <ShieldCheck size={13} />
                               </button>
                               <button
                                 onClick={() => openEditModal(m)}
@@ -981,6 +1166,13 @@ export function MembersPage() {
                                 <Mail size={13} />
                               </button>
                             )}
+                            <button
+                              onClick={() => openRoleModal(m)}
+                              className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 transition-all cursor-pointer"
+                              title="Manage Role & Access"
+                            >
+                              <ShieldCheck size={13} />
+                            </button>
                             <button
                               onClick={() => openEditModal(m)}
                               className="p-2 rounded-xl text-muted-foreground hover:bg-[#17458F]/10 hover:text-[#17458F] transition-all cursor-pointer"
@@ -1451,6 +1643,177 @@ export function MembersPage() {
                 </GoldButton>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CHANGE / UPGRADE ROLE ── */}
+      {roleModalOpen && roleTargetMember && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl border border-border shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-muted/20">
+              <h2 className="text-base font-black flex items-center gap-2" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
+                <ShieldCheck size={18} className="text-emerald-600" />
+                Manage Access Level & Upgrade Role
+              </h2>
+              <button
+                onClick={() => setRoleModalOpen(false)}
+                disabled={updatingRole}
+                className="p-1.5 text-muted-foreground hover:bg-muted rounded-xl transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex flex-col gap-4">
+              <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border">
+                <div
+                  className="w-10 h-10 rounded-full text-white text-xs font-black flex items-center justify-center shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${NAVY}, #0067C8)` }}
+                >
+                  {roleTargetMember.full_name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-bold text-foreground text-sm">{roleTargetMember.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{roleTargetMember.email || roleTargetMember.phone || "No contact info"}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <label className="text-xs font-bold text-foreground">Select System Access Level:</label>
+
+                {/* Option: Admin */}
+                <label
+                  onClick={() => setSelectedRole("admin")}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedRole === "admin"
+                      ? "border-emerald-600 bg-emerald-50/60 text-foreground"
+                      : "border-border hover:bg-muted/10 text-muted-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="roleOption"
+                    checked={selectedRole === "admin"}
+                    onChange={() => setSelectedRole("admin")}
+                    className="mt-0.5 text-emerald-600"
+                  />
+                  <div>
+                    <p className="text-xs font-black text-emerald-800 flex items-center gap-1.5">
+                      <ShieldCheck size={14} /> Admin (Upgrade Level)
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Full administrative privileges: manage roster, events, team roles, billing & settings.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Option: Treasurer */}
+                <label
+                  onClick={() => setSelectedRole("treasurer")}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedRole === "treasurer"
+                      ? "border-sky-600 bg-sky-50/60 text-foreground"
+                      : "border-border hover:bg-muted/10 text-muted-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="roleOption"
+                    checked={selectedRole === "treasurer"}
+                    onChange={() => setSelectedRole("treasurer")}
+                    className="mt-0.5 text-sky-600"
+                  />
+                  <div>
+                    <p className="text-xs font-black text-sky-800 flex items-center gap-1.5">
+                      <Wallet size={14} /> Treasurer
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Access to financial dashboards, dues tracking, donations & withdrawal payouts.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Option: Staff */}
+                <label
+                  onClick={() => setSelectedRole("staff")}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedRole === "staff"
+                      ? "border-slate-600 bg-slate-100/60 text-foreground"
+                      : "border-border hover:bg-muted/10 text-muted-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="roleOption"
+                    checked={selectedRole === "staff"}
+                    onChange={() => setSelectedRole("staff")}
+                    className="mt-0.5 text-slate-600"
+                  />
+                  <div>
+                    <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <UserCheck size={14} /> Staff
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Read-only administrative access to check-ins and member lists.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Option: Standard Member */}
+                <label
+                  onClick={() => setSelectedRole("member")}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedRole === "member"
+                      ? "border-slate-400 bg-slate-50 text-foreground"
+                      : "border-border hover:bg-muted/10 text-muted-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="roleOption"
+                    checked={selectedRole === "member"}
+                    onChange={() => setSelectedRole("member")}
+                    className="mt-0.5 text-slate-600"
+                  />
+                  <div>
+                    <p className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                      <Users size={14} /> Standard Member
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Standard member access only (personal dashboard, attendance, and dues).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex gap-3 border-t border-border pt-4 mt-2">
+                <OutlineButton
+                  type="button"
+                  onClick={() => setRoleModalOpen(false)}
+                  disabled={updatingRole}
+                  className="flex-1 justify-center"
+                >
+                  Cancel
+                </OutlineButton>
+                <GoldButton
+                  type="button"
+                  disabled={updatingRole}
+                  onClick={() => handleUpgradeOrChangeRole(roleTargetMember, selectedRole)}
+                  className="flex-1 justify-center py-2.5 text-slate-900 font-bold"
+                >
+                  {updatingRole ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 size={15} className="animate-spin" /> Saving Role...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck size={14} /> Save Role Access
+                    </span>
+                  )}
+                </GoldButton>
+              </div>
+            </div>
           </div>
         </div>
       )}

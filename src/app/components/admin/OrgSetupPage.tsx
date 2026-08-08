@@ -184,6 +184,8 @@ export function OrgSetupPage() {
           id: user.id,
           organization_id: org.id,
           full_name: user.user_metadata?.full_name || "Admin",
+          email: user.email || null,
+          phone: user.user_metadata?.phone || null,
           role: "admin",
         });
 

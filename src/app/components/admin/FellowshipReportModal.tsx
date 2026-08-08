@@ -35,6 +35,8 @@ export function FellowshipReportModal({
     object_of_rotary_by: "",
     final_toast_by: "",
     sergeant_at_arms: "",
+    happy_shilling_by: "",
+    four_way_test_by: "",
     guest_speaker_name: "",
     guest_speaker_contact: "",
     guest_speaker_introduced_by: "",
@@ -443,6 +445,8 @@ export function FellowshipReportModal({
             <div><span class="label">LOYAL TOAST BY: </span><span class="value">${report.loyal_toast_by || "..........................................................."}</span></div>
             <div><span class="label">AWAY TOAST BY: </span><span class="value">${report.away_toast_by || "..........................................................."}</span></div>
             <div><span class="label">OBJECT OF ROTARY BY: </span><span class="value">${report.object_of_rotary_by || "..........................................................."}</span></div>
+            <div><span class="label">HAPPY SHILLING BY: </span><span class="value">${report.happy_shilling_by || "..........................................................."}</span></div>
+            <div><span class="label">FOUR-WAY TEST BY: </span><span class="value">${report.four_way_test_by || "..........................................................."}</span></div>
           </div>
 
           <div class="section-box">
@@ -703,6 +707,28 @@ export function FellowshipReportModal({
                   </div>
 
                   <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Happy Shilling By</label>
+                    <input
+                      type="text"
+                      value={report.happy_shilling_by || ""}
+                      onChange={(e) => setReport({ ...report, happy_shilling_by: e.target.value })}
+                      placeholder="e.g. Rtn. Name"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#001D4A] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Four-Way Test By</label>
+                    <input
+                      type="text"
+                      value={report.four_way_test_by || ""}
+                      onChange={(e) => setReport({ ...report, four_way_test_by: e.target.value })}
+                      placeholder="e.g. Rtn. Name"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#001D4A] outline-none"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">Final Toast By</label>
                     <input
                       type="text"
@@ -939,6 +965,19 @@ export function FellowshipReportModal({
                   <span className="font-bold uppercase text-slate-500 shrink-0">OBJECT OF ROTARY BY: </span>
                   <span className="font-semibold text-slate-900 border-b border-dotted border-slate-400 pb-0.5 px-1 truncate flex-1 min-w-0">
                     {report.object_of_rotary_by || "—"}
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-1 min-w-0">
+                  <span className="font-bold uppercase text-slate-500 shrink-0">HAPPY SHILLING BY: </span>
+                  <span className="font-semibold text-slate-900 border-b border-dotted border-slate-400 pb-0.5 px-1 truncate flex-1 min-w-0">
+                    {report.happy_shilling_by || "—"}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1 min-w-0">
+                  <span className="font-bold uppercase text-slate-500 shrink-0">FOUR-WAY TEST BY: </span>
+                  <span className="font-semibold text-slate-900 border-b border-dotted border-slate-400 pb-0.5 px-1 truncate flex-1 min-w-0">
+                    {report.four_way_test_by || "—"}
                   </span>
                 </div>
               </div>

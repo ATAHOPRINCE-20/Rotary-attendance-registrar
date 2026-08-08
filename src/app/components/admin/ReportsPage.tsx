@@ -1,37 +1,42 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../context/AuthContext";
-import { useAdminEvents } from "../../../hooks/useEvents";
 import { useOrgMembers } from "../../../hooks/useMembers";
 import { AdminLayout } from "../shared/AdminLayout";
-import { PageCard, TextInput, SelectInput } from "../shared/PageCard";
-import { OutlineButton } from "../shared/Buttons";
-import { NAVY, GOLD, sanitizeRequiredInput, isSyntheticEmail, parseBuddyGroups } from "../../../lib/constants";
+import { PageCard, SelectInput } from "../shared/PageCard";
+import { NAVY, GOLD, isSyntheticEmail, parseBuddyGroups } from "../../../lib/constants";
 import { supabase } from "../../../lib/supabase";
 import {
   FolderArchive,
   Search,
   Printer,
-  ChevronRight,
   Calendar,
   Users,
-  CheckCircle,
   FileText,
-  Filter,
   ChevronDown,
   ChevronUp,
+  LayoutGrid,
+  Award,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingScreen } from "../shared/LoadingScreen";
 import { FellowshipReportModal } from "./FellowshipReportModal";
+import { MonthlyMatrixReport } from "./reports/MonthlyMatrixReport";
+import { BuddyGroupReport } from "./reports/BuddyGroupReport";
+import { MemberSummaryReport } from "./reports/MemberSummaryReport";
 import type { ClubActivity } from "../../../types/database";
 
 export function ReportsPage() {
   const { organization } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // State filters
+  // Tab State: "monthly-matrix" | "meeting-archive" | "buddy-groups" | "member-audit"
+  const activeTab = searchParams.get("tab") || "monthly-matrix";
+
+  // State filters for Single Meeting Archive
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -39,7 +44,7 @@ export function ReportsPage() {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [selectedReportEvent, setSelectedReportEvent] = useState<any | null>(null);
 
-  // Queries
+  // Queries for Single Meeting Archive
   const { data: events, isLoading: eventsLoading } = useQuery({
     queryKey: ["archive-events", organization?.id],
     enabled: !!organization?.id,
@@ -53,7 +58,8 @@ export function ReportsPage() {
       return data;
     }
   });
-  const { data: members } = useOrgMembers(organization?.id);
+
+  const { data: members, isLoading: membersLoading } = useOrgMembers(organization?.id);
   const [allRegs, setAllRegs] = useState<any[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
 
@@ -71,9 +77,9 @@ export function ReportsPage() {
         }
         setRegsLoading(false);
       });
-  }, [organization?.id, events]); // Refresh when events change/refresh
+  }, [organization?.id, events]);
 
-  // Group stats in memory
+  // Group stats in memory for Single Meeting Archive
   const statsByEvent = useMemo(() => {
     const map: Record<
       string,
@@ -121,10 +127,9 @@ export function ReportsPage() {
     return map;
   }, [allRegs]);
 
-  // Filtered events
+  // Filtered events for Single Meeting Archive
   const filteredEvents = useMemo(() => {
     if (!events) return [];
-    // Sort events descending by date so most recent/past meetings appear first (like a folder archive)
     const sorted = [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return sorted.filter((e) => {
@@ -139,13 +144,12 @@ export function ReportsPage() {
     });
   }, [events, searchTerm, typeFilter, statusFilter]);
 
-  // Fetch full details and print report for a single event
+  // Single event print register handler
   async function handlePrintReport(event: any) {
-    if (printingEventId) return; // Prevent multiple concurrent downloads
+    if (printingEventId) return;
     setPrintingEventId(event.id);
 
     try {
-      // 1. Fetch full registrations details for this event
       const { data: eventRegs, error: regsError } = await supabase
         .from("registrations")
         .select("*")
@@ -153,7 +157,6 @@ export function ReportsPage() {
 
       if (regsError) throw regsError;
 
-      // 2. Resolve visiting clubs counts
       const vClubsList: { club: string; count: number }[] = [];
       if (eventRegs) {
         const counts: Record<string, number> = {};
@@ -168,7 +171,6 @@ export function ReportsPage() {
         });
       }
 
-      // 3. Setup print payload metrics
       const eventDate = new Date(event.date).toLocaleDateString("en-GB", {
         weekday: "long", year: "numeric", month: "long", day: "numeric",
       });
@@ -182,23 +184,17 @@ export function ReportsPage() {
       const checkedInCount = eventRegs?.filter(r => r.status === "checked-in").length ?? 0;
       const apologyCount = eventRegs?.filter(r => r.status === "apology").length ?? 0;
 
-      // Filter registrations into groups (excluding apologies from present tables)
       const clubMembers = eventRegs?.filter(r => r.status !== "apology" && r.is_member && ((r.buddy_group && r.buddy_group.trim() !== "") || r.member_id)) ?? [];
       const visitingRotarians = eventRegs?.filter(r => r.status !== "apology" && r.is_member && (!r.buddy_group || r.buddy_group.trim() === "") && r.club_name) ?? [];
       const guests = eventRegs?.filter(r => r.status !== "apology" && !r.is_member) ?? [];
       const apologies = eventRegs?.filter(r => r.status === "apology") ?? [];
 
-      // Helper function to resolve real email/phone from member directory
       const getDisplayEmail = (r: any) => {
         const matched = members?.find(
           (m) => m.id === r.member_id || m.full_name.toLowerCase().trim() === r.full_name.toLowerCase().trim()
         );
-        if (matched?.email && !isSyntheticEmail(matched.email)) {
-          return matched.email;
-        }
-        if (r.email && !isSyntheticEmail(r.email)) {
-          return r.email;
-        }
+        if (matched?.email && !isSyntheticEmail(matched.email)) return matched.email;
+        if (r.email && !isSyntheticEmail(r.email)) return r.email;
         return "—";
       };
 
@@ -229,16 +225,13 @@ export function ReportsPage() {
         ? vClubsList.map(item => `${item.club} (${item.count} ${item.count === 1 ? 'person' : 'people'})`).join(", ")
         : "None";
 
-      // 4. Determine buddy group of the day
       const eventLeader = statsByEvent[event.id]?.leader;
       const eventLeaderCount = statsByEvent[event.id]?.leaderCount;
 
-      // 5. Calculate buddy group attendance breakdown
       const configuredGroups = event?.buddy_groups
         ? parseBuddyGroups(event.buddy_groups)
         : parseBuddyGroups(organization?.buddy_groups);
 
-      // Gather any additional buddy groups from registrations
       const presentGroups = new Set<string>();
       eventRegs?.forEach(r => {
         if (r.status === "checked-in" && r.buddy_group && r.buddy_group.trim()) {
@@ -259,7 +252,6 @@ export function ReportsPage() {
         return { name: groupName, rosterCount, presentCount, attendancePct };
       });
 
-      // Sort by present count descending, then roster count descending, then name alphabetically
       buddyGroupCounts.sort((a, b) => {
         if (b.presentCount !== a.presentCount) return b.presentCount - a.presentCount;
         if (b.rosterCount !== a.rosterCount) return b.rosterCount - a.rosterCount;
@@ -276,7 +268,6 @@ export function ReportsPage() {
           </tr>`;
       }).join("") : `<tr><td colspan="4" class="center text-muted" style="padding: 12px; color: #888; font-style: italic;">No buddy groups configured or present.</td></tr>`;
 
-      // Generate HTML rows
       const clubMemberRows = clubMembers.length > 0 ? clubMembers.map((r, i) => {
         return `
           <tr class="${i % 2 === 0 ? "even" : "odd"}">
@@ -330,9 +321,8 @@ export function ReportsPage() {
     .club-meta p { font-size: 9px; color: #666; font-weight: 600; }
     .header-right { text-align: right; }
     .header-right .timestamp { font-size: 8px; color: #888; margin-top: 4px; font-style: italic; }
-    .report-title { font-size: 16px; font-weight: 900; color: #17458F; text-transform: uppercase; margin-bottom: 4px; font-family: var(--font-sans); }
+    .report-title { font-size: 16px; font-weight: 900; color: #17458F; text-transform: uppercase; margin-bottom: 4px; }
     .report-meta { display: flex; gap: 14px; font-size: 9px; color: #444; }
-    .report-meta span { display: inline-block; }
     .summary { display: flex; gap: 8px; margin-bottom: 16px; }
     .pill { font-size: 9px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid; }
     .pill-blue { background: #f0f7ff; color: #0369a1; border-color: #bae6fd; }
@@ -347,9 +337,6 @@ export function ReportsPage() {
     tr.even { background: #f8fafc; }
     td.no { font-weight: 700; color: #64748b; width: 25px; text-align: center; }
     td.name { font-weight: 700; color: #0f172a; }
-    td.center { text-align: center; }
-    span.checkedin { color: #047857; font-weight: bold; }
-    span.pending { color: #b45309; font-weight: 500; font-style: italic; }
     .signature-block { display: flex; justify-content: space-between; margin-top: 36px; page-break-inside: avoid; }
     .sig-line { width: 30%; border-top: 1px solid #64748b; text-align: center; padding-top: 6px; font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; margin-top: 24px; }
     .footer { display: flex; justify-content: space-between; font-size: 7px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 24px; page-break-inside: avoid; }
@@ -362,18 +349,10 @@ export function ReportsPage() {
 <body>
   <div class="header">
     <div class="header-left">
-      ${logoUrl ? `
-        <img class="wheel" src="${logoUrl}" alt="${orgName}" style="object-fit: contain; border-radius: 4px;" />
-      ` : `
+      ${logoUrl ? `<img class="wheel" src="${logoUrl}" alt="${orgName}" style="object-fit: contain; border-radius: 4px;" />` : `
         <svg class="wheel" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
           <circle cx="50" cy="50" r="46" fill="none" stroke="#17458F" stroke-width="7"/>
           <circle cx="50" cy="50" r="16" fill="#17458F"/>
-          ${Array.from({length:6},(_,i)=>{
-            const a=i*60*Math.PI/180;
-            const x1=50+16*Math.sin(a), y1=50-16*Math.cos(a);
-            const x2=50+44*Math.sin(a), y2=50-44*Math.cos(a);
-            return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#17458F" stroke-width="7" stroke-linecap="round"/>`;
-          }).join('')}
         </svg>
       `}
       <div class="club-meta">
@@ -506,34 +485,7 @@ export function ReportsPage() {
 
   <script>
     window.addEventListener('DOMContentLoaded', () => {
-      const images = Array.from(document.querySelectorAll('img'));
-      let loadedCount = 0;
-      
-      const triggerPrint = () => {
-        setTimeout(() => {
-          window.print();
-        }, 500);
-      };
-
-      if (images.length === 0) {
-        triggerPrint();
-      } else {
-        images.forEach(img => {
-          if (img.complete) {
-            loadedCount++;
-            if (loadedCount === images.length) triggerPrint();
-          } else {
-            img.addEventListener('load', () => {
-              loadedCount++;
-              if (loadedCount === images.length) triggerPrint();
-            });
-            img.addEventListener('error', () => {
-              loadedCount++;
-              if (loadedCount === images.length) triggerPrint();
-            });
-          }
-        });
-      }
+      setTimeout(() => { window.print(); }, 400);
     });
   </script>
 </body>
@@ -555,13 +507,21 @@ export function ReportsPage() {
     }
   }
 
-  // Loading Screen
-  if (eventsLoading || regsLoading) {
-    return <LoadingScreen variant="light" />;
-  }
+  // Auto-scroll active tab heading into view on mobile/small screens
+  useEffect(() => {
+    const el = document.getElementById(`tab-btn-${activeTab}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }, [activeTab]);
+
+  // Switch Tab Handler
+  const handleTabChange = (tabKey: string) => {
+    setSearchParams({ tab: tabKey });
+  };
 
   return (
-    <AdminLayout pageTitle="Reports Archive">
+    <AdminLayout pageTitle="Reports Center">
       <div className="flex flex-col gap-6 max-w-7xl mx-auto">
         
         {/* Header Block */}
@@ -569,270 +529,312 @@ export function ReportsPage() {
           <div>
             <h1 className="text-2xl font-black flex items-center gap-2.5" style={{ color: NAVY, fontFamily: "var(--font-sans)" }}>
               <FolderArchive size={26} className="text-[#F7A81B]" />
-              Meeting Reports Archive
+              Reports Center
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl leading-relaxed">
-              Historical catalog of all organization meetings. Print official attendance registers, export summary stats, and audit past attendance metrics.
+              Comprehensive organization reporting center. Access monthly member attendance matrices, printable meeting registers, buddy group analytics, and member audits.
             </p>
           </div>
         </div>
 
-        {/* Filter Dossier Controls */}
-        <PageCard className="p-4 bg-white border border-border/40 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex items-center gap-2 bg-[#f4f6fb] rounded-xl px-4 py-2.5 w-full md:max-w-md">
-            <Search size={16} className="text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              placeholder="Search meetings by title or venue..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder-muted-foreground"
-            />
-          </div>
+        {/* Tab Navigation Header */}
+        <div className="flex items-center gap-5 sm:gap-6 border-b border-slate-200/80 overflow-x-auto touch-pan-x scrollbar-none pb-0.5 scroll-smooth">
+          <button
+            id="tab-btn-monthly-matrix"
+            onClick={() => handleTabChange("monthly-matrix")}
+            className={`pb-3 pt-2 px-1 text-xs font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 -mb-px ${
+              activeTab === "monthly-matrix"
+                ? "border-[#17458F] text-[#17458F]"
+                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+            }`}
+          >
+            Monthly Attendance Matrix
+          </button>
 
-          <div className="flex flex-wrap md:flex-nowrap gap-3 w-full md:w-auto items-center ml-auto">
-            <div className="w-full md:w-44">
-              <SelectInput
-                label=""
-                options={[
-                  { value: "all", label: "All Types" },
-                  { value: "Fellowship", label: "Fellowship" },
-                  { value: "Gala", label: "Gala" },
-                  { value: "Conference", label: "Conference" },
-                  { value: "Service", label: "Service" },
-                  { value: "General", label: "General" },
-                ]}
-                value={typeFilter}
-                onChange={setTypeFilter}
-              />
-            </div>
-            <div className="w-full md:w-40">
-              <SelectInput
-                label=""
-                options={[
-                  { value: "all", label: "All Statuses" },
-                  { value: "published", label: "Published" },
-                  { value: "closed", label: "Closed" },
-                  { value: "draft", label: "Draft" },
-                ]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-              />
-            </div>
-          </div>
-        </PageCard>
+          <button
+            id="tab-btn-meeting-archive"
+            onClick={() => handleTabChange("meeting-archive")}
+            className={`pb-3 pt-2 px-1 text-xs font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 -mb-px ${
+              activeTab === "meeting-archive"
+                ? "border-[#17458F] text-[#17458F]"
+                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+            }`}
+          >
+            Meeting Registers Archive
+          </button>
 
-        {/* Dossiers Grid */}
-        {filteredEvents.length === 0 ? (
-          <PageCard className="text-center py-20 bg-white border border-border/40 shadow-sm">
-            <FolderArchive className="w-16 h-16 mx-auto text-muted-foreground/60 mb-4 stroke-[1.2]" />
-            <h3 className="text-lg font-bold" style={{ color: NAVY }}>No Reports Found</h3>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              We couldn't find any meetings matching your criteria. Try adjusting your search query or filters.
-            </p>
-          </PageCard>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredEvents.map((ev) => {
-              const stats = statsByEvent[ev.id] || { total: 0, checkedIn: 0, leader: null, leaderCount: 0, buddyCounts: {} };
-              const attendancePct = stats.total > 0 ? (stats.checkedIn / stats.total) * 100 : 0;
-              const formattedDate = new Date(ev.date).toLocaleDateString("en-GB", {
-                day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
-              });
-              const isPrinting = printingEventId === ev.id;
-              const isExpanded = expandedEventId === ev.id;
+          <button
+            id="tab-btn-buddy-groups"
+            onClick={() => handleTabChange("buddy-groups")}
+            className={`pb-3 pt-2 px-1 text-xs font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 -mb-px ${
+              activeTab === "buddy-groups"
+                ? "border-[#17458F] text-[#17458F]"
+                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+            }`}
+          >
+            Buddy Group Analytics
+          </button>
 
-              const eventBuddyGroups = ev.buddy_groups
-                ? parseBuddyGroups(ev.buddy_groups)
-                : parseBuddyGroups(organization?.buddy_groups);
+          <button
+            id="tab-btn-member-audit"
+            onClick={() => handleTabChange("member-audit")}
+            className={`pb-3 pt-2 px-1 text-xs font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 -mb-px ${
+              activeTab === "member-audit"
+                ? "border-[#17458F] text-[#17458F]"
+                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+            }`}
+          >
+            Member Attendance Audit
+          </button>
+        </div>
 
-              const allEventGroups = Array.from(new Set([
-                ...eventBuddyGroups,
-                ...Object.keys(stats.buddyCounts)
-              ]));
+        {/* TAB 1: MONTHLY MATRIX REPORT */}
+        {activeTab === "monthly-matrix" && (
+          <MonthlyMatrixReport
+            organization={organization}
+            members={members || []}
+            membersLoading={membersLoading}
+          />
+        )}
 
-              // Sort by present count descending, then group name alphabetically
-              allEventGroups.sort((a, b) => {
-                const countA = stats.buddyCounts[a] || 0;
-                const countB = stats.buddyCounts[b] || 0;
-                if (countB !== countA) return countB - countA;
-                return a.localeCompare(b);
-              });
+        {/* TAB 2: SINGLE MEETING REGISTERS ARCHIVE */}
+        {activeTab === "meeting-archive" && (
+          <div className="flex flex-col gap-6">
+            {/* Filter Controls */}
+            <PageCard className="p-4 bg-white border border-border/40 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+              <div className="flex items-center gap-2 bg-[#f4f6fb] rounded-xl px-4 py-2.5 w-full md:max-w-md">
+                <Search size={16} className="text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search meetings by title or venue..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder-muted-foreground"
+                />
+              </div>
 
-              return (
-                <div 
-                  key={ev.id} 
-                  className="bg-white rounded-2xl border border-border/40 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
-                >
-                  {/* Collapsed Header / Toggle Trigger */}
-                  <div 
-                    onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
-                    className="p-5 flex items-center justify-between gap-4 cursor-pointer select-none"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-[#17458F]/5 text-[#17458F] flex items-center justify-center shrink-0 border border-[#17458F]/10">
-                        <FileText size={18} className="text-[#17458F]" />
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200/60 tracking-wider">
-                            {ev.type || "General"}
-                          </span>
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${
-                            ev.status === "published"
-                              ? "bg-slate-100 text-slate-700 border-slate-200/60"
-                              : ev.status === "closed"
-                              ? "bg-slate-100 text-slate-600 border-slate-200/60"
-                              : "bg-slate-50 text-slate-500 border-slate-200/40"
-                          }`}>
-                            {ev.status}
-                          </span>
-                        </div>
-                        <h3 className="text-sm font-extrabold text-[#001D4A] leading-snug" style={{ fontFamily: "var(--font-sans)" }}>
-                          {ev.title}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-1 font-medium">
-                          <span className="flex items-center gap-1"><Calendar size={12} /> {formattedDate}</span>
-                          {ev.location && <span className="hidden sm:inline">&bull;</span>}
-                          {ev.location && <span>Venue: <strong className="text-slate-700">{ev.location}</strong></span>}
-                        </div>
-                      </div>
-                    </div>
+              <div className="flex flex-wrap md:flex-nowrap gap-3 w-full md:w-auto items-center ml-auto">
+                <div className="w-full md:w-44">
+                  <SelectInput
+                    label=""
+                    options={[
+                      { value: "all", label: "All Types" },
+                      { value: "Fellowship", label: "Fellowship" },
+                      { value: "Gala", label: "Gala" },
+                      { value: "Conference", label: "Conference" },
+                      { value: "Service", label: "Service" },
+                      { value: "General", label: "General" },
+                    ]}
+                    value={typeFilter}
+                    onChange={setTypeFilter}
+                  />
+                </div>
+                <div className="w-full md:w-40">
+                  <SelectInput
+                    label=""
+                    options={[
+                      { value: "all", label: "All Statuses" },
+                      { value: "published", label: "Published" },
+                      { value: "closed", label: "Closed" },
+                      { value: "draft", label: "Draft" },
+                    ]}
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                  />
+                </div>
+              </div>
+            </PageCard>
 
-                    {/* Quick overview metrics on right side when collapsed */}
-                    <div className="flex items-center gap-6">
-                      <div className="hidden sm:flex flex-col items-end">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Attendance</p>
-                        <p className="text-xs font-black text-[#001D4A] mt-0.5">{stats.total} Attendees</p>
-                      </div>
-                      
-                      <div className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors shrink-0">
-                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </div>
-                    </div>
-                  </div>
+            {/* Dossiers Grid */}
+            {eventsLoading || regsLoading ? (
+              <LoadingScreen variant="light" />
+            ) : filteredEvents.length === 0 ? (
+              <PageCard className="text-center py-20 bg-white border border-border/40 shadow-sm">
+                <FolderArchive className="w-16 h-16 mx-auto text-muted-foreground/60 mb-4 stroke-[1.2]" />
+                <h3 className="text-lg font-bold" style={{ color: NAVY }}>No Reports Found</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                  We couldn't find any meetings matching your criteria. Try adjusting your search query or filters.
+                </p>
+              </PageCard>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {filteredEvents.map((ev) => {
+                  const stats = statsByEvent[ev.id] || { total: 0, checkedIn: 0, leader: null, leaderCount: 0, buddyCounts: {} };
+                  const formattedDate = new Date(ev.date).toLocaleDateString("en-GB", {
+                    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                  });
+                  const isPrinting = printingEventId === ev.id;
+                  const isExpanded = expandedEventId === ev.id;
 
-                  {/* Expanded Content details */}
-                  {isExpanded && (
-                    <div className="px-5 pb-5 pt-4 border-t border-slate-200/60 bg-slate-50/40 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col gap-4">
-                      
-                      {/* Top Row: Stats summary & Actions */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                        {/* Detailed stats grids */}
-                        <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
-                          {/* Headcounts */}
-                          <div className="flex gap-6">
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Registered</p>
-                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.total}</p>
+                  const eventBuddyGroups = ev.buddy_groups
+                    ? parseBuddyGroups(ev.buddy_groups)
+                    : parseBuddyGroups(organization?.buddy_groups);
+
+                  const allEventGroups = Array.from(new Set([
+                    ...eventBuddyGroups,
+                    ...Object.keys(stats.buddyCounts)
+                  ]));
+
+                  allEventGroups.sort((a, b) => {
+                    const countA = stats.buddyCounts[a] || 0;
+                    const countB = stats.buddyCounts[b] || 0;
+                    if (countB !== countA) return countB - countA;
+                    return a.localeCompare(b);
+                  });
+
+                  return (
+                    <div 
+                      key={ev.id} 
+                      className="bg-white rounded-2xl border border-border/40 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+                    >
+                      <div 
+                        onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
+                        className="p-5 flex items-center justify-between gap-4 cursor-pointer select-none"
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-[#17458F]/5 text-[#17458F] flex items-center justify-center shrink-0 border border-[#17458F]/10">
+                            <FileText size={18} className="text-[#17458F]" />
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200/60 tracking-wider">
+                                {ev.type || "General"}
+                              </span>
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border bg-slate-100 text-slate-700 border-slate-200/60">
+                                {ev.status}
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Present</p>
-                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.checkedIn}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Apologies</p>
-                              <p className="text-base font-black mt-0.5 text-slate-900">{stats.apologies || 0}</p>
+                            <h3 className="text-sm font-extrabold text-[#001D4A] leading-snug" style={{ fontFamily: "var(--font-sans)" }}>
+                              {ev.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 mt-1 font-medium">
+                              <span className="flex items-center gap-1"><Calendar size={12} /> {formattedDate}</span>
+                              {ev.location && <span className="hidden sm:inline">&bull;</span>}
+                              {ev.location && <span>Venue: <strong className="text-slate-700">{ev.location}</strong></span>}
                             </div>
                           </div>
-
-                          {/* Buddy Group Leader */}
-                          <div className="min-w-[140px]">
-                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Buddy Group Leader</p>
-                            {stats.leader ? (
-                              <p className="text-xs font-bold text-[#001D4A] mt-1">
-                                {stats.leader} <span className="font-medium text-slate-500">({stats.leaderCount} Present)</span>
-                              </p>
-                            ) : (
-                              <p className="text-xs text-slate-400 mt-1 font-medium">—</p>
-                            )}
-                          </div>
                         </div>
 
-                        {/* Expanded Actions */}
-                        <div 
-                          className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0"
-                          onClick={(e) => e.stopPropagation()} // protect click area
-                        >
-                          <button
-                            onClick={() => handlePrintReport(ev)}
-                            disabled={isPrinting}
-                            className="py-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
-                          >
-                            {isPrinting ? (
-                              <>
-                                <span className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
-                                Loading...
-                              </>
-                            ) : (
-                              <>
-                                <Printer size={13} className="text-slate-500" /> Print Register
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => setSelectedReportEvent(ev)}
-                            className="py-2 px-3.5 bg-[#001D4A]/5 hover:bg-[#001D4A]/10 text-[#001D4A] border border-[#001D4A]/20 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <FileText size={13} className="text-[#001D4A]" />
-                            {ev.fellowship_report || (ev.description && ev.description.startsWith("[FELLOWSHIP_REPORT]"))
-                              ? "Fellowship Report"
-                              : "Create Report"}
-                          </button>
-                          <button
-                            onClick={() => navigate(`/admin/checkin/${ev.id}`)}
-                            className="py-2 px-3.5 bg-[#001D4A] hover:bg-[#001D4A]/90 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Users size={13} /> View Attendees
-                          </button>
+                        <div className="flex items-center gap-6">
+                          <div className="hidden sm:flex flex-col items-end">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Attendance</p>
+                            <p className="text-xs font-black text-[#001D4A] mt-0.5">{stats.total} Attendees</p>
+                          </div>
+                          
+                          <div className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors shrink-0">
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Bottom Section: Buddy Group Breakdown */}
-                      <div className="pt-3 border-t border-slate-200/60">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">Buddy Group Breakdown (Present)</p>
-                        {allEventGroups.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic">No buddy groups configured.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {allEventGroups.map((group) => {
-                              const count = stats.buddyCounts[group] || 0;
-                              const isLeader = group === stats.leader && count > 0;
-                              return (
-                                <div
-                                  key={group}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs transition-all whitespace-nowrap ${
-                                    isLeader
-                                      ? "bg-[#001D4A]/5 text-[#001D4A] border border-[#001D4A]/20 font-bold"
-                                      : count > 0
-                                      ? "bg-white text-slate-700 border border-slate-200 font-medium"
-                                      : "bg-slate-50 text-slate-400 border border-slate-200/40"
-                                  }`}
-                                >
-                                  <span>{group}:</span>
-                                  <span className="font-extrabold">{count}</span>
+                      {isExpanded && (
+                        <div className="px-5 pb-5 pt-4 border-t border-slate-200/60 bg-slate-50/40 animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                            <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+                              <div className="flex gap-6">
+                                <div>
+                                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Registered</p>
+                                  <p className="text-base font-black mt-0.5 text-slate-900">{stats.total}</p>
                                 </div>
-                              );
-                            })}
+                                <div>
+                                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Present</p>
+                                  <p className="text-base font-black mt-0.5 text-slate-900">{stats.checkedIn}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Apologies</p>
+                                  <p className="text-base font-black mt-0.5 text-slate-900">{stats.apologies || 0}</p>
+                                </div>
+                              </div>
+
+                              <div className="min-w-[140px]">
+                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Buddy Group Leader</p>
+                                {stats.leader ? (
+                                  <p className="text-xs font-bold text-[#001D4A] mt-1">
+                                    {stats.leader} <span className="font-medium text-slate-500">({stats.leaderCount} Present)</span>
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-slate-400 mt-1 font-medium">—</p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div 
+                              className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={() => handlePrintReport(ev)}
+                                disabled={isPrinting}
+                                className="py-2 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+                              >
+                                {isPrinting ? (
+                                  <>
+                                    <span className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Printer size={13} className="text-slate-500" /> Print Register
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setSelectedReportEvent(ev)}
+                                className="py-2 px-3.5 bg-[#001D4A]/5 hover:bg-[#001D4A]/10 text-[#001D4A] border border-[#001D4A]/20 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <FileText size={13} className="text-[#001D4A]" />
+                                {ev.fellowship_report || (ev.description && ev.description.startsWith("[FELLOWSHIP_REPORT]"))
+                                  ? "Fellowship Report"
+                                  : "Create Report"}
+                              </button>
+                              <button
+                                onClick={() => navigate(`/admin/checkin/${ev.id}`)}
+                                className="py-2 px-3.5 bg-[#001D4A] hover:bg-[#001D4A]/90 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <Users size={13} /> View Attendees
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                 </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
-      </div>
 
-      {/* Fellowship Report Modal */}
-      <FellowshipReportModal
-        isOpen={!!selectedReportEvent}
-        onClose={() => setSelectedReportEvent(null)}
-        event={selectedReportEvent}
-        organization={organization}
-      />
+        {/* TAB 3: BUDDY GROUP ANALYTICS */}
+        {activeTab === "buddy-groups" && (
+          <BuddyGroupReport
+            organization={organization}
+            members={members || []}
+            membersLoading={membersLoading}
+          />
+        )}
+
+        {/* TAB 4: MEMBER ATTENDANCE AUDIT */}
+        {activeTab === "member-audit" && (
+          <MemberSummaryReport
+            organization={organization}
+            members={members || []}
+            membersLoading={membersLoading}
+          />
+        )}
+
+        {/* Modal for Fellowship Report */}
+        {selectedReportEvent && (
+          <FellowshipReportModal
+            event={selectedReportEvent}
+            organization={organization}
+            onClose={() => setSelectedReportEvent(null)}
+            onSaveSuccess={() => {
+              setSelectedReportEvent(null);
+            }}
+          />
+        )}
+      </div>
     </AdminLayout>
   );
 }

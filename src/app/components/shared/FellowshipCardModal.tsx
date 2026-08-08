@@ -15,6 +15,7 @@ export interface VisitorCardItem {
   phone?: string;
   eventTitle?: string;
   eventDate?: string;
+  isMember?: boolean;
 }
 
 interface FellowshipCardModalProps {
@@ -77,6 +78,16 @@ export function FellowshipCardModal({
     }
   }
 
+  function checkIsRotarian(item?: VisitorCardItem, clubNameState?: string): boolean {
+    if (!item) return false;
+    if (item.isMember === false) return false;
+    const club = (clubNameState || item.visitorClub || "").toLowerCase().trim();
+    if (!club || club === "guest" || club === "visitor" || club.includes("non-rotarian") || club.includes("guest") || club.includes("visitor")) {
+      return false;
+    }
+    return true;
+  }
+
   // Initialize values whenever active visitor or modal opens
   useEffect(() => {
     if (!isOpen) return;
@@ -114,10 +125,11 @@ export function FellowshipCardModal({
     if (visitors && visitors.length > 0) {
       const current = visitors[currentIndex] || visitors[0];
       setVisitorName(current.visitorName || "");
-      setVisitorClub(current.visitorClub || "RC Ntinda");
+      const isGuest = current.isMember === false || (current.visitorClub && (current.visitorClub.toLowerCase().includes("guest") || current.visitorClub.toLowerCase().includes("visitor")));
+      setVisitorClub(current.visitorClub || (isGuest ? "Guest" : "Visiting Club"));
     } else {
       setVisitorName("Florence Tinkamanyire");
-      setVisitorClub("RC Ntinda");
+      setVisitorClub("Guest");
     }
   }, [isOpen, currentIndex, visitors, organization, event]);
 
@@ -169,16 +181,26 @@ export function FellowshipCardModal({
           await new Promise((resolve) => setTimeout(resolve, 150));
         }
 
+        const itemIsRotarian = checkIsRotarian(item, item.visitorClub);
+
+        const cardTitleText = itemIsRotarian ? "FELLOWSHIP CARD" : "GUEST VISITATION CARD";
+        const salutationText = itemIsRotarian
+          ? `To the Secretary, ${item.visitorClub || "Visiting Club"}`
+          : "To Our Esteemed Guest";
+        const bodyPhraseText = itemIsRotarian
+          ? "sharing fellowship with"
+          : "hosting our guest";
+
         const htmlContent = `
           <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 2px solid #0067C8; border-radius: 16px; padding: 30px; font-family: sans-serif; text-align: center; color: #1e293b;">
             <div style="margin-bottom: 15px;">
               <img src="${logoUrl}" width="60" alt="Rotary Logo" style="vertical-align: middle;" />
               <h2 style="font-family: serif; color: #0067C8; font-size: 24px; margin: 10px 0 5px 0;">${hostClubName}</h2>
             </div>
-            <h1 style="font-family: serif; color: #17458F; font-size: 28px; margin: 0 0 15px 0;">FELLOWSHIP CARD</h1>
-            <p style="font-weight: bold; font-size: 16px; color: #0f172a; margin-bottom: 15px;">To the Secretary, ${item.visitorClub || "Visiting Club"}</p>
+            <h1 style="font-family: serif; color: #17458F; font-size: 28px; margin: 0 0 15px 0;">${cardTitleText}</h1>
+            <p style="font-weight: bold; font-size: 16px; color: #0f172a; margin-bottom: 15px;">${salutationText}</p>
             <p style="font-size: 15px; color: #475569; line-height: 1.6;">
-              The President and members of the <strong>${hostClubName}</strong> had the pleasure of sharing fellowship with
+              The President and members of the <strong>${hostClubName}</strong> had the pleasure of ${bodyPhraseText}
             </p>
             <div style="font-family: serif; font-style: italic; font-size: 26px; font-weight: bold; color: #D9531F; margin: 20px 0; border-bottom: 2px solid #e2e8f0; display: inline-block; padding-bottom: 5px;">
               ${item.visitorName}
@@ -276,19 +298,28 @@ export function FellowshipCardModal({
       pdf.setTextColor(0, 103, 200);
       pdf.text(hostClubName.toUpperCase(), width / 2, 35, { align: "center" });
 
+      const isRotarian = checkIsRotarian(currentVisitor, visitorClub);
+      const cardTitleText = isRotarian ? "FELLOWSHIP CARD" : "GUEST VISITATION CARD";
+      const salutationText = isRotarian
+        ? `To the Secretary, ${visitorClub || "Visiting Club"}`
+        : "To Our Esteemed Guest";
+      const bodyPhraseText = isRotarian
+        ? "sharing fellowship with"
+        : "hosting our guest";
+
       pdf.setFontSize(24);
       pdf.setTextColor(23, 69, 143);
-      pdf.text("FELLOWSHIP CARD", width / 2, 52, { align: "center" });
+      pdf.text(cardTitleText, width / 2, 52, { align: "center" });
 
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(14);
       pdf.setTextColor(15, 23, 42);
-      pdf.text(`To the Secretary, ${visitorClub || "Visiting Club"}`, width / 2, 70, { align: "center" });
+      pdf.text(salutationText, width / 2, 70, { align: "center" });
 
       pdf.setFontSize(12);
       pdf.setTextColor(71, 85, 105);
       pdf.text(`The President and members of the ${hostClubName} had the pleasure`, width / 2, 88, { align: "center" });
-      pdf.text(`of sharing fellowship with`, width / 2, 96, { align: "center" });
+      pdf.text(`of ${bodyPhraseText}`, width / 2, 96, { align: "center" });
 
       pdf.setFont("times", "bolditalic");
       pdf.setFontSize(24);
@@ -461,7 +492,13 @@ export function FellowshipCardModal({
 
     const cardsHtml = cardsToPrint
       .map(
-        (v) => `
+        (v) => {
+          const isRotarian = checkIsRotarian(v, v.visitorClub);
+          const titleText = isRotarian ? "FELLOWSHIP CARD" : "GUEST VISITATION CARD";
+          const addresseeText = isRotarian ? `To the Secretary, ${v.visitorClub || visitorClub || "Visiting Club"}` : "To Our Esteemed Guest";
+          const bodyPhraseText = isRotarian ? "sharing fellowship with" : "hosting our guest";
+
+          return `
       <div class="card-page">
         <div class="card-container">
           <!-- Rotary Watermark -->
@@ -473,14 +510,14 @@ export function FellowshipCardModal({
               <span class="club-title">${hostClubName}</span>
               <img src="${logoUrl}" alt="Rotary Logo" class="rotary-wheel" />
             </div>
-            <h1 class="card-title">FELLOWSHIP CARD</h1>
+            <h1 class="card-title">${titleText}</h1>
           </div>
 
           <!-- CENTER SECTION -->
           <div class="center-section">
-            <div class="addressee">To the Secretary, ${v.visitorClub || visitorClub || "Visiting Club"}</div>
+            <div class="addressee">${addresseeText}</div>
             <div class="body-text">
-              The President and members of the ${hostClubName} had the pleasure of sharing fellowship with
+              The President and members of the ${hostClubName} had the pleasure of ${bodyPhraseText}
             </div>
             <div class="visitor-name">
               ${v.visitorName || visitorName}
@@ -522,7 +559,8 @@ export function FellowshipCardModal({
           </div>
         </div>
       </div>
-    `
+    `;
+        }
       )
       .join("");
 
@@ -1056,22 +1094,31 @@ export function FellowshipCardModal({
               </div>
             </div>
 
-            {/* Document Title */}
-            <div className="relative z-10 my-2">
-              <h1 className="text-3xl sm:text-4xl font-bold text-[#17458F] tracking-wide" style={{ fontFamily: "Cinzel, serif" }}>
-                Fellowship Card
-              </h1>
-            </div>
+            {/* Document Title & Addressee */}
+            {(() => {
+              const isRotarian = checkIsRotarian(currentVisitor, visitorClub);
+              const titleText = isRotarian ? "Fellowship Card" : "Guest Visitation Card";
+              const addresseeText = isRotarian ? `To the Secretary, ${visitorClub || "Visiting Club"}` : "To Our Esteemed Guest";
+              const bodyPhraseText = isRotarian ? "sharing fellowship with" : "hosting our guest";
 
-            {/* Addressee */}
-            <div className="relative z-10 text-base sm:text-lg font-extrabold text-slate-900 my-1">
-              To the Secretary, {visitorClub || "Visiting Club"}
-            </div>
+              return (
+                <>
+                  <div className="relative z-10 my-2">
+                    <h1 className="text-3xl sm:text-4xl font-bold text-[#17458F] tracking-wide" style={{ fontFamily: "Cinzel, serif" }}>
+                      {titleText}
+                    </h1>
+                  </div>
 
-            {/* Body Statement */}
-            <div className="relative z-10 text-xs sm:text-sm font-medium text-slate-600 max-w-md leading-relaxed my-1">
-              The President and members of the {hostClubName} had the pleasure of sharing fellowship with
-            </div>
+                  <div className="relative z-10 text-base sm:text-lg font-extrabold text-slate-900 my-1">
+                    {addresseeText}
+                  </div>
+
+                  <div className="relative z-10 text-xs sm:text-sm font-medium text-slate-600 max-w-md leading-relaxed my-1">
+                    The President and members of the {hostClubName} had the pleasure of {bodyPhraseText}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Visitor Name */}
             <div className="relative z-10 my-3">

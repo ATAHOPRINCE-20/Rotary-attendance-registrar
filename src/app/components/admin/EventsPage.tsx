@@ -236,11 +236,12 @@ export function EventsPage() {
           visitors.map((v: any) => ({
             id: v.id,
             visitorName: v.full_name,
-            visitorClub: v.club_name || v.organization_name || "Visiting Club",
+            visitorClub: v.club_name || v.organization_name || (v.is_member ? "Visiting Club" : "Guest"),
             email: v.email,
             phone: v.phone,
             eventTitle: ev.title,
             eventDate: ev.date,
+            isMember: v.is_member,
           }))
         );
       }

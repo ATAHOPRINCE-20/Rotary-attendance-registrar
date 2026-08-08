@@ -93,11 +93,12 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         {
           id: singleReg.id,
           visitorName: singleReg.full_name,
-          visitorClub: singleReg.club_name || singleReg.organization_name || "Visiting Club",
+          visitorClub: singleReg.club_name || singleReg.organization_name || (singleReg.is_member ? "Visiting Club" : "Guest"),
           email: singleReg.email,
           phone: singleReg.phone,
           eventTitle: event.title,
           eventDate: event.date,
+          isMember: singleReg.is_member,
         },
       ]);
       setShowCardModal(true);
@@ -113,6 +114,7 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
           visitorClub: "Visiting Club",
           eventTitle: event.title,
           eventDate: event.date,
+          isMember: true,
         },
       ]);
     } else {
@@ -120,11 +122,12 @@ function CheckInContent({ event, registrations, organization, eventId }: CheckIn
         visitors.map((v) => ({
           id: v.id,
           visitorName: v.full_name,
-          visitorClub: v.club_name || v.organization_name || "Visiting Club",
+          visitorClub: v.club_name || v.organization_name || (v.is_member ? "Visiting Club" : "Guest"),
           email: v.email,
           phone: v.phone,
           eventTitle: event.title,
           eventDate: event.date,
+          isMember: v.is_member,
         }))
       );
     }

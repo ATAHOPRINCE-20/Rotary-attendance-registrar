@@ -23,6 +23,8 @@ function getSupabase() {
 
 const supabase = getSupabase();
 
+import { generateVisitationCardPdfBase64 } from './_lib/visitation-card-pdf.js';
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.resend || '';
 const RESEND_SENDER_EMAIL = process.env.RESEND_SENDER_EMAIL || 'onboarding@resend.dev';
 const RESEND_SENDER_NAME = process.env.RESEND_SENDER_NAME || 'agoroll';
@@ -85,11 +87,195 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { orgId, toEmail, toName, subject, htmlContent, attachment } = req.body;
+  const { registrationId, orgId: rawOrgId, toEmail: rawToEmail, toName: rawToName, subject: rawSubject, htmlContent: rawHtmlContent, attachment: rawAttachment } = req.body;
 
-  if (!orgId || !toEmail || !subject || !htmlContent) {
-    return res.status(400).json({ error: 'Missing required parameters (orgId, toEmail, subject, htmlContent)' });
+  // --------------------------------------------------------------------------
+  // AUTOMATED VISITATION CARD EMAIL DISPATCH (by registrationId)
+  // --------------------------------------------------------------------------
+  if (registrationId) {
+    const rateLimitResult = await rateLimit(req, 'send-visitation-card-email', 40, 60);
+    if (!rateLimitResult.success) {
+      return res.status(429).json({ error: rateLimitResult.error });
+    }
+
+    try {
+      const { data: reg, error: regErr } = await supabase
+        .from('registrations')
+        .select('*, events(*), organizations(*)')
+        .eq('id', registrationId)
+        .single();
+
+      if (regErr || !reg) {
+        return res.status(404).json({ error: 'Registration not found' });
+      }
+
+      // Filter out Home Club Members (Visitation cards are only for Visiting Rotarians and Guests)
+      const isHomeMember = reg.is_member && !reg.club_name && (reg.member_id || reg.buddy_group);
+      if (isHomeMember) {
+        return res.status(200).json({ skipped: true, message: 'Visitation cards are strictly for Guests and Visiting Rotarians.' });
+      }
+
+      const isRealEmail = Boolean(reg.email && !reg.email.match(/^member-[a-f0-9\-]+@/));
+      if (!isRealEmail) {
+        return res.status(400).json({ error: 'Registration has no valid recipient email address' });
+      }
+
+      const hostClubName = reg.organizations?.name || 'Rotary Club';
+      const logoUrl = reg.organizations?.logo_url || 'https://raw.githubusercontent.com/shadcn.png';
+
+      const eventDate = reg.events?.date
+        ? new Date(reg.events.date).toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : new Date().toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          });
+
+      const eventTopic = reg.events?.topic || reg.events?.fellowship_report?.guest_speaker_topic || reg.events?.title || 'Regular Fellowship Meeting';
+      const eventTitle = reg.events?.title || 'Rotary Meeting';
+
+      const presidentName = reg.organizations?.president_name || 'Impact President';
+      const presidentTitle = reg.organizations?.president_title || 'Impact President';
+      const secretaryName = reg.organizations?.secretary_name || 'Impact Secretary';
+      const secretaryTitle = reg.organizations?.secretary_title || 'Impact Secretary';
+
+      // Generate PDF attachment
+      const pdfBase64 = generateVisitationCardPdfBase64({
+        hostClubName,
+        visitorName: reg.full_name,
+        isMember: Boolean(reg.is_member),
+        visitorClub: reg.club_name || reg.organization_name || null,
+        eventTitle,
+        eventDate,
+        eventTopic,
+        presidentName,
+        presidentTitle,
+        secretaryName,
+        secretaryTitle,
+      });
+
+      const cardTitleText = reg.is_member ? 'FELLOWSHIP CARD' : 'GUEST VISITATION CARD';
+      const salutationText = reg.is_member
+        ? `To the Secretary, ${reg.club_name || 'Visiting Club'}`
+        : 'To Our Esteemed Guest';
+      const bodyPhrase = reg.is_member
+        ? 'sharing fellowship with'
+        : 'hosting our guest';
+
+      const emailSubject = reg.is_member
+        ? `Fellowship Card - ${hostClubName}`
+        : `Guest Visitation Card - ${hostClubName}`;
+
+      const emailHtml = `
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 2px solid #0067C8; border-radius: 16px; padding: 30px; font-family: sans-serif; text-align: center; color: #1e293b;">
+          <div style="margin-bottom: 15px;">
+            ${logoUrl ? `<img src="${logoUrl}" width="60" alt="Rotary Logo" style="vertical-align: middle; max-height: 60px; object-fit: contain;" /><br/>` : ''}
+            <h2 style="font-family: serif; color: #0067C8; font-size: 24px; margin: 10px 0 5px 0;">${hostClubName}</h2>
+          </div>
+          <h1 style="font-family: serif; color: #17458F; font-size: 26px; margin: 0 0 15px 0;">${cardTitleText}</h1>
+          <p style="font-weight: bold; font-size: 16px; color: #0f172a; margin-bottom: 15px;">${salutationText}</p>
+          <p style="font-size: 15px; color: #475569; line-height: 1.6;">
+            The President and members of <strong>${hostClubName}</strong> had the pleasure of ${bodyPhrase}
+          </p>
+          <div style="font-family: serif; font-style: italic; font-size: 26px; font-weight: bold; color: #D9531F; margin: 20px 0; border-bottom: 2px solid #e2e8f0; display: inline-block; padding-bottom: 5px;">
+            ${reg.full_name}
+          </div>
+          <p style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 25px;">
+            on <strong>${eventDate}</strong>. The topic of the day was <strong>${eventTopic}</strong>.
+          </p>
+          <p style="font-size: 13px; color: #64748b; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+            📎 Your official Visitation Card PDF is attached to this email.
+          </p>
+          <table style="width: 100%; border-top: 1px solid #cbd5e1; margin-top: 25px; pt: 15px;">
+            <tr>
+              <td style="width: 50%; text-align: center; vertical-align: bottom;">
+                <div style="border-bottom: 1px solid #475569; width: 80%; margin: 5px auto;"></div>
+                <strong>${presidentName}</strong><br/>
+                <span style="font-size: 12px; color: #64748b;">${presidentTitle}</span>
+              </td>
+              <td style="width: 50%; text-align: center; vertical-align: bottom;">
+                <div style="border-bottom: 1px solid #475569; width: 80%; margin: 5px auto;"></div>
+                <strong>${secretaryName}</strong><br/>
+                <span style="font-size: 12px; color: #64748b;">${secretaryTitle}</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `;
+
+      const attachmentObj = pdfBase64 ? [{
+        name: `Visitation_Card_${reg.full_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+        content: pdfBase64
+      }] : [];
+
+      const orgId = reg.organization_id;
+      const apiKeyToUse = reg.organizations?.brevo_api_key || BREVO_API_KEY;
+      const senderEmailToUse = reg.organizations?.brevo_sender_email || BREVO_SENDER_EMAIL;
+      const senderNameToUse = reg.organizations?.brevo_sender_name || BREVO_SENDER_NAME;
+
+      if (apiKeyToUse) {
+        const response = await fetchBrevo(apiKeyToUse, {
+          sender: { name: senderNameToUse, email: senderEmailToUse },
+          to: [{ email: reg.email, name: reg.full_name }],
+          subject: emailSubject,
+          htmlContent: emailHtml,
+          ...(attachmentObj.length > 0 ? { attachment: attachmentObj } : {})
+        });
+
+        const result: any = await response.json().catch(() => ({}));
+        if (response.ok) {
+          return res.status(200).json({ success: true, messageId: result.messageId, provider: 'brevo' });
+        }
+      }
+
+      if (RESEND_API_KEY) {
+        const resendSender = `${RESEND_SENDER_NAME} <${RESEND_SENDER_EMAIL}>`;
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: resendSender,
+            to: [reg.email],
+            subject: emailSubject,
+            html: emailHtml,
+            ...(attachmentObj.length > 0 ? {
+              attachments: [{ filename: attachmentObj[0].name, content: attachmentObj[0].content }]
+            } : {})
+          }),
+        });
+
+        const resendData = await resendRes.json().catch(() => ({}));
+        if (resendRes.ok) {
+          return res.status(200).json({ success: true, messageId: resendData.id, provider: 'resend' });
+        }
+      }
+
+      return res.status(500).json({ error: 'No email service configured or delivery failed.' });
+    } catch (err: any) {
+      console.error('Visitation card email dispatch error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to dispatch visitation card email' });
+    }
   }
+
+  if (!rawOrgId || !rawToEmail || !rawSubject || !rawHtmlContent) {
+    return res.status(400).json({ error: 'Missing required parameters (registrationId or orgId, toEmail, subject, htmlContent)' });
+  }
+
+  const orgId = rawOrgId;
+  const toEmail = rawToEmail;
+  const toName = rawToName;
+  const subject = rawSubject;
+  const htmlContent = rawHtmlContent;
+  const attachment = rawAttachment;
 
   // 0. Rate Limiting (300 requests per 60 seconds to support admin bulk campaigns)
   const rateLimitResult = await rateLimit(req, 'send-email', 300, 60);

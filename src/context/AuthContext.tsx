@@ -15,7 +15,7 @@ interface AuthContextValue {
   profileError:   boolean;
   signIn:         (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithGoogle: (orgId?: string | null, role?: string | null) => Promise<{ error: string | null }>;
-  signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) => Promise<{ error: string | null; session: Session | null }>;
+  signUp:         (email: string, password: string, fullName: string, orgId?: string | null, role?: string | null, phone?: string | null) => Promise<{ error: string | null; session: Session | null }>;
   resendVerificationEmail: (email: string) => Promise<void>;
   sendMemberInvite: (email: string) => Promise<{ error: string | null }>;
   signOut:        () => Promise<void>;
@@ -163,6 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 id: userId,
                 organization_id: inviteOrgId,
                 full_name: currentUser?.user_metadata?.full_name || "New Staff",
+                email: currentUser?.email || null,
+                phone: currentUser?.user_metadata?.phone || null,
                 role: inviteRole,
               })
               .select()
@@ -433,10 +435,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
-  async function signUp(email: string, password: string, fullName: string, orgId?: string | null, role?: string | null) {
+  async function signUp(email: string, password: string, fullName: string, orgId?: string | null, role?: string | null, phone?: string | null) {
     setLoading(true);
     const sanitizedName = sanitizeRequiredInput(fullName);
     const metadata: any = { full_name: sanitizedName };
+    if (phone?.trim()) {
+      metadata.phone = sanitizeRequiredInput(phone.trim());
+    }
     if (orgId) {
       metadata.organization_id = orgId;
       metadata.role = role || "staff";

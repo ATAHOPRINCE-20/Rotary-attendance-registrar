@@ -100,6 +100,7 @@ export interface Profile {
   organization_id: string;
   full_name:       string | null;
   email?:          string | null;
+  phone?:          string | null;
   role:            "super_admin" | "admin" | "treasurer" | "staff" | "member";
   avatar_url:      string | null;
   created_at:      string;
@@ -135,6 +136,8 @@ export interface FellowshipReport {
   object_of_rotary_by?: string;
   final_toast_by?: string;
   sergeant_at_arms?: string;
+  happy_shilling_by?: string;
+  four_way_test_by?: string;
   guest_speaker_name?: string;
   guest_speaker_contact?: string;
   guest_speaker_introduced_by?: string;

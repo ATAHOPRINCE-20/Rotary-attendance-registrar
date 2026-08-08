@@ -422,36 +422,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               paymentUrl = result.payment_url || result.data?.payment_url;
             } else {
               const relworxErrMsg = result.message || result.error || '';
-              console.warn('[Relworx Card Session Warning]:', relworxErrMsg);
-
-              // If Relworx card processing is disabled on the merchant account, try Stripe fallback if configured
-              if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.endsWith('...')) {
-                try {
-                  const Stripe = (await import('stripe')).default;
-                  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-02-24.acacia' as any });
-                  const host = req.headers.host ? `https://${req.headers.host}` : 'http://localhost:5173';
-                  
-                  const stripeSession = await stripe.checkout.sessions.create({
-                    payment_method_types: ['card'],
-                    line_items: [{
-                      price_data: {
-                        currency: (currency || 'UGX').toLowerCase(),
-                        product_data: { name: category || 'Contribution' },
-                        unit_amount: Math.round(Number(amount) * 100),
-                      },
-                      quantity: 1,
-                    }],
-                    mode: 'payment',
-                    customer_email: email || undefined,
-                    success_url: `${host}/member/dashboard?payment=success`,
-                    cancel_url: `${host}/member/dashboard?payment=cancelled`,
-                  });
-                  paymentUrl = stripeSession.url;
-                } catch (stripeErr: any) {
-                  console.error('[Stripe Fallback Error]:', stripeErr.message);
-                }
-              }
-
               if (!paymentUrl) {
                 if (relworxErrMsg.toLowerCase().includes('disabled')) {
                   throw new Error('Card payments are disabled on your Relworx merchant account. Please enable Visa/Mastercard processing in your Relworx dashboard or use Mobile Money.');

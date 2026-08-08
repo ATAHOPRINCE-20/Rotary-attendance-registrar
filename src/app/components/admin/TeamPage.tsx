@@ -153,7 +153,7 @@ export function TeamPage() {
 
       for (const emailAddr of emailsList) {
         try {
-          const res = await fetch("/api/member/invite-member", {
+          const res = await fetch("/api/member", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -411,6 +411,16 @@ export function TeamPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
+                            {m.role !== "admin" && m.role !== "super_admin" && (
+                              <OutlineButton
+                                onClick={() => updateRoleMutation.mutate({ userId: m.id, newRole: "admin" })}
+                                disabled={isSelf || updateRoleMutation.isPending}
+                                className="py-1.5 px-3 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 transition-all flex items-center gap-1"
+                                title="Upgrade to Admin Level"
+                              >
+                                <ShieldCheck size={12} /> Upgrade to Admin
+                              </OutlineButton>
+                            )}
                             <OutlineButton
                               onClick={() => handleToggleRole(m.id, m.role)}
                               disabled={isSelf || m.role === "super_admin" || updateRoleMutation.isPending}
@@ -497,6 +507,16 @@ export function TeamPage() {
                       </span>
                       
                       <div className="flex gap-2">
+                        {m.role !== "admin" && m.role !== "super_admin" && (
+                          <OutlineButton
+                            onClick={() => updateRoleMutation.mutate({ userId: m.id, newRole: "admin" })}
+                            disabled={isSelf || updateRoleMutation.isPending}
+                            className="py-1 px-2 text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 transition-all flex items-center gap-1"
+                            title="Upgrade to Admin Level"
+                          >
+                            <ShieldCheck size={10} /> Upgrade
+                          </OutlineButton>
+                        )}
                         <OutlineButton
                           onClick={() => handleToggleRole(m.id, m.role)}
                           disabled={isSelf || m.role === "super_admin" || updateRoleMutation.isPending}

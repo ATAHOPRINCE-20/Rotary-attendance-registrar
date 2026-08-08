@@ -30,8 +30,7 @@ export function useOrgRegistrations(organizationId: string | undefined) {
         .from("registrations")
         .select("*, events(title, date)")
         .eq("organization_id", organizationId!)
-        .order("created_at", { ascending: false })
-        .limit(100);
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -44,12 +43,41 @@ export function useRegistrationByQR(qrRef: string | undefined) {
     queryKey: ["registration-qr", qrRef],
     enabled: !!qrRef,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc(
-        'get_registration_by_qr',
-        { p_qr_ref: qrRef }
-      ).select("*, events(title, date, location, cover_image_url)").single();
-      if (error) throw error;
-      return data;
+      if (!qrRef) return null;
+
+      let regData: any = null;
+
+      // 1. Query registration via secure RPC (SECURITY DEFINER for public lookup)
+      const { data: rpcData, error: rpcErr } = await supabase
+        .rpc("get_registration_by_qr", { p_qr_ref: qrRef });
+
+      if (!rpcErr && rpcData) {
+        regData = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      } else {
+        // Fallback to direct registrations table query
+        const { data: directData } = await supabase
+          .from("registrations")
+          .select("*")
+          .eq("qr_ref", qrRef)
+          .maybeSingle();
+
+        regData = directData;
+      }
+
+      if (!regData) return null;
+
+      // 2. Populate associated event details for pass rendering
+      if (regData.event_id) {
+        const { data: eventData } = await supabase
+          .from("events")
+          .select("title, date, location, cover_image_url")
+          .eq("id", regData.event_id)
+          .maybeSingle();
+
+        regData.events = eventData || null;
+      }
+
+      return regData;
     },
   });
 }
@@ -188,8 +216,25 @@ export function useSubmitRegistration() {
             console.error("Failed to proxy whatsapp welcome message:", err);
           });
         }
+
+        // 3. Trigger automated Visitation Card PDF email dispatch (for Guests and Visiting Rotarians)
+        if (reg.email && !reg.email.match(/^member-[a-f0-9\-]+@/)) {
+          const isHomeMember = reg.is_member && !reg.club_name && (reg.member_id || reg.buddy_group);
+          if (!isHomeMember) {
+            fetch("/api/send-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                registrationId: reg.id,
+                type: "visitation_card"
+              })
+            }).catch((err) => {
+              console.error("Failed to trigger automated visitation card email:", err);
+            });
+          }
+        }
       } catch (triggerErr) {
-        console.error("Error in automated welcome WhatsApp flow:", triggerErr);
+        console.error("Error in automated welcome WhatsApp/Email flow:", triggerErr);
       }
 
       return reg as Registration;
@@ -329,6 +374,23 @@ export function useCheckIn() {
         .select()
         .single();
       if (error) throw error;
+
+      if (status === "checked-in" && data) {
+        const isHomeMember = data.is_member && !data.club_name && (data.member_id || data.buddy_group);
+        if (!isHomeMember && data.email && !data.email.match(/^member-[a-f0-9\-]+@/)) {
+          fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              registrationId: data.id,
+              type: "visitation_card"
+            })
+          }).catch((err) => {
+            console.error("Failed to trigger automated visitation card email on check-in:", err);
+          });
+        }
+      }
+
       return { data: data as Registration, eventId };
     },
     onSuccess: ({ eventId }) => {

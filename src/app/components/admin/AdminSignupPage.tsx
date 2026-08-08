@@ -14,6 +14,7 @@ export function AdminSignupPage() {
   const navigate   = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail]       = useState("");
+  const [phone, setPhone]       = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,12 +30,12 @@ export function AdminSignupPage() {
 
   async function handleSignUp() {
     setError(null);
-    if (!fullName || !email || !password) { setError("All fields are required."); return; }
+    if (!fullName || !email || !password || !phone.trim()) { setError("All fields are required."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
 
     setLoading(true);
-    const { error: err, session: newSession } = await signUp(email, password, fullName, orgId, role);
+    const { error: err, session: newSession } = await signUp(email, password, fullName, orgId, role, phone.trim());
     setLoading(false);
     if (err) { setError(getFriendlyErrorMessage(err)); return; }
     
@@ -129,6 +130,18 @@ export function AdminSignupPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold" style={{ fontFamily: "var(--font-sans)" }}>Phone Contact</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 0770123456"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
                   className="px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 transition-all"
                 />
               </div>

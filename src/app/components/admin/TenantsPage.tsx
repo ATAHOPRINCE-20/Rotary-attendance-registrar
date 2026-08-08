@@ -21,8 +21,11 @@ import {
   Unlock,
   Phone,
   LogIn,
+  Contact,
+  Download,
 } from "lucide-react";
 import { Organization } from "../../../types/database";
+import { TenantContactsModal, exportAllTenantContacts } from "./TenantContactsModal";
 
 export function TenantsPage() {
   const navigate = useNavigate();
@@ -45,6 +48,8 @@ export function TenantsPage() {
   const [editExpiry, setEditExpiry] = useState("");
   const [editSuspended, setEditSuspended] = useState(false);
   const [editMomoPhone, setEditMomoPhone] = useState("");
+  const [contactsTenant, setContactsTenant] = useState<Organization | null>(null);
+  const [exportingContacts, setExportingContacts] = useState(false);
 
   // Load all system data
   async function loadData() {
@@ -276,6 +281,26 @@ export function TenantsPage() {
               <option value="active">Active Tenants Only</option>
               <option value="suspended">Suspended Tenants Only</option>
             </select>
+
+            <button
+              onClick={async () => {
+                setExportingContacts(true);
+                try {
+                  await exportAllTenantContacts(tenants);
+                  toast.success("Exported contacts for all tenants.");
+                } catch (err: unknown) {
+                  console.error(err);
+                  toast.error(err instanceof Error ? err.message : "Failed to export contacts.");
+                } finally {
+                  setExportingContacts(false);
+                }
+              }}
+              disabled={exportingContacts || loading || tenants.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl border border-border bg-white hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <Download size={14} />
+              {exportingContacts ? "Exporting..." : "Export All Contacts"}
+            </button>
           </div>
         </div>
 
@@ -381,6 +406,13 @@ export function TenantsPage() {
                         <td className="py-4 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
+                              onClick={() => setContactsTenant(t)}
+                              className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
+                              title="View contacts"
+                            >
+                              <Contact size={14} />
+                            </button>
+                            <button
                               onClick={() => {
                                 impersonateOrganization(t.id);
                                 toast.success(`Now impersonating ${t.name}. Redirecting to dashboard...`);
@@ -408,6 +440,13 @@ export function TenantsPage() {
             </div>
           )}
         </div>
+
+        {contactsTenant && (
+          <TenantContactsModal
+            tenant={contactsTenant}
+            onClose={() => setContactsTenant(null)}
+          />
+        )}
 
         {/* ── Edit License / Subscription Modal ── */}
         {selectedTenant && (

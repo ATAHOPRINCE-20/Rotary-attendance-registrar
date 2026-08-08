@@ -15,11 +15,6 @@ export function PWAInstallBanner() {
   const [canPrompt, setCanPrompt] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
-  // Hide install banner on registration pages to avoid distracting user during sign up
-  if (location.pathname.includes("/register")) {
-    return null;
-  }
-
   useEffect(() => {
     // 1. Check if already running in standalone PWA mode or already installed
     const isStandalone =
@@ -109,7 +104,8 @@ export function PWAInstallBanner() {
     setShowBanner(false);
   };
 
-  if (!showBanner || !platform) return null;
+  // Hide install banner on registration pages to avoid distracting user during sign up, or when dismissed/unsupported
+  if (location.pathname.includes("/register") || !showBanner || !platform) return null;
 
   const isDesktop = platform === "desktop";
 

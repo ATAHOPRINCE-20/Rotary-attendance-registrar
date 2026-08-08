@@ -147,13 +147,15 @@ export function MemberSetupPasswordPage() {
               id: userId,
               organization_id: metaOrgId,
               full_name: meta.full_name || userEmail.split("@")[0],
+              email: userEmail,
+              phone: meta.phone || null,
               role: metaRole
             });
             if (metaRole !== "member") destination = "/admin/dashboard";
           } else {
             const { data: memberRec } = await supabase
               .from("members")
-              .select("organization_id, full_name")
+              .select("organization_id, full_name, phone")
               .ilike("email", userEmail)
               .maybeSingle();
 
@@ -162,6 +164,8 @@ export function MemberSetupPasswordPage() {
                 id: userId,
                 organization_id: memberRec.organization_id,
                 full_name: memberRec.full_name,
+                email: userEmail,
+                phone: memberRec.phone || null,
                 role: "member"
               });
             }

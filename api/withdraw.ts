@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit } from './_rate-limit.js';
-import { logSystemEvent } from './lib/logger.js';
+import { logSystemEvent } from './_lib/logger.js';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
